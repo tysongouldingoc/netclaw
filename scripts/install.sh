@@ -2080,6 +2080,35 @@ fi
 
 echo ""
 
+# ═══════════════════════════════════════════
+# Step 50e: HumanRail MCP Server (Human-in-the-Loop Escalation)
+# ═══════════════════════════════════════════
+
+log_step "50e/$TOTAL_STEPS Installing HumanRail MCP Server..."
+echo "  Source: https://github.com/prime001/humanrail-mcp-server"
+echo "  Human-in-the-loop escalation — route agent decisions to human engineers (7 tools, streamable HTTP)"
+
+HUMANRAIL_MCP_DIR="$MCP_DIR/humanrail-mcp-server"
+clone_or_pull "$HUMANRAIL_MCP_DIR" "https://github.com/prime001/humanrail-mcp-server.git"
+
+log_info "Installing HumanRail MCP dependencies..."
+pip3 install "mcp[cli]>=1.0.0" httpx 2>/dev/null || \
+    pip3 install --break-system-packages "mcp[cli]>=1.0.0" httpx 2>/dev/null || \
+    log_warn "HumanRail MCP dependencies install failed"
+
+[ -f "$HUMANRAIL_MCP_DIR/server.py" ] && \
+    log_info "HumanRail MCP ready: $HUMANRAIL_MCP_DIR/server.py" || \
+    log_error "HumanRail MCP server.py not found"
+
+echo ""
+echo "  HumanRail routes AI agent decisions to human engineers — free while in beta."
+echo "  Get your API key at: https://humanrail.dev"
+echo "  Start the server: HUMANRAIL_API_KEY=<key> python3 $HUMANRAIL_MCP_DIR/server.py"
+echo "  Or use the hosted endpoint: HUMANRAIL_MCP_URL=https://humanrail.dev/mcp"
+echo ""
+
+echo ""
+
 log_step "51/$TOTAL_STEPS Deploying skills and configuration..."
 
 PYATS_SCRIPT="$PYATS_MCP_DIR/pyats_mcp_server.py"
@@ -2162,6 +2191,8 @@ _set_env_var "INFOBLOX_MCP_CMD"         "$INFOBLOX_MCP_CMD_DETECTED"
 _set_env_var "PANOS_MCP_CMD"            "$PANOS_MCP_CMD_DETECTED"
 _set_env_var "FORTIMANAGER_MCP_CMD"     "$FORTIMANAGER_MCP_CMD_DETECTED"
 _set_env_var "MEMPALACE_MCP_SCRIPT"     "$MEMPALACE_MCP_DIR/mempalace/mcp_server.py"
+_set_env_var "HUMANRAIL_MCP_SCRIPT"    "$HUMANRAIL_MCP_DIR/server.py"
+_set_env_var "HUMANRAIL_MCP_URL"       "http://127.0.0.1:8100/mcp"
 
 # gtrace is a Go binary, not a Python script — just record the path
 if command -v gtrace &> /dev/null; then
@@ -2503,6 +2534,15 @@ else
     SERVERS_FAIL=$((SERVERS_FAIL + 1))
 fi
 
+# HumanRail MCP is git-cloned from GitHub
+if [ -f "$HUMANRAIL_MCP_DIR/server.py" ]; then
+    log_info "HumanRail MCP: OK (7 tools, streamable HTTP :8100 — requires HUMANRAIL_API_KEY)"
+    SERVERS_OK=$((SERVERS_OK + 1))
+else
+    log_warn "HumanRail MCP: NOT INSTALLED (clone failed)"
+    SERVERS_FAIL=$((SERVERS_FAIL + 1))
+fi
+
 # nmap MCP is git-cloned
 if [ -d "$NMAP_MCP_DIR" ] && [ -f "$NMAP_MCP_DIR/server.py" ]; then
     log_info "nmap MCP: OK (14 tools, stdio — CIDR scope enforcement)"
@@ -2651,6 +2691,9 @@ echo "  │   Wikipedia           Technology context & history"
 echo "  │   Markmap             Mind map visualization"
 echo "  │   UML MCP            27+ diagram types via Kroki (class, sequence, nwdiag, rack, packet, C4)"
 echo "  │"
+echo "  │ HUMAN-IN-THE-LOOP:"
+echo "  │   HumanRail           Route decisions to human engineers — approvals, triage, low-confidence gates (7 tools, streamable HTTP)"
+echo "  │"
 echo "  │ NPX (no install):"
 echo "  │   Draw.io             Network topology diagrams"
 echo "  │   RFC                 IETF standards reference"
@@ -2706,6 +2749,7 @@ echo "  │   ise-posture-audit      ISE posture & TrustSec audit"
 echo "  │   ise-incident-response  Endpoint investigation & quarantine"
 echo "  │   servicenow-change-workflow  Full ITSM change lifecycle"
 echo "  │   gait-session-tracking  Mandatory audit trail"
+echo "  │   humanrail-escalation  Human-in-the-loop gates — low-confidence decisions, pre-destructive approvals, incident triage"
 echo "  │"
 echo "  │ Itential IAP Skills:"
 echo "  │   itential-automation    Config mgmt, compliance, workflows, golden config, lifecycle (65+ tools)"

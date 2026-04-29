@@ -638,6 +638,24 @@ else
 fi
 echo ""
 
+# --- HumanRail ---
+if yesno "Do you have a HumanRail account? (human-in-the-loop escalation for AI agents — free while in beta)"; then
+    echo ""
+    echo -e "  HumanRail routes agent decisions to human engineers when confidence is low,"
+    echo -e "  a destructive operation needs sign-off, or an ambiguous ticket needs triage."
+    echo -e "  Workers are paid via Lightning Network. Free while building the network."
+    echo -e "  Get your API key at: ${BOLD}https://humanrail.dev${NC}"
+    echo ""
+    prompt_secret HR_KEY "HumanRail API Key (ek_live_... or ek_test_...)"
+    prompt HR_URL "HumanRail MCP URL" "http://127.0.0.1:8100/mcp"
+    [ -n "$HR_KEY" ] && set_env "HUMANRAIL_API_KEY" "$HR_KEY"
+    [ -n "$HR_URL" ] && set_env "HUMANRAIL_MCP_URL" "$HR_URL"
+    ok "HumanRail configured"
+else
+    skip "HumanRail"
+fi
+echo ""
+
 # --- Cisco WebEx ---
 if yesno "Do you have a Cisco WebEx account? (alerts, incidents, reports via WebEx spaces)"; then
     echo ""
@@ -752,6 +770,7 @@ grep -q "^GRAFANA_URL=" "$OPENCLAW_ENV" 2>/dev/null && ok "Grafana" || skip "Gra
 grep -q "^PROMETHEUS_URL=" "$OPENCLAW_ENV" 2>/dev/null && ok "Prometheus" || skip "Prometheus"
 grep -q "^KUBESHARK_MCP_URL=" "$OPENCLAW_ENV" 2>/dev/null && ok "Kubeshark" || skip "Kubeshark"
 grep -q "^NETCLAW_ROUTER_ID=" "$OPENCLAW_ENV" 2>/dev/null && ok "Protocol Participation (BGP/OSPF/GRE)" || skip "Protocol Participation"
+grep -q "^HUMANRAIL_API_KEY=" "$OPENCLAW_ENV" 2>/dev/null && ok "HumanRail (human-in-the-loop escalation)" || skip "HumanRail"
 grep -q "^WEBEX_BOT_TOKEN=" "$OPENCLAW_ENV" 2>/dev/null && ok "Cisco WebEx" || skip "Cisco WebEx"
 
 echo ""
