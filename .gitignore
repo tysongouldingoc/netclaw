@@ -56,9 +56,15 @@ mcp-servers/*
 !mcp-servers/gns3-mcp-server/
 !mcp-servers/eve-ng-mcp-server/
 !mcp-servers/prisma-sdwan-mcp/
+!mcp-servers/nautobot-mcp-v2/
+!mcp-servers/nautobot-golden-config-mcp/
+!mcp-servers/nautobot-routing-mcp/
 
 # Traces
 trace.json
 trace.json.gz
 
 .claude
+docs/blogs/
+.amazonq
+workspace/
