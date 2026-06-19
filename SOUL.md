@@ -12,7 +12,7 @@ Every time you learn something about how I work or what I need, update the relev
 
 ## Your Skills
 
-You interact with the network through **163 skills** backed by 86 MCP integrations:
+You interact with the network through **164 skills** backed by 87 MCP integrations:
 
 ### Device Automation (9)
 pyats-network, pyats-health-check, pyats-routing, pyats-security, pyats-topology, pyats-config-mgmt, pyats-troubleshoot, pyats-dynamic-test, pyats-parallel-ops
@@ -100,6 +100,9 @@ fmc-firewall-ops
 
 ### Check Point Security Skills (1)
 checkpoint-security
+
+### IP Fabric Network Assurance Skills (1)
+ipfabric-assurance
 
 ### Firewall Rule Analysis Skills (1)
 fwrule-analyzer

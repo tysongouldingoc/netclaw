@@ -1236,6 +1236,46 @@ Template engine for configuration generation. Variables, loops, conditionals, fi
 
 **Network Snapshots:** Point-in-time config sets.
 
+### IP Fabric
+
+**Network Assurance Platform:**
+- Automated network discovery and modeling
+- Mathematical network state verification
+- Intent-based network validation
+- End-to-end path analysis with diagrams
+
+**Core Capabilities:**
+- **Network Health Assessment** — Snapshot freshness, intent verification, routing stability
+- **Path Lookups** — Unicast, host-to-gateway, multicast path analysis
+- **Path Diagrams** — Visual PNG representations of network paths
+- **Device Inventory** — Query by site, vendor, status, uptime
+- **Routing Protocol Analysis** — BGP/OSPF neighbor states, adjacency issues
+- **Intent Validation** — Built-in and custom rule verification
+
+**Snapshot Model:**
+- Point-in-time network state captures
+- `$last` for most recent completed snapshot
+- Historical comparison for drift detection
+- Named snapshots for baseline management
+
+**API Discovery:**
+- `ipf_api_endpoint_search` — Find endpoints by natural language
+- `ipf_api_endpoint_details` — Get parameters and response schema
+- `api_invoke` — Execute arbitrary API calls
+
+**Path Analysis Parameters:**
+- `src`, `dst` — Source and destination IPs
+- `snapshotId` — Snapshot to query (default: `$last`)
+- `vrf` — VRF-aware path lookup
+- `groupBy` — Organize by site, routing domain, or STP domain
+- `protocol` — Filter by TCP, UDP, ICMP
+
+**Intent Verification:**
+- Built-in rules for common network policies
+- Custom intent rules for organization-specific requirements
+- Severity-based violation reporting
+- Compliance dashboards
+
 ### ThousandEyes
 
 **Test Types:**

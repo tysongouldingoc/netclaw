@@ -2177,6 +2177,56 @@ fi
 
 echo ""
 
+# ═══════════════════════════════════════════
+# Step 50g: IP Fabric Network Assurance Integration
+# ═══════════════════════════════════════════
+
+log_step "50g/$TOTAL_STEPS IP Fabric Network Assurance Integration..."
+echo "  10 MCP Tools: health assessment, path analysis, diagrams"
+echo "  Partnership: Daren Fulwell (IP Fabric) + John Capobianco (NetClaw)"
+echo ""
+
+read -r -p "Enable IP Fabric Integration? [y/N] " enable_ipfabric
+
+if [[ "$enable_ipfabric" =~ ^[Yy]$ ]]; then
+    log_info "IP Fabric uses remote MCP (built into IP Fabric appliances)"
+    log_info "No installation required - connection via mcp-remote proxy"
+    echo ""
+    echo "  IP Fabric MCP endpoint: https://<your-appliance>/mcp"
+    echo "  Generate API token: IP Fabric UI → Settings → API Tokens"
+    echo ""
+
+    read -r -p "Configure IP Fabric credentials now? [y/N] " config_ipfabric
+    if [[ "$config_ipfabric" =~ ^[Yy]$ ]]; then
+        read -r -p "IP Fabric host URL (e.g., https://ipfabric.example.com): " ipfabric_host
+        if [ -n "$ipfabric_host" ]; then
+            ipfabric_host="${ipfabric_host%/}"  # Remove trailing slash
+            _set_env_var "IPFABRIC_HOST" "$ipfabric_host"
+            log_info "Set IPFABRIC_HOST=$ipfabric_host"
+        fi
+
+        read -r -sp "IP Fabric API token: " ipfabric_token
+        echo ""
+        if [ -n "$ipfabric_token" ]; then
+            _set_env_var "IPFABRIC_API_TOKEN" "$ipfabric_token"
+            log_info "Set IPFABRIC_API_TOKEN=***"
+        fi
+
+        log_info "IP Fabric credentials configured in ~/.openclaw/.env"
+    else
+        log_info "Skipping credential configuration. Set IPFABRIC_* variables in ~/.openclaw/.env later."
+        # Set placeholders
+        _set_env_var "IPFABRIC_HOST" "https://ipfabric.example.com"
+        _set_env_var "IPFABRIC_API_TOKEN" "your-api-token-here"
+    fi
+
+    log_info "IP Fabric integration enabled. Use /ipfabric skill to query."
+else
+    log_info "Skipping IP Fabric integration. Run scripts/ipfabric-enable.sh later to enable."
+fi
+
+echo ""
+
 log_step "51/$TOTAL_STEPS Deploying skills and configuration..."
 
 PYATS_SCRIPT="$PYATS_MCP_DIR/pyats_mcp_server.py"

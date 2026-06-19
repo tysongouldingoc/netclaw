@@ -1271,3 +1271,51 @@ GNS3 snapshot management:
 - `delete_snapshot` — remove snapshot
 
 Always snapshot before major topology changes.
+
+---
+
+## IP Fabric Network Assurance Skills
+
+### ipfabric-assurance
+IP Fabric network assurance and path analysis (10 tools):
+
+**Health Assessment:**
+- `ipf_network_health_assess` — Comprehensive network health overview (snapshot freshness, intent verification, device issues, routing stability)
+
+**Path Lookups:**
+- `ipf_pathlookup_unicast` — Trace unicast path between two IPs
+- `ipf_pathlookup_host-to-gateway` — Trace host to default gateway
+- `ipf_pathlookup_multicast` — Trace multicast distribution path
+
+**Path Diagrams (PNG):**
+- `ipf_png_pathlookup_unicast` — Unicast path as visual diagram
+- `ipf_png_pathlookup_host-to-gateway` — Host-to-gateway path diagram
+- `ipf_png_pathlookup_multicast` — Multicast path diagram
+
+**API Discovery:**
+- `ipf_api_endpoint_search` — Find API endpoints using natural language
+- `ipf_api_endpoint_details` — Get endpoint parameters and response schema
+- `api_invoke` — Execute arbitrary API calls with parameters
+
+**Workflow:**
+1. Start with `ipf_network_health_assess` for overall health
+2. Use `ipf_pathlookup_unicast` for connectivity troubleshooting
+3. Add `ipf_png_pathlookup_*` for visual diagrams
+4. Use API discovery tools for custom queries
+
+**Snapshot Handling:**
+- Default to `$last` (most recent completed snapshot)
+- Specify by name: "using snapshot 'Pre-Change'"
+- Specify by UUID for precise targeting
+
+**VRF-Aware Queries:**
+- Add `vrf` parameter for VRF-specific path analysis
+- Default queries use global routing table
+
+**Diagram Delivery:**
+- CLI: Saved to `~/.openclaw/workspace/diagrams/ipfabric/`
+- Slack/Teams/WebEx: Attached as file to message
+
+**Credentials:** `IPFABRIC_HOST`, `IPFABRIC_API_TOKEN`
+
+Developed in collaboration with **Daren Fulwell** (Field CTO, IP Fabric) and **John Capobianco** (Creator, NetClaw).
