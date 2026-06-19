@@ -68,3 +68,4 @@ trace.json.gz
 docs/blogs/
 .amazonq
 workspace/node_modules/
+.dev-secrets/

@@ -248,6 +248,44 @@ NetClaw integrates with Check Point's enterprise security platform through **15 
 
 ---
 
+## IP Fabric Network Assurance Integration
+
+NetClaw integrates with IP Fabric's network assurance platform through **10 MCP tools**, providing AI-powered network health assessment, path analysis with visual diagrams, inventory queries, and intent validation.
+
+> Developed in collaboration with **Daren Fulwell** (Field CTO, IP Fabric) and **John Capobianco** (Creator, NetClaw), representing nearly a decade of professional partnership.
+
+| Capability | Tools | Description |
+|------------|-------|-------------|
+| **Health Assessment** | `ipf_network_health_assess` | Snapshot freshness, intent verification, routing stability |
+| **Path Analysis** | `ipf_pathlookup_*` (3) | Unicast, host-to-gateway, multicast path tracing |
+| **Visual Diagrams** | `ipf_png_pathlookup_*` (3) | PNG network path visualizations |
+| **API Discovery** | `ipf_api_endpoint_*`, `api_invoke` (3) | Find and invoke custom API endpoints |
+
+### Enable IP Fabric Integration
+
+```bash
+# During installation
+./scripts/install.sh
+# Answer "y" to "Enable IP Fabric Integration?"
+
+# Or enable for existing installation
+./scripts/ipfabric-enable.sh
+```
+
+### Example Queries
+
+```
+/ipfabric check network health
+/ipfabric show path from 10.0.1.5 to 10.0.2.10 with diagram
+/ipfabric show BGP neighbors not in Established state
+/ipfabric are there any intent violations
+/ipfabric show all Cisco devices in site HQ
+```
+
+**Full documentation:** [docs/IPFABRIC.md](docs/IPFABRIC.md) | [Skill Definition](workspace/skills/ipfabric/SKILL.md)
+
+---
+
 ## Architecture
 
 ```
@@ -296,6 +334,7 @@ Human (Slack / WebEx / WebChat) --> NetClaw (CCIE Agent on OpenClaw)
                                 |     MCP: Cisco Meraki       --> Dashboard API (~804 endpoints): wireless, switching, security, cameras
                                 |
                                 |-- NETWORK INTELLIGENCE:
+                                |     MCP: IP Fabric          --> Network assurance, path analysis, diagrams, intent (10 tools, remote HTTP)
                                 |     MCP: ThousandEyes (community) --> Tests, agents, path vis, dashboards (9 tools, stdio)
                                 |     MCP: ThousandEyes (official)  --> Alerts, outages, BGP, instant tests, endpoints (~20 tools, remote HTTP)
                                 |
