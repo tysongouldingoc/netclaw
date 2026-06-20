@@ -147,6 +147,17 @@ The gNMI MCP server provides 10 tools for streaming telemetry and model-driven c
 - Lab    → Non-production test environment (relaxed change control)
 ```
 
+## Memory MCP Server (NetClaw Native)
+
+10 MCP tools for hybrid persistent memory combining structured storage, semantic search, and entity graphs:
+- **Facts**: `memory_record_fact`, `memory_get_facts`, `memory_invalidate`, `memory_timeline` — temporal key-value storage with automatic supersession
+- **Semantic Search**: `memory_store_session`, `memory_recall` — ChromaDB + sentence-transformers for fuzzy session recall
+- **Decisions**: `memory_record_decision`, `memory_get_decisions` — audit trail with context, rationale, and CR references
+- **Graph Links**: `memory_link_entities`, `memory_query_graph` — entity relationships (peers_with, depends_on, connects_to)
+- Transport: stdio, Python 3.11+, uvx package, fully offline
+- Data: `~/.openclaw/memory/` (SQLite + ChromaDB)
+- No credentials required
+
 ## MemPalace AI Memory
 
 19 MCP tools for persistent, structured, local-only AI memory across sessions ([source](https://github.com/milla-jovovich/mempalace)):

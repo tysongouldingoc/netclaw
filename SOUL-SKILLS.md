@@ -214,6 +214,46 @@ Virtual server, pool, persistence, iRule, SSL, and performance troubleshooting:
 
 ---
 
+## Memory Skills
+
+### memory-facts
+Record and recall network facts with temporal validity:
+- `memory_record_fact(entity, key, value, metadata)` — store fact about entity (auto-supersedes existing)
+- `memory_get_facts(entity, key)` — retrieve current facts for entity
+- `memory_invalidate(fact_id, reason)` — explicitly invalidate outdated fact
+- `memory_timeline(entity, after, before, key)` — view historical facts including invalidated
+
+Facts are normalized (lowercase entities) and timestamped. Superseded facts remain in timeline for audit.
+
+### memory-semantic
+Semantic search across past sessions:
+- `memory_store_session(summary, entities, topics)` — store session summary with embeddings
+- `memory_recall(query, top_k, min_score)` — natural language search for similar sessions
+
+Uses ChromaDB + all-MiniLM-L6-v2 (384 dimensions). Graceful degradation if embeddings unavailable.
+
+### memory-decisions
+Decision log with full context for audit:
+- `memory_record_decision(context, decision, rationale, entities, cr_number)` — log operational decision
+- `memory_get_decisions(entity, after, before)` — query decisions by entity or time range
+
+Include ServiceNow CR number (CHG format) when available. Links to GAIT for full audit trail.
+
+### memory-graph
+Entity relationship tracking:
+- `memory_link_entities(subject, predicate, object)` — create relationship between entities
+- `memory_query_graph(entity, direction, predicate, depth)` — traverse relationships
+
+Standard predicates: `peers_with`, `depends_on`, `connects_to`, `managed_by`, `caused`, `fixed_by`, `learned_from`.
+
+**Use memory to:**
+1. Remember device states across sessions
+2. Recall similar troubleshooting sessions
+3. Audit why decisions were made
+4. Track topology relationships
+
+---
+
 ## Domain Skills
 
 ### netbox-reconcile
