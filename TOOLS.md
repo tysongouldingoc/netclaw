@@ -42,6 +42,7 @@ All credentials are in `~/.openclaw/.env`. Never put credentials in skill files 
 - Token Optimization  → ANTHROPIC_API_KEY (reused), NETCLAW_TOKEN_PRICING_OVERRIDE (optional)
 - GitLab MCP          → GITLAB_PERSONAL_ACCESS_TOKEN, GITLAB_API_URL (default: gitlab.com)
 - Jenkins MCP         → JENKINS_URL, JENKINS_AUTH_BASE64 (remote HTTP, Basic Auth)
+- Claroty xDome MCP   → CLAROTY_API_URL (default: https://api.medigate.io), CLAROTY_API_TOKEN, CLAROTY_VERIFY_SSL, CLAROTY_TIMEOUT, CLAROTY_RATE_LIMIT_PER_MIN (default: 2000)
 ```
 
 ## GitLab MCP Server
@@ -167,6 +168,20 @@ The gNMI MCP server provides 10 tools for streaming telemetry and model-driven c
 - **Agent Diary**: write/read specialist agent journals (AAAK-compressed)
 - Transport: stdio, Python 3.9+, no credentials, fully offline
 - `MEMPALACE_MCP_SCRIPT` → cloned repo `mcp_server.py`
+
+## Claroty xDome MCP Server
+
+The Claroty xDome MCP server provides 21 tools (15 read-only + 6 ITSM-gated writes) for OT / IoT / IoMT visibility via stdio transport:
+
+- **Assets**: `list_devices`, `get_device_details`, `get_device_communication_map`
+- **Alerts**: `list_alerts`, `get_alert_with_devices`
+- **Vulnerabilities**: `list_vulnerabilities`, `get_vulnerable_devices`
+- **Sites & sensors**: `list_sites`, `get_site`, `list_edge_locations`
+- **Servers & OT activity**: `list_servers`, `get_server_interfaces`, `list_ot_activity_events`
+- **Governance**: `get_audit_log`, `list_organization_zones`
+- **Writes (ITSM-gated, CHG\d+ CR required)**: `acknowledge_alert`, `set_vulnerability_relevance`, `set_device_purdue_level`, `set_device_custom_attribute`, `label_alerts`, `assign_alerts`
+- Default base URL `https://api.medigate.io`; Bearer token auth; sliding-window rate gate at 2000 req/min matches the xDome upstream cap; lab-mode bypass via `NETCLAW_LAB_MODE=true` (shared with gnmi-mcp).
+- Edge sensor lifecycle, site CRUD, and organisation policy CRUD are deferred to a future spec — see `specs/035-claroty-mcp/research.md`.
 
 ## Notes
 

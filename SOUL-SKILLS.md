@@ -603,6 +603,34 @@ Cisco Secure Firewall policy search via FMC (4 read-only tools):
 
 ---
 
+## Claroty OT Security Skills
+
+### claroty-asset-inventory
+OT / IoT / IoMT asset discovery and Purdue Model classification via Claroty xDome (4 tools, 2 ITSM-gated):
+- `list_devices(site_id?, purdue_level?, device_purpose?, name_contains?)` — paginated device inventory
+- `get_device_details` — full record for one device
+- `set_device_purdue_level(device_id, purdue_level, cr_number)` — assign Purdue layer (ITSM-gated)
+- `set_device_custom_attribute(device_id, key, value, cr_number)` — set metadata (ITSM-gated)
+- Cross-reference with `nautobot-sot` or `netbox-reconcile` to surface SoT drift.
+
+### claroty-risk-triage
+Unified alert + vulnerability triage in OT environments (8 tools, 4 ITSM-gated):
+- `list_alerts(severity?, status?, site_id?, assignee?)` and `get_alert_with_devices(alert_id)` for blast radius
+- `list_vulnerabilities(severity?, cvss_min?, cve_contains?)` and `get_vulnerable_devices(vulnerability_id)`
+- `acknowledge_alert(alert_id, resolution, cr_number)` — set resolution state (ITSM-gated)
+- `set_vulnerability_relevance(device_id, vuln_id, relevant, cr_number)` — suppress CVE on a device (ITSM-gated)
+- `label_alerts(alert_ids, labels, cr_number)` and `assign_alerts(alert_ids, assignee, cr_number)` (ITSM-gated)
+- Correlate with `nvd-cve` MCP for CVSS vector decomposition; hand off to `ise-incident-response` for endpoint quarantine.
+
+### claroty-ot-topology
+OT communication map and segmentation visualisation (3 read-only tools):
+- `get_device_communication_map(device_id? | site_id?)` — device-to-device edges
+- `list_organization_zones()` — segmentation zones with device counts
+- `list_ot_activity_events(device_id?, start?, end?)` — activity timeline
+- Hand off to `canvas-network-viz` for inline Canvas/A2UI render or `drawio-` for exportable diagrams.
+
+---
+
 ## Check Point Security Skills
 
 ### checkpoint-security
