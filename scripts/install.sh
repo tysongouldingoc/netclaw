@@ -2355,6 +2355,39 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════
+# Step 50h: Claroty xDome MCP Server (OT/IoT/IoMT visibility)
+# ═══════════════════════════════════════════
+
+log_step "50h/$TOTAL_STEPS Installing Claroty xDome MCP Server..."
+echo "  Built-in MCP server: mcp-servers/claroty-mcp/"
+echo "  Claroty xDome — OT/IoT/IoMT asset discovery, alert/vuln triage, Purdue classification (21 tools: 15 read + 6 ITSM-gated writes)"
+
+CLAROTY_MCP_DIR="$MCP_DIR/claroty-mcp"
+if [ -d "$NETCLAW_DIR/mcp-servers/claroty-mcp" ]; then
+    CLAROTY_MCP_DIR="$NETCLAW_DIR/mcp-servers/claroty-mcp"
+fi
+
+if [ -f "$CLAROTY_MCP_DIR/requirements.txt" ]; then
+    log_info "Installing Claroty MCP dependencies (mcp, httpx, python-dotenv, anyio)..."
+    pip3 install -r "$CLAROTY_MCP_DIR/requirements.txt" 2>/dev/null || \
+        pip3 install --break-system-packages -r "$CLAROTY_MCP_DIR/requirements.txt" 2>/dev/null || {
+            log_warn "Claroty MCP pip install failed — dependencies may need manual installation"
+        }
+
+    # Copy .env.example if .env does not exist
+    if [ -f "$CLAROTY_MCP_DIR/.env.example" ] && [ ! -f "$CLAROTY_MCP_DIR/.env" ]; then
+        log_info "Claroty MCP .env.example available — copy and configure:"
+        echo "    cp $CLAROTY_MCP_DIR/.env.example $CLAROTY_MCP_DIR/.env"
+    fi
+
+    log_info "Claroty MCP ready: $CLAROTY_MCP_DIR/claroty_mcp_server.py"
+else
+    log_warn "Claroty MCP requirements.txt not found at $CLAROTY_MCP_DIR"
+fi
+
+echo ""
+
+# ═══════════════════════════════════════════
 # Step 50: Verify installation
 # ═══════════════════════════════════════════
 

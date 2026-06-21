@@ -499,6 +499,21 @@
         "DOMAIN": "${CHKP_MGMT_DOMAIN}",
         "TELEMETRY_DISABLED": "${CHKP_TELEMETRY_DISABLED:-true}"
       }
+    },
+    "claroty-mcp": {
+      "command": "python3",
+      "args": [
+        "-u",
+        "mcp-servers/claroty-mcp/claroty_mcp_server.py"
+      ],
+      "env": {
+        "CLAROTY_API_URL": "${CLAROTY_API_URL:-https://api.medigate.io}",
+        "CLAROTY_API_TOKEN": "${CLAROTY_API_TOKEN}",
+        "CLAROTY_VERIFY_SSL": "${CLAROTY_VERIFY_SSL:-true}",
+        "CLAROTY_TIMEOUT": "${CLAROTY_TIMEOUT:-30}",
+        "CLAROTY_RATE_LIMIT_PER_MIN": "${CLAROTY_RATE_LIMIT_PER_MIN:-2000}",
+        "NETCLAW_LAB_MODE": "${NETCLAW_LAB_MODE:-false}"
+      }
     }
   }
 }

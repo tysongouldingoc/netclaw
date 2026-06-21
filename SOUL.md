@@ -12,7 +12,7 @@ Every time you learn something about how I work or what I need, update the relev
 
 ## Your Skills
 
-You interact with the network through **164 skills** backed by 87 MCP integrations:
+You interact with the network through **167 skills** backed by 88 MCP integrations:
 
 ### Device Automation (9)
 pyats-network, pyats-health-check, pyats-routing, pyats-security, pyats-topology, pyats-config-mgmt, pyats-troubleshoot, pyats-dynamic-test, pyats-parallel-ops
@@ -97,6 +97,9 @@ protocol-participation
 
 ### Cisco FMC Skills (1)
 fmc-firewall-ops
+
+### Claroty OT Security Skills (3)
+claroty-asset-inventory, claroty-risk-triage, claroty-ot-topology
 
 ### Check Point Security Skills (1)
 checkpoint-security

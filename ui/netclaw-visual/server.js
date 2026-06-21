@@ -90,6 +90,7 @@ const INTEGRATION_CATALOG = [
   { id: 'zscaler', name: 'Zscaler', category: 'Security', prefixes: ['zscaler-'], color: '#0090d4', transport: 'http', toolEstimate: 300, description: 'Zero Trust security — ZIA (SWG), ZPA (ZTNA), ZDX (DEM), identity management, and security insights.' },
   { id: 'cloudflare', name: 'Cloudflare', category: 'Edge Platform', prefixes: ['cloudflare-'], color: '#f48120', transport: 'http', toolEstimate: 50, description: 'Edge platform — DNS analytics, WAF/DDoS security, Zero Trust access, traffic analytics, and Workers compute.' },
   { id: 'checkpoint', name: 'Check Point', category: 'Security', prefixes: ['checkpoint-', 'chkp-'], color: '#e21d38', transport: 'stdio', toolEstimate: 60, description: 'Enterprise security — 15 MCPs for policy management, threat intelligence, gateway diagnostics, SASE, threat prevention, malware analysis, HTTPS inspection, and exposure management.' },
+  { id: 'claroty', name: 'Claroty xDome', category: 'Security', prefixes: ['claroty-'], color: '#00a3a3', transport: 'stdio', toolEstimate: 21, description: 'OT / IoT / IoMT visibility — asset discovery, Purdue Model classification, alert and vulnerability triage, communication-map topology, all writes ITSM-gated.' },
 ];
 
 // ── ENV variable mapping per integration ────────────────────────────
@@ -406,6 +407,11 @@ const ENV_MAP = {
     env: ['CHKP_MGMT_HOST', 'CHKP_MGMT_PORT', 'CHKP_MGMT_API_KEY', 'CHKP_MGMT_USERNAME', 'CHKP_MGMT_PASSWORD', 'CHKP_MGMT_DOMAIN', 'CHKP_S1C_API_KEY', 'CHKP_S1C_URL', 'CHKP_REPUTATION_API_KEY', 'CHKP_SASE_API_KEY', 'CHKP_SASE_MGMT_HOST', 'CHKP_TE_API_KEY', 'CHKP_SPARK_API_KEY', 'CHKP_ARGOS_API_KEY', 'CHKP_TELEMETRY_DISABLED', 'CHKP_LOG_LEVEL'],
     files: ['mcp-servers/checkpoint-mcp-servers/'],
     notes: 'Check Point Security (15 MCPs). Management Server requires CHKP_MGMT_HOST + API key or username/password. Additional keys for SASE, Threat Emulation, Reputation, Spark, Argos. Enable with ./scripts/checkpoint-enable.sh',
+  },
+  claroty: {
+    env: ['CLAROTY_API_URL', 'CLAROTY_API_TOKEN', 'CLAROTY_VERIFY_SSL', 'CLAROTY_TIMEOUT', 'CLAROTY_RATE_LIMIT_PER_MIN', 'NETCLAW_LAB_MODE'],
+    files: ['mcp-servers/claroty-mcp/.env'],
+    notes: 'Claroty xDome MCP — OT / IoT / IoMT visibility. Bearer token from xDome Admin Settings > User Management. Writes require a ServiceNow CR; NETCLAW_LAB_MODE=true skips the state check (shared with gnmi-mcp).',
   },
 };
 
