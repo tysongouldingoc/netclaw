@@ -38,6 +38,11 @@ yarn-error.log*
 # OpenClaw
 .openclaw/
 
+# Local agent state and audit harnesses
+.gait/
+memory/
+.pytest_cache/
+
 # Diagrams (generated)
 *.drawio.bak
 
