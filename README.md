@@ -287,6 +287,67 @@ NetClaw integrates with IP Fabric's network assurance platform through **10 MCP 
 
 ---
 
+## Forward MCP Integration
+
+NetClaw integrates with the upstream Forward MCP server for snapshot
+assurance, path search, NQE, NQE diffs, snapshot diffs, config search, config
+diffs, checks, vulnerabilities, blast radius, missing-device evidence, device
+inventory, and hardware/OS support checks.
+
+| Capability | Tools | Description |
+|------------|-------|-------------|
+| **Snapshot Assurance** | `list_networks`, `list_snapshots`, `get_latest_snapshot` | Discover networks and point-in-time snapshots |
+| **Path Analysis** | `list_l7_applications`, `search_paths_bulk`, `search_paths` | Trace reachability and app-aware paths through Forward snapshots |
+| **Topology** | `get_snapshot_topology`, `search_nqe_queries`, `run_nqe_query_by_id` | Fetch native Forward topology links and enrich with NQE peer evidence when needed |
+| **Blast Radius** | `suggest_blast_radius_sources`, `get_blast_radius` | Analyze source exposure to bounded destination subnets |
+| **NQE Analysis** | `get_device_basic_info`, `search_nqe_queries`, `run_nqe_query_by_id`, `run_nqe_query`, `start_nqe_query` | Discover built-in Forward NQE IDs, execute them, or run bounded/ad-hoc NQE through sync or async native NQE APIs |
+| **Checks and Intent** | `list_predefined_checks`, `list_checks`, `get_check` | Review predefined checks and snapshot intent status |
+| **CVE Posture** | `search_nqe_queries`, `run_nqe_query_by_id`, `get_nqe_diff`, `get_snapshot_diff` | Review CVE exposure through built-in Forward NQE and snapshot diffs |
+| **Diff Analysis** | `get_snapshot_diff_summary`, `get_snapshot_diff`, `get_nqe_diff`, `get_config_diff` | Compare route, ACL, NAT, interface, check, NQE, and config diffs between snapshots |
+| **Configuration Analysis** | `search_configs`, `get_config_diff` | Search configs and compare snapshot diffs |
+| **Lifecycle Support** | `get_device_hardware`, `get_hardware_support`, `get_os_support` | Review hardware and OS support posture |
+| **Collection Workflows** | `list_classic_devices`, `upsert_classic_devices`, `get_collector_status`, `start_collection_task`, `get_collector_task`, `wait_for_latest_snapshot` | Prepare lab/admin networks for collection and monitor snapshot creation |
+
+### Enable Forward Integration
+
+```bash
+# During installation
+./scripts/install.sh
+# Answer "y" to "Enable Forward MCP Integration?"
+
+# Or enable for existing installation
+./scripts/forward-enable.sh
+```
+
+NetClaw installs the `netclaw` branch of Forward MCP by default. Set
+`FORWARD_MCP_REF=main` to use upstream main, or override `FORWARD_MCP_REPO` to
+point at a fork.
+
+For Forward SaaS, use `https://fwd.app` as the API base URL and set a
+`FORWARD_INSTANCE_ID` so local cache state is partitioned for that account.
+
+Example queries:
+
+```
+/forward list networks
+/forward get latest snapshot for network 101
+/forward search paths from 10.0.1.10 to 10.0.2.20
+/forward show failed checks for snapshot 123
+/forward show CVE violations by device for network 101
+/forward find NQE queries for BGP peer state
+/forward run the built-in CDP and LLDP NQE query for snapshot 123
+/forward write a bounded NQE query to list devices with their platform and type
+/forward summarize diffs between snapshots 123 and 124
+/forward show route diff prefixes between snapshots 123 and 124
+/forward show collector readiness for network 101
+/forward compare config diff between snapshots 123 and 124
+/forward compare NQE query FQ_xxx between snapshots 123 and 124
+```
+
+**Full documentation:** [docs/FORWARD.md](docs/FORWARD.md) | [Skill Definition](workspace/skills/forward/SKILL.md)
+
+---
+
 ## Architecture
 
 ```
@@ -336,6 +397,7 @@ Human (Slack / WebEx / WebChat) --> NetClaw (CCIE Agent on OpenClaw)
                                 |
                                 |-- NETWORK INTELLIGENCE:
                                 |     MCP: IP Fabric          --> Network assurance, path analysis, diagrams, intent (10 tools, remote HTTP)
+                                |     MCP: Forward          --> Snapshot assurance, paths, NQE, snapshot/config diffs, lifecycle support
                                 |     MCP: ThousandEyes (community) --> Tests, agents, path vis, dashboards (9 tools, stdio)
                                 |     MCP: ThousandEyes (official)  --> Alerts, outages, BGP, instant tests, endpoints (~20 tools, remote HTTP)
                                 |
