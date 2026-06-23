@@ -66,6 +66,7 @@ mcp-servers/*
 !mcp-servers/nautobot-routing-mcp/
 !mcp-servers/memory-mcp/
 !mcp-servers/claroty-mcp/
+!mcp-servers/ollama-mcp/
 
 # Traces
 trace.json
