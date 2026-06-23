@@ -116,11 +116,11 @@
 
 **Purpose**: Final verification and cross-cutting concerns
 
-- [ ] T030 Run verification: `find workspace/skills -maxdepth 1 -type d | tail -n +2 | wc -l` confirms 179 skills
-- [ ] T031 Run verification: `jq '.mcpServers | keys | length' config/openclaw.json` confirms 43 MCP servers
-- [ ] T032 Search all updated files for outdated counts (113, 67, 103, 48) to ensure none remain
-- [ ] T033 Verify CLAUDE.md includes recent feature additions (auto-generated - review only)
-- [ ] T034 Git add all changed files and prepare for PR
+- [x] T030 Run verification: `find workspace/skills -maxdepth 1 -type d | tail -n +2 | wc -l` confirms 179 skills
+- [x] T031 Run verification: `jq '.mcpServers | keys | length' config/openclaw.json` confirms 43 MCP servers
+- [x] T032 Search all updated files for outdated counts (113, 67, 103, 48) to ensure none remain
+- [x] T033 Verify CLAUDE.md includes recent feature additions (auto-generated - review only)
+- [x] T034 Git add all changed files and prepare for PR
 
 ---
 
