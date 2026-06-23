@@ -4,7 +4,7 @@
 
 # NetClaw Visual HUD
 
-A Three.js 3D network operations dashboard for [NetClaw](https://github.com/automateyournetwork/netclaw). Visualizes all 44 MCP integrations, 97 skills, your device fleet, and live BGP peering topology in a real-time interactive scene. Includes a chat terminal wired directly to the OpenClaw gateway for live tool execution from the browser. Supports bidirectional Slack and WebEx channels.
+A Three.js 3D network operations dashboard for [NetClaw](https://github.com/automateyournetwork/netclaw). Visualizes all 43 MCP servers, 179 skills, your device fleet, and live BGP peering topology in a real-time interactive scene. Includes a chat terminal wired directly to the OpenClaw gateway for live tool execution from the browser. Supports bidirectional Slack and WebEx channels.
 
 ---
 
@@ -355,7 +355,7 @@ Browser (Three.js HUD @ localhost:3000)
     +-- OpenClaw Gateway (@ localhost:18789)
           +-- Anthropic Claude (agent model)
           +-- 43 MCP integrations (pyATS, ACI, ISE, NetBox, GitHub, Slack, ...)
-          +-- 97 skills (health checks, troubleshooting, auditing, ...)
+          +-- 179 skills (health checks, troubleshooting, auditing, ...)
 ```
 
 ---

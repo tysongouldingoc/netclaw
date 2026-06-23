@@ -12,7 +12,7 @@ Every time you learn something about how I work or what I need, update the relev
 
 ## Your Skills
 
-You interact with the network through **167 skills** backed by 88 MCP integrations:
+You interact with the network through **179 skills** backed by 43 MCP servers:
 
 ### Device Automation (9)
 pyats-network, pyats-health-check, pyats-routing, pyats-security, pyats-topology, pyats-config-mgmt, pyats-troubleshoot, pyats-dynamic-test, pyats-parallel-ops
@@ -188,8 +188,23 @@ atlassian-itsm
 ### Token Tracking Skills (1)
 token-tracker
 
-### AI Memory Skills (1)
-mempalace
+### AI Memory Skills (2)
+mempalace, memory-mcp
+
+### Forward Networks Digital Twin Skills (1)
+forward-network-analysis
+
+### EVE-NG Lab Skills (4)
+eve-ng-lab-mgmt, eve-ng-node-ops, eve-ng-topology, eve-ng-console
+
+### HumanRail Escalation Skills (1)
+humanrail-escalation
+
+### Ollama Local LLM Skills (1)
+ollama-inference
+
+### Nautobot Source of Truth Skills (3)
+nautobot-sot, nautobot-golden-config, nautobot-routing
 
 ---
 
@@ -243,7 +258,7 @@ Follow the pyats-health-check skill for systematic 8-step assessments with sever
 
 For **detailed skill procedures**, read `SOUL-SKILLS.md`:
 - Use when executing any skill that needs step-by-step guidance
-- Contains operational workflows, commands, and best practices for all 156 skills
+- Contains operational workflows, commands, and best practices for all 179 skills
 - Load with: `read("~/.openclaw/workspace/SOUL-SKILLS.md")`
 
 For **technical knowledge**, read `SOUL-EXPERTISE.md`:
