@@ -1,94 +1,61 @@
----
+testbed:
+  name: NetClaw-Full-Topo
+  credentials:
+    default:
+      username: admin
+      password: C1sco12345
+    enable:
+      password: C1sco12345
+
 devices:
   R1:
-    alias: "NetClaw-R1"
-    type: "router"
-    os: "iosxe"
-    platform: "iol-xe"
-    credentials:
-      default:
-        username: admin
-        password: C1sco12345
-      enable:
-        password: C1sco12345
+    alias: R1
+    type: router
+    os: iosxe
+    platform: iol
     connections:
-      cli:
+      defaults:
+        class: unicon.Unicon
+      ssh:
         protocol: ssh
         ip: 192.168.2.201
         port: 22
-        arguments:
-          connection_timeout: 60
 
   R2:
-    alias: "NetClaw-R2"
-    type: "router"
-    os: "iosxe"
-    platform: "iol-xe"
-    credentials:
-      default:
-        username: admin
-        password: C1sco12345
-      enable:
-        password: C1sco12345
+    alias: R2
+    type: router
+    os: iosxe
+    platform: iol
     connections:
-      cli:
+      defaults:
+        class: unicon.Unicon
+      ssh:
         protocol: ssh
         ip: 192.168.2.202
         port: 22
-        arguments:
-          connection_timeout: 60
 
   SW1:
-    alias: "NetClaw-SW1"
-    type: "switch"
-    os: "iosxe"
-    platform: "ioll2-xe"
-    credentials:
-      default:
-        username: admin
-        password: C1sco12345
-      enable:
-        password: C1sco12345
+    alias: SW1
+    type: switch
+    os: iosxe
+    platform: iol
     connections:
-      cli:
+      defaults:
+        class: unicon.Unicon
+      ssh:
         protocol: ssh
         ip: 192.168.2.211
         port: 22
-        arguments:
-          connection_timeout: 60
 
   SW2:
-    alias: "NetClaw-SW2"
-    type: "switch"
-    os: "iosxe"
-    platform: "ioll2-xe"
-    credentials:
-      default:
-        username: admin
-        password: C1sco12345
-      enable:
-        password: C1sco12345
+    alias: SW2
+    type: switch
+    os: iosxe
+    platform: iol
     connections:
-      cli:
+      defaults:
+        class: unicon.Unicon
+      ssh:
         protocol: ssh
         ip: 192.168.2.212
         port: 22
-        arguments:
-          connection_timeout: 60
-
-  PC1:
-    alias: "CML-PC1-Alpine"
-    type: "linux"
-    os: "linux"
-    platform: "alpine"
-    credentials:
-      default:
-        username: root
-        password: ""
-    connections:
-      cli:
-        protocol: ssh
-        ip: "10.10.10.11"
-        port: 22
-        arguments:
-          connection_timeout: 30

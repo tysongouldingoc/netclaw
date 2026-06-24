@@ -27,6 +27,7 @@ class MentionCategory(Enum):
     FRIENDLY = "friendly"
     OFF_TOPIC = "off_topic"
     SPAM = "spam"
+    SELF_COMMAND = "self_command"  # John's own tweets with #netclaw commands
 
 
 @dataclass
@@ -446,6 +447,144 @@ async def fetch_mentions_oauth2(
     except Exception as e:
         logger.error(f"Error fetching mentions: {e}")
         raise
+
+
+async def fetch_own_tweets_with_netclaw(
+    oauth2_token: str,
+    user_id: str,
+    limit: int = 10,
+    since_id: Optional[str] = None
+) -> List[Mention]:
+    """
+    Fetch John's own recent tweets that contain #netclaw (self-commands).
+
+    This allows John to post a tweet like:
+    "Hey #netclaw is the CML environment healthy? Make me a markmap!"
+
+    And have the heartbeat cycle pick it up as a command to execute.
+
+    Args:
+        oauth2_token: OAuth 2.0 Bearer Token
+        user_id: Twitter user ID (John's ID)
+        limit: Maximum number of tweets to return
+        since_id: Only return tweets newer than this ID
+
+    Returns:
+        List of Mention objects with category=SELF_COMMAND
+    """
+    headers = {
+        "Authorization": f"Bearer {oauth2_token}",
+        "Content-Type": "application/json"
+    }
+
+    params = {
+        "max_results": max(5, min(limit, 100)),
+        "tweet.fields": "created_at,conversation_id,in_reply_to_user_id,author_id",
+        "exclude": "retweets,replies"  # Only original tweets, not replies
+    }
+    if since_id:
+        params["since_id"] = since_id
+
+    try:
+        response = requests.get(
+            f"https://api.twitter.com/2/users/{user_id}/tweets",
+            headers=headers,
+            params=params
+        )
+
+        if response.status_code == 429:
+            raise tweepy.TooManyRequests(response)
+
+        if response.status_code != 200:
+            logger.error(f"Error fetching own tweets: {response.text}")
+            return []
+
+        data = response.json()
+
+        if "data" not in data:
+            return []
+
+        commands = []
+        for tweet in data["data"]:
+            text = tweet["text"].lower()
+
+            # Only include tweets with #netclaw
+            if "#netclaw" not in text:
+                continue
+
+            command = Mention(
+                tweet_id=tweet["id"],
+                author_id=user_id,
+                author_handle="John_Capobianco",  # It's John's own tweet
+                text=tweet["text"],
+                created_at=datetime.fromisoformat(tweet["created_at"].replace("Z", "+00:00")) if tweet.get("created_at") else datetime.utcnow(),
+                conversation_id=tweet.get("conversation_id"),
+                in_reply_to_tweet_id=None,
+                category=MentionCategory.SELF_COMMAND
+            )
+            commands.append(command)
+
+        logger.info(f"Found {len(commands)} #netclaw self-commands")
+        return commands
+
+    except Exception as e:
+        logger.error(f"Error fetching own tweets: {e}")
+        raise
+
+
+def parse_netclaw_command(text: str) -> Dict[str, Any]:
+    """
+    Parse a #netclaw command from a tweet.
+
+    Examples:
+        "Hey #netclaw is CML healthy?" -> {"action": "health_check", "target": "cml"}
+        "#netclaw make a markmap of the topology" -> {"action": "markmap", "target": "topology"}
+        "#netclaw check BGP peers" -> {"action": "check", "target": "bgp"}
+
+    Returns:
+        Dict with parsed command details
+    """
+    text_lower = text.lower()
+
+    # Remove the #netclaw tag and common prefixes
+    clean = re.sub(r'#netclaw', '', text_lower, flags=re.IGNORECASE)
+    clean = re.sub(r'^(hey|hi|hello|please|can you|could you)\s*,?\s*', '', clean.strip())
+
+    command = {
+        "raw_text": text,
+        "clean_text": clean.strip(),
+        "action": "unknown",
+        "target": None,
+        "details": {}
+    }
+
+    # Detect action type
+    if any(word in clean for word in ["health", "healthy", "status", "check"]):
+        command["action"] = "health_check"
+    elif any(word in clean for word in ["markmap", "mindmap", "mind map", "diagram"]):
+        command["action"] = "markmap"
+    elif any(word in clean for word in ["topology", "topo"]):
+        command["action"] = "topology"
+    elif any(word in clean for word in ["bgp", "peer", "neighbor"]):
+        command["action"] = "bgp_check"
+    elif any(word in clean for word in ["interface", "port"]):
+        command["action"] = "interface_check"
+    elif any(word in clean for word in ["config", "configuration"]):
+        command["action"] = "config_check"
+    elif any(word in clean for word in ["rfc", "validate", "compliance"]):
+        command["action"] = "rfc_validate"
+
+    # Detect target system
+    if "cml" in clean or "cisco modeling" in clean:
+        command["target"] = "cml"
+    elif "netbox" in clean:
+        command["target"] = "netbox"
+    elif "pyats" in clean or "genie" in clean:
+        command["target"] = "pyats"
+    elif "network" in clean:
+        command["target"] = "network"
+
+    return command
 
 
 async def fetch_mentions_with_retry(

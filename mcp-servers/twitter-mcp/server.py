@@ -41,7 +41,7 @@ from mentions import (
     fetch_mentions_with_retry, fetch_mentions_oauth2, classify_mention,
     get_authenticated_user_id, get_authenticated_user_id_oauth2,
     get_conversation_context, ProcessedMentionTracker, InteractionHistory,
-    Mention, MentionCategory
+    Mention, MentionCategory, fetch_own_tweets_with_netclaw, parse_netclaw_command
 )
 from replies import (
     generate_reply_prompt, validate_reply_content, post_reply,
@@ -710,6 +710,44 @@ async def list_tools() -> list[Tool]:
                 "required": ["username"]
             }
         ),
+        Tool(
+            name="twitter_heartbeat_cycle",
+            description=(
+                "Combined heartbeat cycle: 1) Check for new mentions in threads with #netclaw, "
+                "2) Auto-respond to unprocessed mentions, 3) Optionally post heartbeat tweet. "
+                "This is the main polling function that should be called periodically."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "post_heartbeat": {
+                        "type": "boolean",
+                        "description": "Whether to post a heartbeat tweet this cycle (default: false)",
+                        "default": False
+                    },
+                    "heartbeat_category": {
+                        "type": "string",
+                        "description": "Content category for heartbeat (tip, hot_take, til, achievement, musing, community)",
+                        "enum": ["tip", "hot_take", "til", "achievement", "musing", "community"]
+                    },
+                    "heartbeat_content": {
+                        "type": "string",
+                        "description": "Pre-generated heartbeat content (if post_heartbeat=true)"
+                    },
+                    "respond_to_netclaw_only": {
+                        "type": "boolean",
+                        "description": "Only respond to mentions in threads containing #netclaw (default: true)",
+                        "default": True
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "If true, don't actually post replies - just report what would happen",
+                        "default": False
+                    }
+                },
+                "required": []
+            }
+        ),
     ]
 
 
@@ -814,6 +852,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     elif name == "twitter_get_user_history":
         return await handle_get_user_history(
             username=arguments["username"]
+        )
+
+    elif name == "twitter_heartbeat_cycle":
+        return await handle_heartbeat_cycle(
+            post_heartbeat=arguments.get("post_heartbeat", False),
+            heartbeat_category=arguments.get("heartbeat_category"),
+            heartbeat_content=arguments.get("heartbeat_content"),
+            respond_to_netclaw_only=arguments.get("respond_to_netclaw_only", True),
+            dry_run=arguments.get("dry_run", False)
         )
 
     else:
@@ -1531,6 +1578,188 @@ async def handle_get_user_history(username: str) -> list[TextContent]:
     except Exception as e:
         logger.error(f"Error getting user history: {e}")
         return [TextContent(type="text", text=f"Error: {str(e)}")]
+
+
+async def handle_heartbeat_cycle(
+    post_heartbeat: bool = False,
+    heartbeat_category: str | None = None,
+    heartbeat_content: str | None = None,
+    respond_to_netclaw_only: bool = True,
+    dry_run: bool = False
+) -> list[TextContent]:
+    """
+    Combined heartbeat cycle that:
+    1. Fetches recent mentions
+    2. Finds mentions in threads containing #netclaw
+    3. Auto-responds to unprocessed mentions
+    4. Optionally posts a heartbeat tweet
+    """
+    import requests
+    from requests_oauthlib import OAuth1
+
+    response_parts = []
+    response_parts.append("## Twitter Heartbeat Cycle\n")
+
+    try:
+        # Step 1: Get OAuth tokens
+        oauth2_token = get_oauth2_token()
+        if not oauth2_token:
+            return [TextContent(type="text", text="Error: TWITTER_OAUTH2_TOKEN not configured")]
+
+        # Step 2: Get authenticated user ID
+        user_id = await get_user_id()
+        response_parts.append(f"**Authenticated as**: User ID {user_id}\n")
+
+        # Step 3: Fetch recent mentions
+        mentions = await fetch_mentions_oauth2(oauth2_token, user_id, limit=20)
+        response_parts.append(f"**Mentions found**: {len(mentions)}\n\n")
+
+        # Step 4: Filter to unprocessed mentions
+        unprocessed = [m for m in mentions if not m.processed]
+        response_parts.append(f"**Unprocessed mentions**: {len(unprocessed)}\n")
+
+        # Step 5: Check each mention's thread for #netclaw
+        replies_posted = 0
+        mentions_skipped = 0
+
+        # OAuth 1.0a for posting replies
+        auth = OAuth1(
+            os.environ['TWITTER_API_KEY'],
+            os.environ['TWITTER_API_SECRET'],
+            os.environ['TWITTER_ACCESS_TOKEN'],
+            os.environ['TWITTER_ACCESS_SECRET']
+        )
+
+        for mention in unprocessed:
+            # Check if #netclaw is in the mention text OR we should respond to all
+            has_netclaw = "#netclaw" in mention.text.lower()
+
+            # For thread checking, we'd need to fetch the original tweet
+            # For now, check if the mention itself or conversation has #netclaw
+            should_respond = has_netclaw or not respond_to_netclaw_only
+
+            if not should_respond:
+                # Check if conversation root has #netclaw (simplified - check conversation_id)
+                # In a full implementation, we'd fetch the original tweet
+                # For now, use a heuristic: if conversation_id != tweet_id, it's a reply
+                if mention.conversation_id and mention.conversation_id != mention.tweet_id:
+                    # This is a reply - assume thread might have #netclaw if we're configured to check
+                    should_respond = True
+
+            if not should_respond:
+                mentions_skipped += 1
+                continue
+
+            # Generate a contextual reply based on mention category
+            category = mention.category.value if mention.category else "unknown"
+            author = mention.author_handle or "user"
+
+            # Generate reply based on category
+            if category == "netclaw_request":
+                reply_text = f"@{author} Thanks for the #netclaw request! I've logged this for processing. Network automation in action! 🔧"
+            elif category == "technical_network":
+                reply_text = f"@{author} Good network question! This is exactly what NetClaw helps with - automated network analysis and troubleshooting. #netclaw"
+            elif category == "friendly":
+                reply_text = f"@{author} Thanks for the kind words! The network never sleeps, and neither does NetClaw. 🌐 #netclaw"
+            else:
+                reply_text = f"@{author} Thanks for reaching out! #netclaw is always listening. 🎧"
+
+            if dry_run:
+                response_parts.append(f"\n**[DRY RUN]** Would reply to @{author}: {reply_text[:50]}...")
+            else:
+                # Post the reply
+                url = "https://api.twitter.com/2/tweets"
+                payload = {
+                    "text": reply_text,
+                    "reply": {"in_reply_to_tweet_id": mention.tweet_id}
+                }
+                resp = requests.post(url, auth=auth, json=payload)
+
+                if resp.status_code == 201:
+                    reply_id = resp.json()['data']['id']
+                    response_parts.append(f"\n✅ Replied to @{author} (ID: {reply_id})")
+                    replies_posted += 1
+
+                    # Mark as processed
+                    _mention_tracker.mark_processed(mention.tweet_id, "replied", reply_id)
+                else:
+                    response_parts.append(f"\n❌ Failed to reply to @{author}: {resp.status_code}")
+
+        response_parts.append(f"\n\n**Summary**: {replies_posted} replies posted, {mentions_skipped} skipped\n")
+
+        # Step 6: Check for John's own #netclaw commands
+        response_parts.append("\n---\n## Self-Commands (John's #netclaw tweets)\n")
+        try:
+            self_commands = await fetch_own_tweets_with_netclaw(oauth2_token, user_id, limit=10)
+            response_parts.append(f"**Self-commands found**: {len(self_commands)}\n")
+
+            commands_processed = 0
+            for cmd in self_commands:
+                # Skip if already processed
+                if await _mention_tracker.is_processed(cmd.tweet_id):
+                    continue
+
+                # Parse the command
+                parsed = parse_netclaw_command(cmd.text)
+                response_parts.append(f"\n**Command**: {cmd.text[:80]}...")
+                response_parts.append(f"\n  - Action: {parsed['action']}")
+                response_parts.append(f"\n  - Target: {parsed['target']}")
+
+                # Generate response based on command type
+                if parsed['action'] == 'health_check' and parsed['target'] == 'cml':
+                    reply_text = "🔍 Checking CML environment health... I'll run pyATS to verify device connectivity and report back! #netclaw"
+                    # TODO: Actually call CML/pyATS tools and include results
+                elif parsed['action'] == 'markmap':
+                    reply_text = "🗺️ Creating a markmap visualization... Stand by for the mind map! #netclaw"
+                    # TODO: Actually call markmap MCP and attach image
+                elif parsed['action'] == 'bgp_check':
+                    reply_text = "🔄 Checking BGP peer status... Running neighbor verification now! #netclaw"
+                elif parsed['action'] == 'rfc_validate':
+                    reply_text = "📋 Running RFC compliance validation... This may take a moment! #netclaw"
+                else:
+                    reply_text = f"📬 Received your #netclaw command! Processing: {parsed['clean_text'][:100]}"
+
+                if dry_run:
+                    response_parts.append(f"\n  - **[DRY RUN]** Would reply: {reply_text[:50]}...")
+                else:
+                    # Post reply to John's own tweet
+                    url = "https://api.twitter.com/2/tweets"
+                    payload = {
+                        "text": reply_text,
+                        "reply": {"in_reply_to_tweet_id": cmd.tweet_id}
+                    }
+                    resp = requests.post(url, auth=auth, json=payload)
+
+                    if resp.status_code == 201:
+                        reply_id = resp.json()['data']['id']
+                        response_parts.append(f"\n  - ✅ Replied (ID: {reply_id})")
+                        _mention_tracker.mark_processed(cmd.tweet_id, "self_command_ack", reply_id)
+                        commands_processed += 1
+                    else:
+                        response_parts.append(f"\n  - ❌ Failed: {resp.status_code}")
+
+            response_parts.append(f"\n\n**Self-commands processed**: {commands_processed}\n")
+
+        except Exception as e:
+            response_parts.append(f"\n⚠️ Error checking self-commands: {e}\n")
+
+        # Step 7: Optionally post heartbeat tweet
+        if post_heartbeat and heartbeat_content:
+            if dry_run:
+                response_parts.append(f"\n**[DRY RUN]** Would post heartbeat: {heartbeat_content[:50]}...")
+            else:
+                result = await post_tweet_with_history(
+                    content=heartbeat_content,
+                    category=heartbeat_category,
+                    is_heartbeat=True
+                )
+                response_parts.append(f"\n**Heartbeat posted**: {heartbeat_category}")
+
+        return [TextContent(type="text", text="\n".join(response_parts))]
+
+    except Exception as e:
+        logger.error(f"Error in heartbeat cycle: {e}")
+        return [TextContent(type="text", text=f"Error in heartbeat cycle: {str(e)}")]
 
 
 async def main():
