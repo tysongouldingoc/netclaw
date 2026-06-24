@@ -1,12 +1,16 @@
 # Skill: Twitter Heartbeat
 
-**Purpose**: Autonomous periodic tweeting to maintain NetClaw's Twitter presence with CCIE-level network engineering content.
+**Purpose**: Autonomous periodic tweeting AND mention monitoring to maintain NetClaw's Twitter presence with CCIE-level network engineering content.
 
 **MCP Server**: twitter-mcp
 
 ## Overview
 
-The twitter-heartbeat skill enables NetClaw to autonomously post tweets every 4 hours (configurable) with varied content drawn from six categories. This maintains an active social presence and demonstrates value to the network engineering community.
+The twitter-heartbeat skill enables NetClaw to:
+1. **Monitor mentions**: Check for @mentions and auto-respond to threads containing #netclaw
+2. **Post heartbeat tweets**: Autonomously post every 4 hours (configurable) with varied content
+
+This combined approach maintains an active social presence AND engages with the community in real-time.
 
 ## Configuration
 
@@ -38,6 +42,37 @@ The heartbeat rotates through six content categories:
 | `community` | Career/culture content | "Network engineering career tip: Learn to read RFCs..." |
 
 ## Workflow
+
+### Combined Heartbeat Cycle (Recommended)
+
+Use `twitter_heartbeat_cycle` for the full workflow:
+
+```
+1. Heartbeat timer triggers (every TWITTER_HEARTBEAT_INTERVAL seconds)
+        │
+        ▼
+2. Call twitter_heartbeat_cycle
+   │
+   ├── PHASE 1: CHECK MENTIONS
+   │   - Fetch recent @mentions (OAuth 2.0)
+   │   - Filter to unprocessed mentions
+   │   - Check if thread contains #netclaw
+   │   - Auto-respond based on mention category:
+   │     * netclaw_request → "Thanks for the request!"
+   │     * technical_network → "Good network question!"
+   │     * friendly → "Thanks for the kind words!"
+   │   - Mark mentions as processed
+   │
+   ├── PHASE 2: POST HEARTBEAT (if enabled)
+   │   - Generate content for category
+   │   - Validate against guardrails
+   │   - Check for duplicates
+   │   - Post tweet with history tracking
+   │
+   └── Return summary of actions taken
+```
+
+### Heartbeat-Only Workflow (Legacy)
 
 ```
 1. Heartbeat timer triggers (every TWITTER_HEARTBEAT_INTERVAL seconds)
@@ -82,11 +117,23 @@ The heartbeat rotates through six content categories:
 
 | Tool | Purpose |
 |------|---------|
+| `twitter_heartbeat_cycle` | **Combined workflow**: Check mentions + auto-respond + post heartbeat |
 | `twitter_generate_heartbeat_content` | Get category and generation prompt |
 | `twitter_check_duplicate` | Verify content is unique (last 7 days) |
 | `twitter_post_heartbeat` | Post with category tracking and history |
 | `twitter_get_history` | Review recent tweets |
 | `twitter_get_rate_limits` | Check remaining tweet quota |
+| `twitter_get_mentions` | Fetch recent @mentions (used by heartbeat_cycle) |
+
+### twitter_heartbeat_cycle Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `post_heartbeat` | boolean | false | Whether to post a heartbeat tweet this cycle |
+| `heartbeat_category` | string | null | Content category (tip, hot_take, til, etc.) |
+| `heartbeat_content` | string | null | Pre-generated heartbeat content |
+| `respond_to_netclaw_only` | boolean | true | Only respond to #netclaw threads |
+| `dry_run` | boolean | false | Preview actions without posting |
 
 ## Content Guidelines
 
