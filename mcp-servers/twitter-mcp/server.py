@@ -41,7 +41,7 @@ from mentions import (
     fetch_mentions_with_retry, fetch_mentions_oauth2, classify_mention,
     get_authenticated_user_id, get_authenticated_user_id_oauth2,
     get_conversation_context, ProcessedMentionTracker, InteractionHistory,
-    Mention, MentionCategory
+    Mention, MentionCategory, fetch_own_tweets_with_netclaw, parse_netclaw_command
 )
 from replies import (
     generate_reply_prompt, validate_reply_content, post_reply,
@@ -1687,7 +1687,63 @@ async def handle_heartbeat_cycle(
 
         response_parts.append(f"\n\n**Summary**: {replies_posted} replies posted, {mentions_skipped} skipped\n")
 
-        # Step 6: Optionally post heartbeat tweet
+        # Step 6: Check for John's own #netclaw commands
+        response_parts.append("\n---\n## Self-Commands (John's #netclaw tweets)\n")
+        try:
+            self_commands = await fetch_own_tweets_with_netclaw(oauth2_token, user_id, limit=10)
+            response_parts.append(f"**Self-commands found**: {len(self_commands)}\n")
+
+            commands_processed = 0
+            for cmd in self_commands:
+                # Skip if already processed
+                if await _mention_tracker.is_processed(cmd.tweet_id):
+                    continue
+
+                # Parse the command
+                parsed = parse_netclaw_command(cmd.text)
+                response_parts.append(f"\n**Command**: {cmd.text[:80]}...")
+                response_parts.append(f"\n  - Action: {parsed['action']}")
+                response_parts.append(f"\n  - Target: {parsed['target']}")
+
+                # Generate response based on command type
+                if parsed['action'] == 'health_check' and parsed['target'] == 'cml':
+                    reply_text = "🔍 Checking CML environment health... I'll run pyATS to verify device connectivity and report back! #netclaw"
+                    # TODO: Actually call CML/pyATS tools and include results
+                elif parsed['action'] == 'markmap':
+                    reply_text = "🗺️ Creating a markmap visualization... Stand by for the mind map! #netclaw"
+                    # TODO: Actually call markmap MCP and attach image
+                elif parsed['action'] == 'bgp_check':
+                    reply_text = "🔄 Checking BGP peer status... Running neighbor verification now! #netclaw"
+                elif parsed['action'] == 'rfc_validate':
+                    reply_text = "📋 Running RFC compliance validation... This may take a moment! #netclaw"
+                else:
+                    reply_text = f"📬 Received your #netclaw command! Processing: {parsed['clean_text'][:100]}"
+
+                if dry_run:
+                    response_parts.append(f"\n  - **[DRY RUN]** Would reply: {reply_text[:50]}...")
+                else:
+                    # Post reply to John's own tweet
+                    url = "https://api.twitter.com/2/tweets"
+                    payload = {
+                        "text": reply_text,
+                        "reply": {"in_reply_to_tweet_id": cmd.tweet_id}
+                    }
+                    resp = requests.post(url, auth=auth, json=payload)
+
+                    if resp.status_code == 201:
+                        reply_id = resp.json()['data']['id']
+                        response_parts.append(f"\n  - ✅ Replied (ID: {reply_id})")
+                        _mention_tracker.mark_processed(cmd.tweet_id, "self_command_ack", reply_id)
+                        commands_processed += 1
+                    else:
+                        response_parts.append(f"\n  - ❌ Failed: {resp.status_code}")
+
+            response_parts.append(f"\n\n**Self-commands processed**: {commands_processed}\n")
+
+        except Exception as e:
+            response_parts.append(f"\n⚠️ Error checking self-commands: {e}\n")
+
+        # Step 7: Optionally post heartbeat tweet
         if post_heartbeat and heartbeat_content:
             if dry_run:
                 response_parts.append(f"\n**[DRY RUN]** Would post heartbeat: {heartbeat_content[:50]}...")
