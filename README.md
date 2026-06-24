@@ -4,7 +4,7 @@
 
 # NetClaw
 
-A CCIE-level AI network engineering coworker. Built on [OpenClaw](https://github.com/openclaw/openclaw) with Anthropic Claude, 179 skills, and 43 MCP servers for complete network automation with ITSM gating, source-of-truth reconciliation, immutable audit trails, gNMI streaming telemetry, Canvas/A2UI inline network visualizations, packet capture analysis, GitHub config-as-code, GitLab DevOps (issues, merge requests, pipelines, repositories, wikis), Jenkins CI/CD (job monitoring, build triggering, log analysis, SCM tracking), Cisco CML lab simulation, ContainerLab containerized network labs, Cisco NSO orchestration, Cisco SD-WAN vManage monitoring, Grafana observability (dashboards, Prometheus, Loki, alerting, incidents), Prometheus direct PromQL monitoring, Kubeshark Kubernetes traffic analysis, Cisco Meraki Dashboard management, Cisco ThousandEyes network intelligence, AWS cloud networking, Cisco Secure Firewall policy auditing, Check Point Security (15 MCPs: policy, threat intel, gateway, SASE, malware), Itential network orchestration, Juniper JunOS device automation, Arista CloudVision Portal monitoring, F5 BIG-IP pyATS iControl REST coverage, Infoblox DDI, Palo Alto Panorama, FortiManager, Batfish offline configuration analysis, UML diagram generation, EVPN/VXLAN fabric workflows, live BGP/OSPF control-plane participation, nmap network scanning, gtrace path analysis and IP enrichment, Slack-native operations, Cisco WebEx-native operations, Microsoft 365 integration, and MemPalace persistent AI memory.
+A CCIE-level AI network engineering coworker. Built on [OpenClaw](https://github.com/openclaw/openclaw) with Anthropic Claude, 182 skills, and 43 MCP servers for complete network automation with ITSM gating, source-of-truth reconciliation, immutable audit trails, gNMI streaming telemetry, Canvas/A2UI inline network visualizations, packet capture analysis, GitHub config-as-code, GitLab DevOps (issues, merge requests, pipelines, repositories, wikis), Jenkins CI/CD (job monitoring, build triggering, log analysis, SCM tracking), Cisco CML lab simulation, ContainerLab containerized network labs, Cisco NSO orchestration, Cisco SD-WAN vManage monitoring, Grafana observability (dashboards, Prometheus, Loki, alerting, incidents), Prometheus direct PromQL monitoring, Kubeshark Kubernetes traffic analysis, Cisco Meraki Dashboard management, Cisco ThousandEyes network intelligence, AWS cloud networking, Cisco Secure Firewall policy auditing, Check Point Security (15 MCPs: policy, threat intel, gateway, SASE, malware), Itential network orchestration, Juniper JunOS device automation, Arista CloudVision Portal monitoring, F5 BIG-IP pyATS iControl REST coverage, Infoblox DDI, Palo Alto Panorama, FortiManager, Batfish offline configuration analysis, UML diagram generation, EVPN/VXLAN fabric workflows, live BGP/OSPF control-plane participation, nmap network scanning, gtrace path analysis and IP enrichment, Slack-native operations, Cisco WebEx-native operations, Microsoft 365 integration, and MemPalace persistent AI memory.
 
 ---
 
@@ -16,7 +16,7 @@ cd netclaw
 ./scripts/install.sh          # installs everything, then launches the setup wizard
 ```
 
-That's it. The installer deploys 179 skills, installs bundled MCP dependencies, and prepares configuration for 43 MCP servers, then launches a two-phase setup:
+That's it. The installer deploys 182 skills, installs bundled MCP dependencies, and prepares configuration for 43 MCP servers, then launches a two-phase setup:
 
 **Phase 1: `openclaw onboard`** (OpenClaw's built-in wizard)
 - Pick your AI provider (Anthropic, OpenAI, Bedrock, Vertex, 30+ options)
@@ -93,7 +93,7 @@ claw
   <img src="ui/netclaw-visual/logos/netclawvisualhud.png" alt="NetClaw Visual HUD — 3D Network Operations Dashboard" width="800">
 </p>
 
-NetClaw includes a Three.js 3D operations dashboard that visualizes all 43 MCP servers, 179 skills, your device fleet, and live BGP peering topology. Chat with NetClaw directly from the browser, watch integrations light up as tools execute, and inspect every node in the graph. The Canvas/A2UI visualization skill renders inline topology maps, health dashboards, alert cards, change timelines, config diffs, path traces, and health scorecards directly in the chat interface.
+NetClaw includes a Three.js 3D operations dashboard that visualizes all 43 MCP servers, 182 skills, your device fleet, and live BGP peering topology. Chat with NetClaw directly from the browser, watch integrations light up as tools execute, and inspect every node in the graph. The Canvas/A2UI visualization skill renders inline topology maps, health dashboards, alert cards, change timelines, config diffs, path traces, and health scorecards directly in the chat interface.
 
 ```bash
 cd ui/netclaw-visual
@@ -948,6 +948,90 @@ Memory MCP runs via FastMCP stdio (10 tools for persistent network memory — `m
 | **webex-voice-interface** | Voice responses for WebEx: OpenClaw transcribes voice clips, NetClaw processes with full skill set, edge-tts generates MP3, uploaded to WebEx space alongside text |
 
 > WebEx setup is documented in the dedicated **[Cisco WebEx Integration](#cisco-webex-integration)** section below.
+
+### Twitter/X Integration Skills (3)
+
+| Skill | Purpose |
+|-------|---------|
+| **twitter-heartbeat** | Autonomous periodic tweeting every 4 hours with CCIE-level content. Rotates through 6 categories: tips, hot takes, TIL, achievements, musings, community. Memory-driven deduplication. |
+| **twitter-share** | Manual tweet posting with human approval flow. Content guardrails prevent IP addresses, credentials, and customer names from being posted. Thread support for content >280 chars. |
+| **twitter-respond** | Bidirectional interaction - monitors @mentions, classifies intent, generates CCIE-level replies with human approval. Tracks user interaction history. |
+
+> Twitter integration supports **bidirectional** interaction with pay-as-you-go tier. See the **[Twitter/X Integration](#twitterx-integration)** section below for setup.
+
+---
+
+## Twitter/X Integration
+
+NetClaw maintains a Twitter/X presence via @John_Capobianco's account. The integration supports **bidirectional** interaction with pay-as-you-go tier - post tweets AND respond to @mentions.
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Heartbeat Tweets** | Automatic tweets every 4 hours with CCIE-level network engineering content |
+| **Manual Tweets** | Post specific content via natural language ("tweet about BGP path selection") |
+| **Mention Monitoring** | Poll for @mentions and classify intent (netclaw_request, technical, friendly, spam) |
+| **Reply Generation** | Generate CCIE-level technical replies with conversation context |
+| **Human Approval** | All replies require explicit approval before posting (Constitution Principle XIV) |
+| **Content Guardrails** | Blocks IP addresses, credentials, customer names. Sanitizes before posting. |
+| **Thread Support** | Content >280 chars automatically split into threaded tweets |
+| **#netclaw Hashtag** | Every tweet includes #netclaw for community visibility |
+| **User Memory** | Track interaction history with users for personalized responses |
+
+### Setup
+
+1. Get Twitter API credentials from [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+2. Ensure your app is attached to a Project (required for API v2)
+3. Add to `~/.openclaw/.env`:
+
+```bash
+TWITTER_API_KEY=your_api_key
+TWITTER_API_SECRET=your_api_secret
+TWITTER_ACCESS_TOKEN=your_access_token
+TWITTER_ACCESS_SECRET=your_access_token_secret
+
+# Optional: Enable autonomous heartbeat tweets (disabled by default)
+TWITTER_HEARTBEAT_ENABLED=true
+TWITTER_HEARTBEAT_INTERVAL=14400  # 4 hours in seconds
+
+# Optional: Mention polling interval
+TWITTER_MENTION_POLL_INTERVAL=300  # Check every 5 minutes
+```
+
+4. Restart the OpenClaw gateway
+
+### Usage Examples
+
+**Posting:**
+```
+"Tweet about OSPF area types"
+"Tweet: Just finished auditing 50 BGP peers! #netclaw"
+"Check my Twitter rate limits"
+```
+
+**Mention Interaction:**
+```
+"Check my Twitter mentions"
+"Reply to the BGP question"
+"Show me my conversation history with @alice_neteng"
+```
+
+### Cost Estimates
+
+With pay-as-you-go tier (~$0.01 per API call):
+- Check mentions: ~$0.01
+- Post tweet/reply: ~$0.01
+- Full reply interaction: ~$0.03-0.05
+- With $5 credit: ~100-150 interactions
+
+### Human Approval
+
+Per Constitution Principle XIV, Twitter is external communication:
+- Manual tweets show preview and require approval before posting
+- **All replies require explicit approval** - use `approved=true` parameter
+- Heartbeat tweets require opt-in via `TWITTER_HEARTBEAT_ENABLED=true`
+- All posted replies are logged to audit trail
 
 ---
 

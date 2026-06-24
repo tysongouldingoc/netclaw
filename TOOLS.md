@@ -43,6 +43,7 @@ All credentials are in `~/.openclaw/.env`. Never put credentials in skill files 
 - GitLab MCP          → GITLAB_PERSONAL_ACCESS_TOKEN, GITLAB_API_URL (default: gitlab.com)
 - Jenkins MCP         → JENKINS_URL, JENKINS_AUTH_BASE64 (remote HTTP, Basic Auth)
 - Claroty xDome MCP   → CLAROTY_API_URL (default: https://api.medigate.io), CLAROTY_API_TOKEN, CLAROTY_VERIFY_SSL, CLAROTY_TIMEOUT, CLAROTY_RATE_LIMIT_PER_MIN (default: 2000)
+- Twitter MCP         → TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET, TWITTER_HEARTBEAT_ENABLED (default: false)
 ```
 
 ## GitLab MCP Server
@@ -168,6 +169,28 @@ The gNMI MCP server provides 10 tools for streaming telemetry and model-driven c
 - **Agent Diary**: write/read specialist agent journals (AAAK-compressed)
 - Transport: stdio, Python 3.9+, no credentials, fully offline
 - `MEMPALACE_MCP_SCRIPT` → cloned repo `mcp_server.py`
+
+## Twitter MCP Server (NetClaw Native)
+
+16 MCP tools for Twitter/X integration — bidirectional (pay-as-you-go tier) via stdio transport:
+
+**Posting Tools (9):**
+- **Posting**: `twitter_post_tweet`, `twitter_post_thread`, `twitter_post_tweet_with_media`, `twitter_delete_tweet`
+- **Rate Limits**: `twitter_get_rate_limits` — quota monitoring
+- **Heartbeat**: `twitter_generate_heartbeat_content`, `twitter_post_heartbeat` — autonomous CCIE-persona tweets (opt-in)
+- **Deduplication**: `twitter_check_duplicate`, `twitter_get_history` — 30-day memory-backed history
+
+**Bidirectional Tools (7):**
+- **Mentions**: `twitter_get_mentions` — fetch @mentions, `twitter_classify_mention` — categorize intent
+- **Conversation**: `twitter_get_conversation` — thread context for context-aware replies
+- **Reply**: `twitter_generate_reply` — CCIE-level draft, `twitter_reply_to_tweet` — post with human approval
+- **Tracking**: `twitter_mark_processed` — prevent duplicate handling, `twitter_get_user_history` — interaction memory
+
+- Content guardrails: IPv4/IPv6 sanitization (RFC 5737/3849), MAC/credential/hostname blocking
+- Human approval required for all replies (Constitution Principle XIV)
+- Spam detection: account age, follower ratio, username patterns, content patterns
+- `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`
+- `TWITTER_MENTION_POLL_INTERVAL` — polling frequency (default 300s)
 
 ## Claroty xDome MCP Server
 

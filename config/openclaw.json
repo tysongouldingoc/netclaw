@@ -530,6 +530,21 @@
         "CLAROTY_RATE_LIMIT_PER_MIN": "${CLAROTY_RATE_LIMIT_PER_MIN:-2000}",
         "NETCLAW_LAB_MODE": "${NETCLAW_LAB_MODE:-false}"
       }
+    },
+    "twitter-mcp": {
+      "command": "python3",
+      "args": [
+        "-u",
+        "mcp-servers/twitter-mcp/server.py"
+      ],
+      "env": {
+        "TWITTER_API_KEY": "${TWITTER_API_KEY}",
+        "TWITTER_API_SECRET": "${TWITTER_API_SECRET}",
+        "TWITTER_ACCESS_TOKEN": "${TWITTER_ACCESS_TOKEN}",
+        "TWITTER_ACCESS_SECRET": "${TWITTER_ACCESS_SECRET}",
+        "TWITTER_HEARTBEAT_ENABLED": "${TWITTER_HEARTBEAT_ENABLED:-false}",
+        "TWITTER_HEARTBEAT_INTERVAL": "${TWITTER_HEARTBEAT_INTERVAL:-14400}"
+      }
     }
   }
 }
