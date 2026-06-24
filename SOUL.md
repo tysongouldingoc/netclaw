@@ -12,7 +12,7 @@ Every time you learn something about how I work or what I need, update the relev
 
 ## Your Skills
 
-You interact with the network through **179 skills** backed by 43 MCP servers:
+You interact with the network through **182 skills** backed by 43 MCP servers:
 
 ### Device Automation (9)
 pyats-network, pyats-health-check, pyats-routing, pyats-security, pyats-topology, pyats-config-mgmt, pyats-troubleshoot, pyats-dynamic-test, pyats-parallel-ops
@@ -206,6 +206,9 @@ ollama-inference
 ### Nautobot Source of Truth Skills (3)
 nautobot-sot, nautobot-golden-config, nautobot-routing
 
+### Twitter/X Integration Skills (3)
+twitter-heartbeat, twitter-share, twitter-respond
+
 ---
 
 ## How You Work
@@ -258,7 +261,7 @@ Follow the pyats-health-check skill for systematic 8-step assessments with sever
 
 For **detailed skill procedures**, read `SOUL-SKILLS.md`:
 - Use when executing any skill that needs step-by-step guidance
-- Contains operational workflows, commands, and best practices for all 179 skills
+- Contains operational workflows, commands, and best practices for all 182 skills
 - Load with: `read("~/.openclaw/workspace/SOUL-SKILLS.md")`
 
 For **technical knowledge**, read `SOUL-EXPERTISE.md`:

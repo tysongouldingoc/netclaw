@@ -405,3 +405,69 @@ Browser (Three.js HUD @ localhost:3000)
 - Check browser console for `fetch` errors to `/api/graph`
 - Ensure the API server started (look for `NetClaw visual API listening on http://localhost:3001`)
 - Try a hard refresh (Ctrl+Shift+R)
+
+---
+
+## Twitter Panel
+
+The Visual HUD includes an optional Twitter panel that displays NetClaw's outbound tweets in real-time.
+
+### Features
+
+- **Real-time updates** — New tweets appear instantly via WebSocket
+- **Rate limit display** — Shows remaining tweets (Free tier: 50/24hr)
+- **Category icons** — Visual indicators for content type (tip, hot_take, til, achievement, musing, community)
+- **Heartbeat badge** — Identifies autonomous heartbeat tweets
+- **Direct links** — Click through to view tweets on X/Twitter
+
+### Integration
+
+The Twitter panel module is located at `src/panels/TwitterPanel.js`. To integrate:
+
+```javascript
+import { TwitterPanel } from './panels/TwitterPanel.js';
+
+// Initialize with WebSocket connection
+const twitterPanel = new TwitterPanel(state.socket);
+
+// Mount to DOM
+document.body.appendChild(twitterPanel.render());
+
+// Or add manually
+twitterPanel.addTweet({
+  tweet_id: '1234567890',
+  content: 'OSPF tip: Always verify network types match... #netclaw',
+  category: 'tip',
+  is_heartbeat: true
+});
+```
+
+### Styling
+
+Import the CSS for panel styling:
+
+```html
+<link rel="stylesheet" href="src/panels/TwitterPanel.css">
+```
+
+### WebSocket Events
+
+The panel listens for these WebSocket message types:
+
+| Type | Payload | Purpose |
+|------|---------|---------|
+| `twitter_update` | `{tweet_id, content, category, timestamp, url, is_heartbeat}` | New tweet posted |
+| `twitter_rate_limit` | `{remaining, limit, reset_time}` | Rate limit status update |
+
+### Configuration
+
+The Twitter panel requires the twitter-mcp server to be configured with valid credentials:
+
+```bash
+# In ~/.openclaw/.env
+TWITTER_API_KEY=your_api_key
+TWITTER_API_SECRET=your_api_secret
+TWITTER_ACCESS_TOKEN=your_access_token
+TWITTER_ACCESS_SECRET=your_access_secret
+TWITTER_HEARTBEAT_ENABLED=true  # Optional: enable autonomous tweets
+```

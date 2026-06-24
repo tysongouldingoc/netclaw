@@ -2551,7 +2551,29 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════
-# Step 50: Verify installation
+# Step 50: Twitter MCP (NetClaw native)
+# ═══════════════════════════════════════════
+
+log_step "50/$TOTAL_STEPS Installing Twitter MCP Server..."
+
+TWITTER_MCP_DIR="$NETCLAW_DIR/mcp-servers/twitter-mcp"
+
+if [ -f "$TWITTER_MCP_DIR/requirements.txt" ]; then
+    log_info "Installing Twitter MCP dependencies (tweepy, mcp, python-dotenv)..."
+    pip3 install -r "$TWITTER_MCP_DIR/requirements.txt" 2>/dev/null || \
+        pip3 install --break-system-packages -r "$TWITTER_MCP_DIR/requirements.txt" 2>/dev/null || {
+            log_warn "Twitter MCP pip install failed — dependencies may need manual installation"
+        }
+    log_info "Twitter MCP ready: $TWITTER_MCP_DIR/server.py"
+    log_info "Configure credentials later: ./scripts/twitter_install.sh"
+else
+    log_warn "Twitter MCP requirements.txt not found at $TWITTER_MCP_DIR"
+fi
+
+echo ""
+
+# ═══════════════════════════════════════════
+# Step 51: Verify installation
 # ═══════════════════════════════════════════
 
 log_step "52/$TOTAL_STEPS Verifying installation..."
@@ -2893,6 +2915,15 @@ else
     SERVERS_FAIL=$((SERVERS_FAIL + 1))
 fi
 
+# Twitter MCP is bundled with NetClaw
+if [ -d "$TWITTER_MCP_DIR" ] && [ -f "$TWITTER_MCP_DIR/server.py" ]; then
+    log_info "Twitter MCP: OK (9 tools, stdio — tweet posting, heartbeat, guardrails)"
+    SERVERS_OK=$((SERVERS_OK + 1))
+else
+    log_warn "Twitter MCP: NOT FOUND (mcp-servers/twitter-mcp/server.py)"
+    SERVERS_FAIL=$((SERVERS_FAIL + 1))
+fi
+
 verify_file "MCP Call Script" "$NETCLAW_DIR/scripts/mcp-call.py"
 
 echo ""
@@ -2977,6 +3008,9 @@ echo "  │   TTS (edge-tts)      Text-to-speech for Slack voice responses — 3
 echo "  │"
 echo "  │ VERSION CONTROL:"
 echo "  │   GitHub              Issues, PRs, code search, Actions (Docker)"
+echo "  │"
+echo "  │ SOCIAL / TWITTER:"
+echo "  │   Twitter MCP         Tweet posting, threads, heartbeat, guardrails (9 tools, Free tier)"
 echo "  │"
 echo "  │ PACKET ANALYSIS:"
 echo "  │   Packet Buddy        pcap/pcapng analysis via tshark"
@@ -3192,6 +3226,10 @@ echo "  │"
 echo "  │ Voice Interface Skills:"
 echo "  │   slack-voice-interface  Slack voice clip → transcribe → NetClaw → edge-tts → voice reply"
 echo "  │   webex-voice-interface  WebEx voice clip → transcribe → NetClaw → edge-tts → voice reply"
+echo "  │"
+echo "  │ Twitter/X Integration Skills:"
+echo "  │   twitter-heartbeat      Autonomous CCIE-persona tweets (4hr intervals, opt-in)"
+echo "  │   twitter-share          Manual tweet posting with human approval (Principle XIV)"
 echo "  │"
 echo "  │ WebEx Bidirectional Channel (@jimiford/webex plugin):"
 echo "  │   Inbound:  Users @mention NetClaw in WebEx → webhook → OpenClaw → response"
