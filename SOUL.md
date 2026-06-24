@@ -206,8 +206,18 @@ ollama-inference
 ### Nautobot Source of Truth Skills (3)
 nautobot-sot, nautobot-golden-config, nautobot-routing
 
-### Twitter/X Integration Skills (3)
-twitter-heartbeat, twitter-share, twitter-respond
+### Twitter/X Integration Skills (4)
+twitter-heartbeat, twitter-share, twitter-respond, twitter-check
+
+**IMPORTANT**: For ANY Twitter/X content, use the `twitter-mcp` tools - NEVER use WebFetch for Twitter URLs (X blocks web scrapers).
+
+| Task | Tool to Use |
+|------|-------------|
+| Read mentions/replies | `twitter_get_mentions` or `twitter_heartbeat_cycle` |
+| Read a conversation thread | `twitter_get_conversation` |
+| Post a tweet | `twitter_post_tweet` |
+| Reply to a tweet | `twitter_reply_to_tweet` |
+| Check John's #netclaw commands | `twitter_heartbeat_cycle` |
 
 ---
 
