@@ -95,8 +95,125 @@ def get_mention_poll_config() -> dict:
 
 
 def get_oauth2_token() -> Optional[str]:
-    """Get OAuth 2.0 token from environment."""
-    return os.environ.get("TWITTER_OAUTH2_TOKEN")
+    """Get OAuth 2.0 token from environment, auto-refreshing if needed."""
+    return os.environ.get("TWITTER_OAUTH2_ACCESS_TOKEN") or os.environ.get("TWITTER_OAUTH2_TOKEN")
+
+
+def refresh_oauth2_token() -> Optional[str]:
+    """
+    Refresh the OAuth 2.0 access token using the refresh token.
+    Returns the new access token, or None if refresh failed.
+    """
+    refresh_token = os.environ.get("TWITTER_OAUTH2_REFRESH_TOKEN")
+    client_id = os.environ.get("TWITTER_CLIENT_ID")
+    client_secret = os.environ.get("TWITTER_CLIENT_SECRET")
+
+    if not refresh_token or not client_id:
+        logger.warning("Cannot refresh OAuth2 token: missing TWITTER_OAUTH2_REFRESH_TOKEN or TWITTER_CLIENT_ID")
+        return None
+
+    try:
+        import requests
+
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id
+        }
+
+        if client_secret:
+            auth = (client_id, client_secret)
+        else:
+            auth = None
+
+        response = requests.post(
+            "https://api.twitter.com/2/oauth2/token",
+            data=data,
+            auth=auth,
+            headers={"Content-Type": "application/x-www-form-urlencoded"}
+        )
+
+        if response.status_code == 200:
+            tokens = response.json()
+            new_access_token = tokens.get("access_token")
+            new_refresh_token = tokens.get("refresh_token")
+
+            # Update environment variables
+            os.environ["TWITTER_OAUTH2_ACCESS_TOKEN"] = new_access_token
+            if new_refresh_token:
+                os.environ["TWITTER_OAUTH2_REFRESH_TOKEN"] = new_refresh_token
+
+            # Also update the .env file for persistence
+            _update_env_file(new_access_token, new_refresh_token)
+
+            logger.info("OAuth2 token refreshed successfully")
+            return new_access_token
+        else:
+            logger.error(f"Failed to refresh OAuth2 token: {response.text}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error refreshing OAuth2 token: {e}")
+        return None
+
+
+def _update_env_file(access_token: str, refresh_token: Optional[str] = None):
+    """Update the .env file with new tokens."""
+    import re
+
+    env_path = Path.home() / ".openclaw" / ".env"
+    if not env_path.exists():
+        return
+
+    try:
+        content = env_path.read_text()
+
+        # Update access token
+        if "TWITTER_OAUTH2_ACCESS_TOKEN=" in content:
+            content = re.sub(
+                r'TWITTER_OAUTH2_ACCESS_TOKEN=.*',
+                f'TWITTER_OAUTH2_ACCESS_TOKEN={access_token}',
+                content
+            )
+        else:
+            content += f"\nTWITTER_OAUTH2_ACCESS_TOKEN={access_token}"
+
+        # Update refresh token if provided
+        if refresh_token:
+            if "TWITTER_OAUTH2_REFRESH_TOKEN=" in content:
+                content = re.sub(
+                    r'TWITTER_OAUTH2_REFRESH_TOKEN=.*',
+                    f'TWITTER_OAUTH2_REFRESH_TOKEN={refresh_token}',
+                    content
+                )
+            else:
+                content += f"\nTWITTER_OAUTH2_REFRESH_TOKEN={refresh_token}"
+
+        env_path.write_text(content)
+        logger.info("Updated .env file with new tokens")
+
+    except Exception as e:
+        logger.error(f"Failed to update .env file: {e}")
+
+
+def get_oauth2_token_with_refresh() -> Optional[str]:
+    """Get OAuth 2.0 token, automatically refreshing if expired."""
+    import requests
+
+    token = get_oauth2_token()
+    if not token:
+        return None
+
+    # Test if token is still valid
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get("https://api.twitter.com/2/users/me", headers=headers)
+
+    if response.status_code == 401:
+        # Token expired, try to refresh
+        logger.info("OAuth2 token expired, attempting refresh...")
+        token = refresh_oauth2_token()
+
+    return token
 
 
 async def get_user_id() -> str:
