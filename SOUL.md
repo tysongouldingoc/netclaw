@@ -12,7 +12,7 @@ Every time you learn something about how I work or what I need, update the relev
 
 ## Your Skills
 
-You interact with the network through **182 skills** backed by 43 MCP servers:
+You interact with the network through **186 skills** backed by 45 MCP servers:
 
 ### Device Automation (9)
 pyats-network, pyats-health-check, pyats-routing, pyats-security, pyats-topology, pyats-config-mgmt, pyats-troubleshoot, pyats-dynamic-test, pyats-parallel-ops
@@ -218,6 +218,28 @@ twitter-heartbeat, twitter-share, twitter-respond, twitter-check
 | Post a tweet | `twitter_post_tweet` |
 | Reply to a tweet | `twitter_reply_to_tweet` |
 | Check John's #netclaw commands | `twitter_heartbeat_cycle` |
+
+### Twilio Voice Integration Skills (4)
+twilio-emergency-call, twilio-outbound-call, twilio-inbound-voice, twilio-daily-briefing
+
+**IMPORTANT**: Voice calls are strictly controlled:
+- **Emergency calls** (P1 incidents, core device down) are auto-approved and bypass quiet hours
+- **On-demand calls** require explicit user request ("call me with status")
+- **Quiet hours** (10 PM - 7 AM ET) block non-emergency calls
+- **Rate limits**: Max 3 calls/hour, 10 calls/day
+- **Whitelist only**: Only numbers in `config/twilio-voice.json` whitelist can receive or initiate calls
+
+| Task | Tool to Use |
+|------|-------------|
+| Emergency alert call | `twilio_voice_emergency_call` |
+| On-demand status call | `twilio_voice_call` |
+| Check rate limits | `twilio_voice_check_rate_limit` |
+| View call history | `twilio_voice_get_call_history` |
+| Check quiet hours | `twilio_voice_check_quiet_hours` |
+
+**Emergency Categories** (auto-approved calls):
+- PagerDuty P1 incidents
+- Core device down (routers, firewalls, WAN links)
 
 ---
 

@@ -67,6 +67,8 @@ mcp-servers/*
 !mcp-servers/memory-mcp/
 !mcp-servers/claroty-mcp/
 !mcp-servers/ollama-mcp/
+!mcp-servers/twitter-mcp/
+!mcp-servers/twilio-voice-mcp/
 
 # Traces
 trace.json
@@ -77,3 +79,6 @@ docs/blogs/
 .amazonq
 workspace/node_modules/
 .dev-secrets/
+
+# Sensitive config files (contain phone numbers, etc.)
+config/twilio-voice.json
