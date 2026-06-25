@@ -103,13 +103,9 @@ async def get_user_id() -> str:
     """Get or cache the authenticated user ID."""
     global _authenticated_user_id
     if _authenticated_user_id is None:
-        # Prefer OAuth 2.0 if available
-        oauth2_token = get_oauth2_token()
-        if oauth2_token:
-            _authenticated_user_id = await get_authenticated_user_id_oauth2(oauth2_token)
-        else:
-            client = get_twitter_client()
-            _authenticated_user_id = await get_authenticated_user_id(client)
+        # Use OAuth 1.0a (tweepy client) - it doesn't expire like OAuth 2.0 tokens
+        client = get_twitter_client()
+        _authenticated_user_id = await get_authenticated_user_id(client)
     return _authenticated_user_id
 
 
@@ -1601,17 +1597,51 @@ async def handle_heartbeat_cycle(
     response_parts.append("## Twitter Heartbeat Cycle\n")
 
     try:
-        # Step 1: Get OAuth tokens
-        oauth2_token = get_oauth2_token()
-        if not oauth2_token:
-            return [TextContent(type="text", text="Error: TWITTER_OAUTH2_TOKEN not configured")]
+        # Use OAuth 1.0a with raw requests (doesn't expire like OAuth2)
+        auth = OAuth1(
+            os.environ['TWITTER_API_KEY'],
+            os.environ['TWITTER_API_SECRET'],
+            os.environ['TWITTER_ACCESS_TOKEN'],
+            os.environ['TWITTER_ACCESS_SECRET']
+        )
 
-        # Step 2: Get authenticated user ID
-        user_id = await get_user_id()
-        response_parts.append(f"**Authenticated as**: User ID {user_id}\n")
+        # Step 1: Get authenticated user ID
+        user_response = requests.get("https://api.twitter.com/2/users/me", auth=auth)
+        if user_response.status_code != 200:
+            return [TextContent(type="text", text=f"Error authenticating: {user_response.text}")]
+        user_id = user_response.json()["data"]["id"]
+        username = user_response.json()["data"]["username"]
+        response_parts.append(f"**Authenticated as**: @{username} (ID: {user_id})\n")
 
-        # Step 3: Fetch recent mentions
-        mentions = await fetch_mentions_oauth2(oauth2_token, user_id, limit=20)
+        # Step 2: Fetch recent mentions using OAuth 1.0a raw requests
+        mentions_response = requests.get(
+            f"https://api.twitter.com/2/users/{user_id}/mentions",
+            auth=auth,
+            params={
+                "max_results": 20,
+                "tweet.fields": "created_at,conversation_id,author_id",
+                "expansions": "author_id",
+                "user.fields": "username"
+            }
+        )
+
+        mentions = []
+        if mentions_response.status_code == 200:
+            mentions_data = mentions_response.json()
+            authors = {u["id"]: u["username"] for u in mentions_data.get("includes", {}).get("users", [])}
+
+            for tweet in mentions_data.get("data", []):
+                mention = Mention(
+                    tweet_id=tweet["id"],
+                    author_id=tweet["author_id"],
+                    author_handle=authors.get(tweet["author_id"], "unknown"),
+                    text=tweet["text"],
+                    created_at=datetime.fromisoformat(tweet.get("created_at", "").replace("Z", "+00:00")) if tweet.get("created_at") else datetime.now(timezone.utc),
+                    conversation_id=tweet.get("conversation_id"),
+                    category=classify_mention(tweet["text"])
+                )
+                mentions.append(mention)
+
         response_parts.append(f"**Mentions found**: {len(mentions)}\n\n")
 
         # Step 4: Filter to unprocessed mentions
@@ -1621,14 +1651,6 @@ async def handle_heartbeat_cycle(
         # Step 5: Check each mention's thread for #netclaw
         replies_posted = 0
         mentions_skipped = 0
-
-        # OAuth 1.0a for posting replies
-        auth = OAuth1(
-            os.environ['TWITTER_API_KEY'],
-            os.environ['TWITTER_API_SECRET'],
-            os.environ['TWITTER_ACCESS_TOKEN'],
-            os.environ['TWITTER_ACCESS_SECRET']
-        )
 
         for mention in unprocessed:
             # Check if #netclaw is in the mention text OR we should respond to all
@@ -1690,7 +1712,31 @@ async def handle_heartbeat_cycle(
         # Step 6: Check for John's own #netclaw commands
         response_parts.append("\n---\n## Self-Commands (John's #netclaw tweets)\n")
         try:
-            self_commands = await fetch_own_tweets_with_netclaw(oauth2_token, user_id, limit=10)
+            # Use OAuth 1.0a to fetch own tweets (doesn't expire)
+            own_tweets_response = requests.get(
+                f"https://api.twitter.com/2/users/{user_id}/tweets",
+                auth=auth,
+                params={
+                    "max_results": 10,
+                    "tweet.fields": "created_at,conversation_id",
+                    "exclude": "retweets,replies"
+                }
+            )
+            self_commands = []
+            if own_tweets_response.status_code == 200:
+                own_data = own_tweets_response.json()
+                for tweet in own_data.get("data", []):
+                    if "#netclaw" in tweet["text"].lower():
+                        cmd = Mention(
+                            tweet_id=tweet["id"],
+                            author_id=user_id,
+                            author_handle="John_Capobianco",
+                            text=tweet["text"],
+                            created_at=datetime.fromisoformat(tweet.get("created_at", "").replace("Z", "+00:00")) if tweet.get("created_at") else datetime.now(timezone.utc),
+                            conversation_id=tweet.get("conversation_id"),
+                            category=MentionCategory.SELF_COMMAND
+                        )
+                        self_commands.append(cmd)
             response_parts.append(f"**Self-commands found**: {len(self_commands)}\n")
 
             commands_processed = 0
