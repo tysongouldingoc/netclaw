@@ -545,6 +545,35 @@
         "TWITTER_HEARTBEAT_ENABLED": "${TWITTER_HEARTBEAT_ENABLED:-false}",
         "TWITTER_HEARTBEAT_INTERVAL": "${TWITTER_HEARTBEAT_INTERVAL:-14400}"
       }
+    },
+    "twilio-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@twilio-alpha/mcp",
+        "${TWILIO_ACCOUNT_SID}/${TWILIO_API_KEY_SID}:${TWILIO_API_SECRET}",
+        "--services", "twilio_api_v2010",
+        "--tags", "Api20100401Call,Api20100401Message"
+      ],
+      "env": {
+        "TWILIO_ACCOUNT_SID": "${TWILIO_ACCOUNT_SID}",
+        "TWILIO_API_KEY_SID": "${TWILIO_API_KEY_SID}",
+        "TWILIO_API_SECRET": "${TWILIO_API_SECRET}"
+      }
+    },
+    "twilio-voice-mcp": {
+      "command": "python3",
+      "args": [
+        "-u",
+        "mcp-servers/twilio-voice-mcp/server.py"
+      ],
+      "env": {
+        "TWILIO_ACCOUNT_SID": "${TWILIO_ACCOUNT_SID}",
+        "TWILIO_API_KEY_SID": "${TWILIO_API_KEY_SID}",
+        "TWILIO_API_SECRET": "${TWILIO_API_SECRET}",
+        "TWILIO_PHONE_NUMBER": "${TWILIO_PHONE_NUMBER}",
+        "TWILIO_WEBHOOK_URL": "${TWILIO_WEBHOOK_URL}"
+      }
     }
   }
 }
