@@ -95,21 +95,134 @@ def get_mention_poll_config() -> dict:
 
 
 def get_oauth2_token() -> Optional[str]:
-    """Get OAuth 2.0 token from environment."""
-    return os.environ.get("TWITTER_OAUTH2_TOKEN")
+    """Get OAuth 2.0 token from environment, auto-refreshing if needed."""
+    return os.environ.get("TWITTER_OAUTH2_ACCESS_TOKEN") or os.environ.get("TWITTER_OAUTH2_TOKEN")
+
+
+def refresh_oauth2_token() -> Optional[str]:
+    """
+    Refresh the OAuth 2.0 access token using the refresh token.
+    Returns the new access token, or None if refresh failed.
+    """
+    refresh_token = os.environ.get("TWITTER_OAUTH2_REFRESH_TOKEN")
+    client_id = os.environ.get("TWITTER_CLIENT_ID")
+    client_secret = os.environ.get("TWITTER_CLIENT_SECRET")
+
+    if not refresh_token or not client_id:
+        logger.warning("Cannot refresh OAuth2 token: missing TWITTER_OAUTH2_REFRESH_TOKEN or TWITTER_CLIENT_ID")
+        return None
+
+    try:
+        import requests
+
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id
+        }
+
+        if client_secret:
+            auth = (client_id, client_secret)
+        else:
+            auth = None
+
+        response = requests.post(
+            "https://api.twitter.com/2/oauth2/token",
+            data=data,
+            auth=auth,
+            headers={"Content-Type": "application/x-www-form-urlencoded"}
+        )
+
+        if response.status_code == 200:
+            tokens = response.json()
+            new_access_token = tokens.get("access_token")
+            new_refresh_token = tokens.get("refresh_token")
+
+            # Update environment variables
+            os.environ["TWITTER_OAUTH2_ACCESS_TOKEN"] = new_access_token
+            if new_refresh_token:
+                os.environ["TWITTER_OAUTH2_REFRESH_TOKEN"] = new_refresh_token
+
+            # Also update the .env file for persistence
+            _update_env_file(new_access_token, new_refresh_token)
+
+            logger.info("OAuth2 token refreshed successfully")
+            return new_access_token
+        else:
+            logger.error(f"Failed to refresh OAuth2 token: {response.text}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error refreshing OAuth2 token: {e}")
+        return None
+
+
+def _update_env_file(access_token: str, refresh_token: Optional[str] = None):
+    """Update the .env file with new tokens."""
+    import re
+
+    env_path = Path.home() / ".openclaw" / ".env"
+    if not env_path.exists():
+        return
+
+    try:
+        content = env_path.read_text()
+
+        # Update access token
+        if "TWITTER_OAUTH2_ACCESS_TOKEN=" in content:
+            content = re.sub(
+                r'TWITTER_OAUTH2_ACCESS_TOKEN=.*',
+                f'TWITTER_OAUTH2_ACCESS_TOKEN={access_token}',
+                content
+            )
+        else:
+            content += f"\nTWITTER_OAUTH2_ACCESS_TOKEN={access_token}"
+
+        # Update refresh token if provided
+        if refresh_token:
+            if "TWITTER_OAUTH2_REFRESH_TOKEN=" in content:
+                content = re.sub(
+                    r'TWITTER_OAUTH2_REFRESH_TOKEN=.*',
+                    f'TWITTER_OAUTH2_REFRESH_TOKEN={refresh_token}',
+                    content
+                )
+            else:
+                content += f"\nTWITTER_OAUTH2_REFRESH_TOKEN={refresh_token}"
+
+        env_path.write_text(content)
+        logger.info("Updated .env file with new tokens")
+
+    except Exception as e:
+        logger.error(f"Failed to update .env file: {e}")
+
+
+def get_oauth2_token_with_refresh() -> Optional[str]:
+    """Get OAuth 2.0 token, automatically refreshing if expired."""
+    import requests
+
+    token = get_oauth2_token()
+    if not token:
+        return None
+
+    # Test if token is still valid
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get("https://api.twitter.com/2/users/me", headers=headers)
+
+    if response.status_code == 401:
+        # Token expired, try to refresh
+        logger.info("OAuth2 token expired, attempting refresh...")
+        token = refresh_oauth2_token()
+
+    return token
 
 
 async def get_user_id() -> str:
     """Get or cache the authenticated user ID."""
     global _authenticated_user_id
     if _authenticated_user_id is None:
-        # Prefer OAuth 2.0 if available
-        oauth2_token = get_oauth2_token()
-        if oauth2_token:
-            _authenticated_user_id = await get_authenticated_user_id_oauth2(oauth2_token)
-        else:
-            client = get_twitter_client()
-            _authenticated_user_id = await get_authenticated_user_id(client)
+        # Use OAuth 1.0a (tweepy client) - it doesn't expire like OAuth 2.0 tokens
+        client = get_twitter_client()
+        _authenticated_user_id = await get_authenticated_user_id(client)
     return _authenticated_user_id
 
 
@@ -1601,17 +1714,76 @@ async def handle_heartbeat_cycle(
     response_parts.append("## Twitter Heartbeat Cycle\n")
 
     try:
-        # Step 1: Get OAuth tokens
-        oauth2_token = get_oauth2_token()
-        if not oauth2_token:
-            return [TextContent(type="text", text="Error: TWITTER_OAUTH2_TOKEN not configured")]
+        # Get OAuth2 token with auto-refresh
+        oauth2_token = get_oauth2_token_with_refresh()
 
-        # Step 2: Get authenticated user ID
-        user_id = await get_user_id()
-        response_parts.append(f"**Authenticated as**: User ID {user_id}\n")
+        if oauth2_token:
+            # Use OAuth2 (preferred - supports all features)
+            headers = {"Authorization": f"Bearer {oauth2_token}"}
+            auth = None  # Not needed for OAuth2
+            use_oauth2 = True
+            response_parts.append("**Auth**: OAuth 2.0 (auto-refresh enabled)\n")
+        else:
+            # Fallback to OAuth 1.0a
+            auth = OAuth1(
+                os.environ['TWITTER_API_KEY'],
+                os.environ['TWITTER_API_SECRET'],
+                os.environ['TWITTER_ACCESS_TOKEN'],
+                os.environ['TWITTER_ACCESS_SECRET']
+            )
+            headers = {}
+            use_oauth2 = False
+            response_parts.append("**Auth**: OAuth 1.0a (fallback)\n")
 
-        # Step 3: Fetch recent mentions
-        mentions = await fetch_mentions_oauth2(oauth2_token, user_id, limit=20)
+        # Step 1: Get authenticated user ID
+        if use_oauth2:
+            user_response = requests.get("https://api.twitter.com/2/users/me", headers=headers)
+        else:
+            user_response = requests.get("https://api.twitter.com/2/users/me", auth=auth)
+
+        if user_response.status_code != 200:
+            return [TextContent(type="text", text=f"Error authenticating: {user_response.text}")]
+        user_id = user_response.json()["data"]["id"]
+        username = user_response.json()["data"]["username"]
+        response_parts.append(f"**Authenticated as**: @{username} (ID: {user_id})\n")
+
+        # Step 2: Fetch recent mentions
+        mentions_params = {
+            "max_results": 20,
+            "tweet.fields": "created_at,conversation_id,author_id",
+            "expansions": "author_id",
+            "user.fields": "username"
+        }
+        if use_oauth2:
+            mentions_response = requests.get(
+                f"https://api.twitter.com/2/users/{user_id}/mentions",
+                headers=headers,
+                params=mentions_params
+            )
+        else:
+            mentions_response = requests.get(
+                f"https://api.twitter.com/2/users/{user_id}/mentions",
+                auth=auth,
+                params=mentions_params
+            )
+
+        mentions = []
+        if mentions_response.status_code == 200:
+            mentions_data = mentions_response.json()
+            authors = {u["id"]: u["username"] for u in mentions_data.get("includes", {}).get("users", [])}
+
+            for tweet in mentions_data.get("data", []):
+                mention = Mention(
+                    tweet_id=tweet["id"],
+                    author_id=tweet["author_id"],
+                    author_handle=authors.get(tweet["author_id"], "unknown"),
+                    text=tweet["text"],
+                    created_at=datetime.fromisoformat(tweet.get("created_at", "").replace("Z", "+00:00")) if tweet.get("created_at") else datetime.now(timezone.utc),
+                    conversation_id=tweet.get("conversation_id"),
+                    category=classify_mention(tweet["text"])
+                )
+                mentions.append(mention)
+
         response_parts.append(f"**Mentions found**: {len(mentions)}\n\n")
 
         # Step 4: Filter to unprocessed mentions
@@ -1621,14 +1793,6 @@ async def handle_heartbeat_cycle(
         # Step 5: Check each mention's thread for #netclaw
         replies_posted = 0
         mentions_skipped = 0
-
-        # OAuth 1.0a for posting replies
-        auth = OAuth1(
-            os.environ['TWITTER_API_KEY'],
-            os.environ['TWITTER_API_SECRET'],
-            os.environ['TWITTER_ACCESS_TOKEN'],
-            os.environ['TWITTER_ACCESS_SECRET']
-        )
 
         for mention in unprocessed:
             # Check if #netclaw is in the mention text OR we should respond to all
@@ -1667,13 +1831,19 @@ async def handle_heartbeat_cycle(
             if dry_run:
                 response_parts.append(f"\n**[DRY RUN]** Would reply to @{author}: {reply_text[:50]}...")
             else:
-                # Post the reply
+                # Post the reply (must use OAuth 1.0a for posting)
+                post_auth = OAuth1(
+                    os.environ['TWITTER_API_KEY'],
+                    os.environ['TWITTER_API_SECRET'],
+                    os.environ['TWITTER_ACCESS_TOKEN'],
+                    os.environ['TWITTER_ACCESS_SECRET']
+                )
                 url = "https://api.twitter.com/2/tweets"
                 payload = {
                     "text": reply_text,
                     "reply": {"in_reply_to_tweet_id": mention.tweet_id}
                 }
-                resp = requests.post(url, auth=auth, json=payload)
+                resp = requests.post(url, auth=post_auth, json=payload)
 
                 if resp.status_code == 201:
                     reply_id = resp.json()['data']['id']
@@ -1690,7 +1860,39 @@ async def handle_heartbeat_cycle(
         # Step 6: Check for John's own #netclaw commands
         response_parts.append("\n---\n## Self-Commands (John's #netclaw tweets)\n")
         try:
-            self_commands = await fetch_own_tweets_with_netclaw(oauth2_token, user_id, limit=10)
+            # Use OAuth2 for reading (with auto-refresh), fallback to OAuth1
+            own_tweets_params = {
+                "max_results": 10,
+                "tweet.fields": "created_at,conversation_id",
+                "exclude": "retweets,replies"
+            }
+            if use_oauth2:
+                own_tweets_response = requests.get(
+                    f"https://api.twitter.com/2/users/{user_id}/tweets",
+                    headers=headers,
+                    params=own_tweets_params
+                )
+            else:
+                own_tweets_response = requests.get(
+                    f"https://api.twitter.com/2/users/{user_id}/tweets",
+                    auth=auth,
+                    params=own_tweets_params
+                )
+            self_commands = []
+            if own_tweets_response.status_code == 200:
+                own_data = own_tweets_response.json()
+                for tweet in own_data.get("data", []):
+                    if "#netclaw" in tweet["text"].lower():
+                        cmd = Mention(
+                            tweet_id=tweet["id"],
+                            author_id=user_id,
+                            author_handle="John_Capobianco",
+                            text=tweet["text"],
+                            created_at=datetime.fromisoformat(tweet.get("created_at", "").replace("Z", "+00:00")) if tweet.get("created_at") else datetime.now(timezone.utc),
+                            conversation_id=tweet.get("conversation_id"),
+                            category=MentionCategory.SELF_COMMAND
+                        )
+                        self_commands.append(cmd)
             response_parts.append(f"**Self-commands found**: {len(self_commands)}\n")
 
             commands_processed = 0
@@ -1722,13 +1924,19 @@ async def handle_heartbeat_cycle(
                 if dry_run:
                     response_parts.append(f"\n  - **[DRY RUN]** Would reply: {reply_text[:50]}...")
                 else:
-                    # Post reply to John's own tweet
+                    # Post reply (must use OAuth 1.0a for posting)
+                    post_auth = OAuth1(
+                        os.environ['TWITTER_API_KEY'],
+                        os.environ['TWITTER_API_SECRET'],
+                        os.environ['TWITTER_ACCESS_TOKEN'],
+                        os.environ['TWITTER_ACCESS_SECRET']
+                    )
                     url = "https://api.twitter.com/2/tweets"
                     payload = {
                         "text": reply_text,
                         "reply": {"in_reply_to_tweet_id": cmd.tweet_id}
                     }
-                    resp = requests.post(url, auth=auth, json=payload)
+                    resp = requests.post(url, auth=post_auth, json=payload)
 
                     if resp.status_code == 201:
                         reply_id = resp.json()['data']['id']
