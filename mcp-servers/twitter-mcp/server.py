@@ -87,10 +87,20 @@ _reply_audit_log: ReplyAuditLog = ReplyAuditLog()
 _authenticated_user_id: str | None = None
 
 
+def _safe_int(value: str, default: int) -> int:
+    """Safely convert env var to int, handling bash-style defaults and empty values."""
+    if not value or value.startswith("${"):
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def get_mention_poll_config() -> dict:
     """Get mention polling configuration from environment."""
     return {
-        "interval": int(os.environ.get("TWITTER_MENTION_POLL_INTERVAL", "300")),
+        "interval": _safe_int(os.environ.get("TWITTER_MENTION_POLL_INTERVAL", ""), 300),
     }
 
 
@@ -279,7 +289,7 @@ def get_heartbeat_config() -> dict:
     """Get heartbeat configuration from environment."""
     return {
         "enabled": os.environ.get("TWITTER_HEARTBEAT_ENABLED", "false").lower() == "true",
-        "interval": int(os.environ.get("TWITTER_HEARTBEAT_INTERVAL", "14400")),
+        "interval": _safe_int(os.environ.get("TWITTER_HEARTBEAT_INTERVAL", ""), 14400),
     }
 
 
