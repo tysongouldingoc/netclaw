@@ -2573,7 +2573,30 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════
-# Step 51: Verify installation
+# Step 51: Twilio Voice MCP (NetClaw native)
+# ═══════════════════════════════════════════
+
+log_step "51/$TOTAL_STEPS Installing Twilio Voice MCP Server..."
+
+TWILIO_MCP_DIR="$NETCLAW_DIR/mcp-servers/twilio-voice-mcp"
+
+if [ -f "$TWILIO_MCP_DIR/requirements.txt" ]; then
+    log_info "Installing Twilio Voice MCP dependencies (twilio, flask, mcp, pytz)..."
+    pip3 install -r "$TWILIO_MCP_DIR/requirements.txt" 2>/dev/null || \
+        pip3 install --break-system-packages -r "$TWILIO_MCP_DIR/requirements.txt" 2>/dev/null || {
+            log_warn "Twilio Voice MCP pip install failed — dependencies may need manual installation"
+        }
+    log_info "Twilio Voice MCP ready: $TWILIO_MCP_DIR/server.py"
+    log_info "Webhook server: $TWILIO_MCP_DIR/webhook_server.py"
+    log_info "Configure credentials later: ./scripts/twilio_install.sh"
+else
+    log_warn "Twilio Voice MCP requirements.txt not found at $TWILIO_MCP_DIR"
+fi
+
+echo ""
+
+# ═══════════════════════════════════════════
+# Step 52: Verify installation
 # ═══════════════════════════════════════════
 
 log_step "52/$TOTAL_STEPS Verifying installation..."
@@ -2924,6 +2947,15 @@ else
     SERVERS_FAIL=$((SERVERS_FAIL + 1))
 fi
 
+# Twilio Voice MCP is bundled with NetClaw
+if [ -d "$TWILIO_MCP_DIR" ] && [ -f "$TWILIO_MCP_DIR/server.py" ]; then
+    log_info "Twilio Voice MCP: OK (6 tools, stdio + webhook — voice calls, emergencies)"
+    SERVERS_OK=$((SERVERS_OK + 1))
+else
+    log_warn "Twilio Voice MCP: NOT FOUND (mcp-servers/twilio-voice-mcp/server.py)"
+    SERVERS_FAIL=$((SERVERS_FAIL + 1))
+fi
+
 verify_file "MCP Call Script" "$NETCLAW_DIR/scripts/mcp-call.py"
 
 echo ""
@@ -2943,7 +2975,7 @@ echo ""
 
 SKILL_COUNT=$(ls -d "$NETCLAW_DIR/workspace/skills/"*/ 2>/dev/null | wc -l)
 
-echo "MCP Integrations Available (43):"
+echo "MCP Integrations Available (45):"
 echo "  ┌─────────────────────────────────────────────────────────────"
 echo "  │ NETWORK DEVICE AUTOMATION:"
 echo "  │   pyATS              Cisco device CLI, Genie parsers"
@@ -3009,8 +3041,9 @@ echo "  │"
 echo "  │ VERSION CONTROL:"
 echo "  │   GitHub              Issues, PRs, code search, Actions (Docker)"
 echo "  │"
-echo "  │ SOCIAL / TWITTER:"
+echo "  │ SOCIAL / COMMUNICATION:"
 echo "  │   Twitter MCP         Tweet posting, threads, heartbeat, guardrails (9 tools, Free tier)"
+echo "  │   Twilio Voice MCP    Bidirectional voice calls, emergencies, status (6 tools)"
 echo "  │"
 echo "  │ PACKET ANALYSIS:"
 echo "  │   Packet Buddy        pcap/pcapng analysis via tshark"
@@ -3230,6 +3263,12 @@ echo "  │"
 echo "  │ Twitter/X Integration Skills:"
 echo "  │   twitter-heartbeat      Autonomous CCIE-persona tweets (4hr intervals, opt-in)"
 echo "  │   twitter-share          Manual tweet posting with human approval (Principle XIV)"
+echo "  │"
+echo "  │ Twilio Voice Integration Skills:"
+echo "  │   twilio-emergency-call  Auto-call on P1 incidents, core device down (emergency override)"
+echo "  │   twilio-outbound-call   On-demand status calls ('call John with network status')"
+echo "  │   twilio-inbound-voice   Call NetClaw for voice commands (requires webhook)"
+echo "  │   twilio-daily-briefing  Optional morning status calls (configurable schedule)"
 echo "  │"
 echo "  │ WebEx Bidirectional Channel (@jimiford/webex plugin):"
 echo "  │   Inbound:  Users @mention NetClaw in WebEx → webhook → OpenClaw → response"
