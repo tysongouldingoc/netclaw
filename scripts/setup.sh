@@ -690,6 +690,101 @@ else
 fi
 echo ""
 
+# ───────────────────────────────────────────
+# Twilio Voice
+# ───────────────────────────────────────────
+
+echo -e "${BOLD}Twilio Voice Integration${NC}"
+echo "  Bidirectional voice calling: emergency alerts, on-demand status, inbound commands"
+echo ""
+if yesno "Configure Twilio Voice?"; then
+    echo ""
+    echo -e "  Get credentials from ${CYAN}https://console.twilio.com${NC}"
+    echo "  1. Account → Account SID (starts with AC)"
+    echo "  2. Account → API Keys → Create Key"
+    echo "     - Save API Key SID (starts with SK)"
+    echo "     - Save API Key Secret"
+    echo "  3. Phone Numbers → Buy a number (for inbound calls)"
+    echo ""
+    prompt TWILIO_SID "Account SID (ACxxxxxxxx)" ""
+    set_env "TWILIO_ACCOUNT_SID" "$TWILIO_SID"
+    prompt TWILIO_KEY "API Key SID (SKxxxxxxxx)" ""
+    set_env "TWILIO_API_KEY_SID" "$TWILIO_KEY"
+    prompt_secret TWILIO_SECRET "API Key Secret"
+    set_env "TWILIO_API_SECRET" "$TWILIO_SECRET"
+    prompt TWILIO_PHONE "Twilio Phone Number (+1XXXXXXXXXX)" ""
+    set_env "TWILIO_PHONE_NUMBER" "$TWILIO_PHONE"
+    echo ""
+    echo -e "  For inbound calls, you need a public webhook URL."
+    echo -e "  Development: ${CYAN}ngrok http 5001${NC}"
+    echo -e "  Production:  your public HTTPS domain"
+    echo -e "  The webhook path is: {base_url}/webhooks/twilio/voice"
+    echo ""
+    prompt TWILIO_WEBHOOK "Webhook URL (e.g. https://abc123.ngrok-free.app/webhooks/twilio/voice)" ""
+    [ -n "$TWILIO_WEBHOOK" ] && set_env "TWILIO_WEBHOOK_URL" "$TWILIO_WEBHOOK"
+    echo ""
+    echo -e "  ${BOLD}Whitelist Configuration${NC}"
+    echo "  Only whitelisted numbers can receive/make calls."
+    prompt TWILIO_WHITELIST_PHONE "Your mobile number (+1XXXXXXXXXX)" ""
+    prompt TWILIO_WHITELIST_NAME "Label for this number" "John Mobile"
+    if [ -n "$TWILIO_WHITELIST_PHONE" ]; then
+        # Create config directory if needed
+        mkdir -p "$NETCLAW_DIR/config"
+        TWILIO_CONFIG="$NETCLAW_DIR/config/twilio-voice.json"
+        cat > "$TWILIO_CONFIG" << TWILIOEOF
+{
+  "whitelist": [
+    {
+      "phone_number": "$TWILIO_WHITELIST_PHONE",
+      "label": "$TWILIO_WHITELIST_NAME",
+      "can_receive_calls": true,
+      "can_initiate_calls": true,
+      "added_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+      "added_by": "setup.sh"
+    }
+  ],
+  "quiet_hours": [
+    {
+      "id": "default",
+      "start_time": "22:00",
+      "end_time": "07:00",
+      "timezone": "America/Toronto",
+      "days_of_week": [],
+      "p1_override": true,
+      "enabled": true
+    }
+  ],
+  "emergency_categories": [
+    {
+      "category_name": "pagerduty_p1",
+      "description": "PagerDuty P1 Critical Incidents",
+      "source": "pagerduty",
+      "match_pattern": "severity:P1",
+      "enabled": true
+    },
+    {
+      "category_name": "core_device_down",
+      "description": "Core router, firewall, or WAN link failure",
+      "source": "netclaw_monitoring",
+      "match_pattern": "device_type:(core_router|firewall|wan_link) AND status:down",
+      "enabled": true
+    }
+  ],
+  "rate_limits": {
+    "hourly_max": 3,
+    "daily_max": 10
+  },
+  "voice": "Polly.Matthew"
+}
+TWILIOEOF
+        ok "Whitelist configured: $TWILIO_WHITELIST_NAME ($TWILIO_WHITELIST_PHONE)"
+    fi
+    ok "Twilio Voice configured"
+else
+    skip "Twilio Voice"
+fi
+echo ""
+
 # ═══════════════════════════════════════════
 # Step 3: Your Identity
 # ═══════════════════════════════════════════
@@ -772,6 +867,7 @@ grep -q "^KUBESHARK_MCP_URL=" "$OPENCLAW_ENV" 2>/dev/null && ok "Kubeshark" || s
 grep -q "^NETCLAW_ROUTER_ID=" "$OPENCLAW_ENV" 2>/dev/null && ok "Protocol Participation (BGP/OSPF/GRE)" || skip "Protocol Participation"
 grep -q "^HUMANRAIL_API_KEY=" "$OPENCLAW_ENV" 2>/dev/null && ok "HumanRail (human-in-the-loop escalation)" || skip "HumanRail"
 grep -q "^WEBEX_BOT_TOKEN=" "$OPENCLAW_ENV" 2>/dev/null && ok "Cisco WebEx" || skip "Cisco WebEx"
+grep -q "^TWILIO_ACCOUNT_SID=" "$OPENCLAW_ENV" 2>/dev/null && ok "Twilio Voice" || skip "Twilio Voice"
 
 echo ""
 echo -e "  ${BOLD}Ready to go:${NC}"

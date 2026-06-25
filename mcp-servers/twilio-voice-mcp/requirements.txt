@@ -7,6 +7,9 @@ mcp>=1.1.0
 # Twilio SDK
 twilio>=9.0.0
 
+# HTTP Server for webhooks
+flask>=3.0.0
+
 # Async HTTP Client
 httpx>=0.27.0
 
