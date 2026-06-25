@@ -1714,33 +1714,58 @@ async def handle_heartbeat_cycle(
     response_parts.append("## Twitter Heartbeat Cycle\n")
 
     try:
-        # Use OAuth 1.0a with raw requests (doesn't expire like OAuth2)
-        auth = OAuth1(
-            os.environ['TWITTER_API_KEY'],
-            os.environ['TWITTER_API_SECRET'],
-            os.environ['TWITTER_ACCESS_TOKEN'],
-            os.environ['TWITTER_ACCESS_SECRET']
-        )
+        # Get OAuth2 token with auto-refresh
+        oauth2_token = get_oauth2_token_with_refresh()
+
+        if oauth2_token:
+            # Use OAuth2 (preferred - supports all features)
+            headers = {"Authorization": f"Bearer {oauth2_token}"}
+            auth = None  # Not needed for OAuth2
+            use_oauth2 = True
+            response_parts.append("**Auth**: OAuth 2.0 (auto-refresh enabled)\n")
+        else:
+            # Fallback to OAuth 1.0a
+            auth = OAuth1(
+                os.environ['TWITTER_API_KEY'],
+                os.environ['TWITTER_API_SECRET'],
+                os.environ['TWITTER_ACCESS_TOKEN'],
+                os.environ['TWITTER_ACCESS_SECRET']
+            )
+            headers = {}
+            use_oauth2 = False
+            response_parts.append("**Auth**: OAuth 1.0a (fallback)\n")
 
         # Step 1: Get authenticated user ID
-        user_response = requests.get("https://api.twitter.com/2/users/me", auth=auth)
+        if use_oauth2:
+            user_response = requests.get("https://api.twitter.com/2/users/me", headers=headers)
+        else:
+            user_response = requests.get("https://api.twitter.com/2/users/me", auth=auth)
+
         if user_response.status_code != 200:
             return [TextContent(type="text", text=f"Error authenticating: {user_response.text}")]
         user_id = user_response.json()["data"]["id"]
         username = user_response.json()["data"]["username"]
         response_parts.append(f"**Authenticated as**: @{username} (ID: {user_id})\n")
 
-        # Step 2: Fetch recent mentions using OAuth 1.0a raw requests
-        mentions_response = requests.get(
-            f"https://api.twitter.com/2/users/{user_id}/mentions",
-            auth=auth,
-            params={
-                "max_results": 20,
-                "tweet.fields": "created_at,conversation_id,author_id",
-                "expansions": "author_id",
-                "user.fields": "username"
-            }
-        )
+        # Step 2: Fetch recent mentions
+        mentions_params = {
+            "max_results": 20,
+            "tweet.fields": "created_at,conversation_id,author_id",
+            "expansions": "author_id",
+            "user.fields": "username"
+        }
+        if use_oauth2:
+            mentions_response = requests.get(
+                f"https://api.twitter.com/2/users/{user_id}/mentions",
+                headers=headers,
+                params=mentions_params
+            )
+        else:
+            mentions_response = requests.get(
+                f"https://api.twitter.com/2/users/{user_id}/mentions",
+                auth=auth,
+                params=mentions_params
+            )
 
         mentions = []
         if mentions_response.status_code == 200:
@@ -1806,13 +1831,19 @@ async def handle_heartbeat_cycle(
             if dry_run:
                 response_parts.append(f"\n**[DRY RUN]** Would reply to @{author}: {reply_text[:50]}...")
             else:
-                # Post the reply
+                # Post the reply (must use OAuth 1.0a for posting)
+                post_auth = OAuth1(
+                    os.environ['TWITTER_API_KEY'],
+                    os.environ['TWITTER_API_SECRET'],
+                    os.environ['TWITTER_ACCESS_TOKEN'],
+                    os.environ['TWITTER_ACCESS_SECRET']
+                )
                 url = "https://api.twitter.com/2/tweets"
                 payload = {
                     "text": reply_text,
                     "reply": {"in_reply_to_tweet_id": mention.tweet_id}
                 }
-                resp = requests.post(url, auth=auth, json=payload)
+                resp = requests.post(url, auth=post_auth, json=payload)
 
                 if resp.status_code == 201:
                     reply_id = resp.json()['data']['id']
@@ -1829,16 +1860,24 @@ async def handle_heartbeat_cycle(
         # Step 6: Check for John's own #netclaw commands
         response_parts.append("\n---\n## Self-Commands (John's #netclaw tweets)\n")
         try:
-            # Use OAuth 1.0a to fetch own tweets (doesn't expire)
-            own_tweets_response = requests.get(
-                f"https://api.twitter.com/2/users/{user_id}/tweets",
-                auth=auth,
-                params={
-                    "max_results": 10,
-                    "tweet.fields": "created_at,conversation_id",
-                    "exclude": "retweets,replies"
-                }
-            )
+            # Use OAuth2 for reading (with auto-refresh), fallback to OAuth1
+            own_tweets_params = {
+                "max_results": 10,
+                "tweet.fields": "created_at,conversation_id",
+                "exclude": "retweets,replies"
+            }
+            if use_oauth2:
+                own_tweets_response = requests.get(
+                    f"https://api.twitter.com/2/users/{user_id}/tweets",
+                    headers=headers,
+                    params=own_tweets_params
+                )
+            else:
+                own_tweets_response = requests.get(
+                    f"https://api.twitter.com/2/users/{user_id}/tweets",
+                    auth=auth,
+                    params=own_tweets_params
+                )
             self_commands = []
             if own_tweets_response.status_code == 200:
                 own_data = own_tweets_response.json()
@@ -1885,13 +1924,19 @@ async def handle_heartbeat_cycle(
                 if dry_run:
                     response_parts.append(f"\n  - **[DRY RUN]** Would reply: {reply_text[:50]}...")
                 else:
-                    # Post reply to John's own tweet
+                    # Post reply (must use OAuth 1.0a for posting)
+                    post_auth = OAuth1(
+                        os.environ['TWITTER_API_KEY'],
+                        os.environ['TWITTER_API_SECRET'],
+                        os.environ['TWITTER_ACCESS_TOKEN'],
+                        os.environ['TWITTER_ACCESS_SECRET']
+                    )
                     url = "https://api.twitter.com/2/tweets"
                     payload = {
                         "text": reply_text,
                         "reply": {"in_reply_to_tweet_id": cmd.tweet_id}
                     }
-                    resp = requests.post(url, auth=auth, json=payload)
+                    resp = requests.post(url, auth=post_auth, json=payload)
 
                     if resp.status_code == 201:
                         reply_id = resp.json()['data']['id']
