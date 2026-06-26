@@ -26,7 +26,7 @@ Environment Variables:
 import os
 import logging
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from pathlib import Path
 
@@ -1940,6 +1940,23 @@ async def handle_heartbeat_cycle(
                 mentions.append(mention)
 
         response_parts.append(f"**Mentions found**: {len(mentions)}\n\n")
+
+        # Step 3.5: CRITICAL - Filter out OLD mentions (only last 2 hours)
+        # This prevents replying to old tweets that predate our tracking
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        recent_mentions = []
+        old_skipped = 0
+        for m in mentions:
+            if m.created_at and m.created_at >= cutoff_time:
+                recent_mentions.append(m)
+            else:
+                old_skipped += 1
+                # Mark old ones as processed so we never see them again
+                await _mention_tracker.mark_processed(m.tweet_id, "too_old")
+
+        if old_skipped > 0:
+            response_parts.append(f"**Skipped {old_skipped} old mentions** (older than 2 hours)\n")
+        mentions = recent_mentions
 
         # Step 4: Filter to unprocessed mentions - ACTUALLY CHECK THE TRACKER!
         unprocessed = []
