@@ -82,8 +82,14 @@ TWITTER_CONFIG_NAMESPACE = "twitter_config"
 # ============================================================================
 # SAFETY CONTROLS - Prevent runaway reply loops
 # ============================================================================
+# MASTER KILL SWITCH - Replies are OFF until explicitly enabled
+# To enable: export TWITTER_REPLIES_ENABLED=true
+TWITTER_REPLIES_ENABLED = os.environ.get("TWITTER_REPLIES_ENABLED", "false").lower() == "true"
+
 # Hard limit on replies per heartbeat cycle - prevents spam even if other checks fail
 MAX_REPLIES_PER_CYCLE = 3
+
+logger.info(f"🔒 TWITTER_REPLIES_ENABLED = {TWITTER_REPLIES_ENABLED}")
 # ============================================================================
 HISTORY_RETENTION_DAYS = 30
 SIMILARITY_THRESHOLD = 0.85
@@ -1947,6 +1953,15 @@ async def handle_heartbeat_cycle(
         # Only respond if #netclaw is explicitly in the mention text
         replies_posted = 0
         mentions_skipped = 0
+
+        # ============ SAFETY CHECK: Master kill switch ============
+        if not TWITTER_REPLIES_ENABLED:
+            response_parts.append("\n⛔ **REPLIES DISABLED** - Set TWITTER_REPLIES_ENABLED=true to enable\n")
+            for mention in unprocessed:
+                await _mention_tracker.mark_processed(mention.tweet_id, "replies_disabled")
+                mentions_skipped += 1
+            response_parts.append(f"Marked {mentions_skipped} mentions as processed (replies disabled).\n")
+            unprocessed = []  # Clear so the loop below doesn't run
 
         for mention in unprocessed:
             # ============ SAFETY CHECK: Never reply to ourselves ============

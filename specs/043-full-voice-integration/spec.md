@@ -233,9 +233,16 @@ An engineer wants to post a NetClaw update or check Twitter mentions without usi
 - **SC-009**: Users report voice interface as "useful" or "very useful" in 80% of feedback responses.
 - **SC-010**: Average call duration for routine queries is under 3 minutes.
 
+## Clarifications
+
+### Session 2026-06-26
+
+- Q: How should outbound call recipients authenticate before hearing incident details? → A: No authentication - speak immediately (speed prioritized over verification)
+
 ## Assumptions
 
 - Users have the existing Twilio Voice MCP (Feature 042) deployed and functional.
+- Outbound proactive calls do not require recipient authentication; information is spoken immediately upon answer.
 - Users have pyATS configured with device credentials and testbed files for devices they want to query.
 - Network devices are reachable from the NetClaw server running pyATS.
 - Users have whitelisted phone numbers configured for voice access.
