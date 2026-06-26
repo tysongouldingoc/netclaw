@@ -78,6 +78,23 @@ _local_tweet_history: dict = {}
 # Tweet history namespace for Memory MCP
 TWITTER_HISTORY_NAMESPACE = "twitter_history"
 TWITTER_CONFIG_NAMESPACE = "twitter_config"
+
+# ============================================================================
+# SAFETY CONTROLS - Prevent runaway reply loops
+# ============================================================================
+# MASTER KILL SWITCH: Set to False to completely disable ALL auto-replies
+# This is the ONLY way to re-enable: manually set to True
+TWITTER_REPLIES_ENABLED = os.environ.get("TWITTER_REPLIES_ENABLED", "false").lower() == "true"
+
+# Hard limit on replies per heartbeat cycle - prevents spam even if other checks fail
+MAX_REPLIES_PER_CYCLE = 3
+
+# Cooldown between replies to same user (seconds) - prevents rapid-fire replies
+REPLY_COOLDOWN_SECONDS = 300  # 5 minutes
+
+logger.info(f"🔒 TWITTER_REPLIES_ENABLED = {TWITTER_REPLIES_ENABLED}")
+logger.info(f"🔒 MAX_REPLIES_PER_CYCLE = {MAX_REPLIES_PER_CYCLE}")
+# ============================================================================
 HISTORY_RETENTION_DAYS = 30
 SIMILARITY_THRESHOLD = 0.85
 
@@ -1941,7 +1958,26 @@ async def handle_heartbeat_cycle(
         replies_posted = 0
         mentions_skipped = 0
 
+        # ============ SAFETY CHECK: Master kill switch ============
+        if not TWITTER_REPLIES_ENABLED:
+            response_parts.append("\n⛔ **REPLIES DISABLED** - TWITTER_REPLIES_ENABLED=false\n")
+            response_parts.append("Set TWITTER_REPLIES_ENABLED=true in environment to enable replies.\n")
+            # Mark all as processed to prevent re-checking
+            for mention in unprocessed:
+                await _mention_tracker.mark_processed(mention.tweet_id, "replies_disabled")
+                mentions_skipped += 1
+            response_parts.append(f"Marked {mentions_skipped} mentions as processed (skipped).\n")
+            # Skip to end of mention processing
+            unprocessed = []  # Clear so the loop below doesn't run
+
         for mention in unprocessed:
+            # ============ SAFETY CHECK: Never reply to ourselves ============
+            if mention.author_id == user_id:
+                logger.info(f"Skipping self-mention {mention.tweet_id}")
+                await _mention_tracker.mark_processed(mention.tweet_id, "self_mention_skip")
+                mentions_skipped += 1
+                continue
+
             # STRICT: Only respond if #netclaw is EXPLICITLY in the mention text
             has_netclaw = "#netclaw" in mention.text.lower()
 
@@ -1953,6 +1989,15 @@ async def handle_heartbeat_cycle(
                 mentions_skipped += 1
                 # Mark as skipped to prevent re-processing
                 await _mention_tracker.mark_processed(mention.tweet_id, "skipped_no_netclaw")
+                continue
+
+            # ============ SAFETY CHECK: Hard rate limit ============
+            if replies_posted >= MAX_REPLIES_PER_CYCLE:
+                response_parts.append(f"\n⚠️ **RATE LIMIT HIT** - Already posted {MAX_REPLIES_PER_CYCLE} replies this cycle")
+                response_parts.append(f"\nMarking remaining {len(unprocessed) - replies_posted - mentions_skipped} mentions as rate-limited.\n")
+                # Mark remaining as rate-limited
+                await _mention_tracker.mark_processed(mention.tweet_id, "rate_limited")
+                mentions_skipped += 1
                 continue
 
             # Generate a CONTEXTUAL reply using Claude - actually READ what they said!
