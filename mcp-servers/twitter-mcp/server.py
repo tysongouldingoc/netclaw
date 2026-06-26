@@ -1928,32 +1928,31 @@ async def handle_heartbeat_cycle(
 
         response_parts.append(f"**Mentions found**: {len(mentions)}\n\n")
 
-        # Step 4: Filter to unprocessed mentions
-        unprocessed = [m for m in mentions if not m.processed]
+        # Step 4: Filter to unprocessed mentions - ACTUALLY CHECK THE TRACKER!
+        unprocessed = []
+        for m in mentions:
+            is_processed = await _mention_tracker.is_processed(m.tweet_id)
+            if not is_processed:
+                unprocessed.append(m)
         response_parts.append(f"**Unprocessed mentions**: {len(unprocessed)}\n")
 
-        # Step 5: Check each mention's thread for #netclaw
+        # Step 5: Check each mention for #netclaw - STRICT FILTERING
+        # Only respond if #netclaw is explicitly in the mention text
         replies_posted = 0
         mentions_skipped = 0
 
         for mention in unprocessed:
-            # Check if #netclaw is in the mention text OR we should respond to all
+            # STRICT: Only respond if #netclaw is EXPLICITLY in the mention text
             has_netclaw = "#netclaw" in mention.text.lower()
 
-            # For thread checking, we'd need to fetch the original tweet
-            # For now, check if the mention itself or conversation has #netclaw
-            should_respond = has_netclaw or not respond_to_netclaw_only
-
-            if not should_respond:
-                # Check if conversation root has #netclaw (simplified - check conversation_id)
-                # In a full implementation, we'd fetch the original tweet
-                # For now, use a heuristic: if conversation_id != tweet_id, it's a reply
-                if mention.conversation_id and mention.conversation_id != mention.tweet_id:
-                    # This is a reply - assume thread might have #netclaw if we're configured to check
-                    should_respond = True
+            # If respond_to_netclaw_only is True (default), ONLY respond to #netclaw mentions
+            # This prevents replying to random mentions in threads
+            should_respond = has_netclaw if respond_to_netclaw_only else True
 
             if not should_respond:
                 mentions_skipped += 1
+                # Mark as skipped to prevent re-processing
+                await _mention_tracker.mark_processed(mention.tweet_id, "skipped_no_netclaw")
                 continue
 
             # Generate a CONTEXTUAL reply using Claude - actually READ what they said!
@@ -1990,10 +1989,12 @@ async def handle_heartbeat_cycle(
                     response_parts.append(f"\n✅ Replied to @{author} (ID: {reply_id})")
                     replies_posted += 1
 
-                    # Mark as processed
-                    _mention_tracker.mark_processed(mention.tweet_id, "replied", reply_id)
+                    # Mark as processed - MUST AWAIT!
+                    await _mention_tracker.mark_processed(mention.tweet_id, "replied", reply_id)
                 else:
                     response_parts.append(f"\n❌ Failed to reply to @{author}: {resp.status_code}")
+                    # Mark as processed even on failure to prevent retry loops
+                    await _mention_tracker.mark_processed(mention.tweet_id, "failed_to_reply")
 
         response_parts.append(f"\n\n**Summary**: {replies_posted} replies posted, {mentions_skipped} skipped\n")
 
@@ -2081,10 +2082,12 @@ async def handle_heartbeat_cycle(
                     if resp.status_code == 201:
                         reply_id = resp.json()['data']['id']
                         response_parts.append(f"\n  - ✅ Replied (ID: {reply_id})")
-                        _mention_tracker.mark_processed(cmd.tweet_id, "self_command_ack", reply_id)
+                        await _mention_tracker.mark_processed(cmd.tweet_id, "self_command_ack", reply_id)
                         commands_processed += 1
                     else:
                         response_parts.append(f"\n  - ❌ Failed: {resp.status_code}")
+                        # Mark as processed even on failure to prevent retry loops
+                        await _mention_tracker.mark_processed(cmd.tweet_id, "self_command_failed")
 
             response_parts.append(f"\n\n**Self-commands processed**: {commands_processed}\n")
 
