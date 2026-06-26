@@ -179,7 +179,7 @@ An engineer wants to post a NetClaw update or check Twitter mentions without usi
 - **Ambiguous commands**: When user says "Check the router" but multiple routers exist, NetClaw asks for clarification: "I found 3 routers. Which one: R1, R2, or R3?"
 - **Long-running operations**: When lab startup takes 5+ minutes, NetClaw provides periodic progress updates and offers to call back when complete.
 - **Speech recognition failures**: When speech is unclear, NetClaw asks for repetition: "I didn't catch that. Could you repeat your request?"
-- **Extended call duration**: At 25 minutes, NetClaw warns and offers to summarize and end or continue.
+- **Extended call duration**: At 25 minutes, NetClaw warns and offers to summarize. At 30 minutes, call auto-disconnects with summary of session.
 - **MCP tool failures**: When tools are unavailable, NetClaw explains which capability is down and suggests alternatives.
 - **Sensitive information**: NetClaw never speaks credentials, keys, or secrets; offers to send via secure channel instead.
 - **Concurrent device queries**: When user asks about multiple devices, NetClaw processes sequentially and reports results per device.
@@ -216,7 +216,7 @@ An engineer wants to post a NetClaw update or check Twitter mentions without usi
 - **Voice Command**: A parsed user request with intent, entities (device names, lab names), and parameters.
 - **MCP Tool Binding**: Mapping between voice intents and specific MCP tool calls with parameter extraction.
 - **Alert Trigger**: Configuration for proactive outbound calls (event type, threshold, recipient phone number).
-- **Conversation Context**: Session state including previously mentioned devices, labs, interfaces, and findings.
+- **Conversation Context**: Session state including previously mentioned devices, labs, interfaces, and findings. Persisted per caller ID in Memory MCP - each phone number maintains its own history across calls.
 
 ## Success Criteria *(mandatory)*
 
@@ -238,6 +238,8 @@ An engineer wants to post a NetClaw update or check Twitter mentions without usi
 ### Session 2026-06-26
 
 - Q: How should outbound call recipients authenticate before hearing incident details? → A: No authentication - speak immediately (speed prioritized over verification)
+- Q: Should conversation context persist across calls? → A: Yes, persist per caller ID - each phone number gets its own conversation history in Memory MCP
+- Q: What is the maximum call duration before auto-disconnect? → A: 30 minutes (warn at 25, disconnect at 30)
 
 ## Assumptions
 
