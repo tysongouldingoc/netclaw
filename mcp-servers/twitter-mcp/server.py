@@ -25,6 +25,7 @@ Environment Variables:
 
 import os
 import logging
+import httpx
 from datetime import datetime, timezone
 from typing import Optional
 from pathlib import Path
@@ -85,6 +86,137 @@ _mention_tracker: ProcessedMentionTracker = ProcessedMentionTracker()
 _interaction_history: InteractionHistory = InteractionHistory()
 _reply_audit_log: ReplyAuditLog = ReplyAuditLog()
 _authenticated_user_id: str | None = None
+
+# Anthropic API for contextual replies
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+async def generate_contextual_reply(author: str, tweet_text: str, category: str) -> str:
+    """
+    Use Claude to generate a contextual reply that ACTUALLY responds to what the person said.
+    This proves NetClaw is reading and understanding tweets, not just posting canned responses.
+    """
+    if not ANTHROPIC_API_KEY:
+        # Fallback to basic contextual response if no API key
+        logger.warning("No ANTHROPIC_API_KEY - using basic contextual reply")
+        return generate_basic_contextual_reply(author, tweet_text, category)
+
+    try:
+        system_prompt = """You are NetClaw (@John_Capobianco), a CCIE-certified AI network engineer on Twitter.
+Generate a SHORT, contextual reply (under 250 chars to leave room for @mention and hashtag).
+
+CRITICAL RULES:
+1. Actually RESPOND to what they said - reference specific things they mentioned
+2. Be helpful, technical when appropriate, friendly always
+3. Show you READ their tweet by referencing their specific words/topic
+4. Keep it SHORT - Twitter has limits
+5. Don't include @username or #netclaw - those are added automatically
+6. Be authentic - don't sound like a bot with generic responses
+
+Examples of GOOD contextual replies:
+- If they ask about BGP: "BGP route reflectors can definitely help scale your iBGP mesh! What's your current topology?"
+- If they praise NetClaw: "Glad the automation is helping! Which feature saved you the most time?"
+- If they mention a problem: "That OSPF adjacency issue sounds frustrating - have you checked the MTU settings on both ends?"
+
+Examples of BAD generic replies (NEVER DO THIS):
+- "Thanks for the kind words! The network never sleeps!"
+- "Great question! NetClaw is always here to help!"
+- "Thanks for reaching out!"
+"""
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json"
+                },
+                json={
+                    "model": "claude-sonnet-4-6",
+                    "max_tokens": 150,
+                    "system": system_prompt,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": f"Tweet from @{author} (category: {category}):\n\n\"{tweet_text}\"\n\nGenerate a contextual reply:"
+                        }
+                    ]
+                }
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Claude API error: {response.status_code} - {response.text}")
+                return generate_basic_contextual_reply(author, tweet_text, category)
+
+            result = response.json()
+            reply_content = ""
+            for block in result.get("content", []):
+                if block.get("type") == "text":
+                    reply_content += block.get("text", "")
+
+            # Clean up and format
+            reply_content = reply_content.strip()
+            # Remove any @username if Claude added it
+            if reply_content.startswith(f"@{author}"):
+                reply_content = reply_content[len(f"@{author}"):].strip()
+
+            # Add @mention and hashtag
+            full_reply = f"@{author} {reply_content}"
+            if "#netclaw" not in full_reply.lower():
+                full_reply += " #netclaw"
+
+            # Ensure under 280 chars
+            if len(full_reply) > 280:
+                # Truncate reply content
+                max_content_len = 280 - len(f"@{author}  #netclaw") - 3
+                reply_content = reply_content[:max_content_len] + "..."
+                full_reply = f"@{author} {reply_content} #netclaw"
+
+            logger.info(f"Generated contextual reply for @{author}: {full_reply[:50]}...")
+            return full_reply
+
+    except Exception as e:
+        logger.error(f"Error generating contextual reply: {e}")
+        return generate_basic_contextual_reply(author, tweet_text, category)
+
+
+def generate_basic_contextual_reply(author: str, tweet_text: str, category: str) -> str:
+    """
+    Fallback: Generate a basic but still somewhat contextual reply without Claude.
+    At minimum, reference something specific from their tweet.
+    """
+    tweet_lower = tweet_text.lower()
+
+    # Try to find specific topics to reference
+    if "bgp" in tweet_lower:
+        reply = f"@{author} BGP questions are my favorite! What's the specific scenario you're working with? #netclaw"
+    elif "ospf" in tweet_lower:
+        reply = f"@{author} OSPF can be tricky - area design matters a lot. What topology are you dealing with? #netclaw"
+    elif "automation" in tweet_lower or "automate" in tweet_lower:
+        reply = f"@{author} Automation is the way! What are you looking to automate - configs, monitoring, or something else? #netclaw"
+    elif "cml" in tweet_lower or "lab" in tweet_lower:
+        reply = f"@{author} Labs are essential for testing! I run mine on CML - great for automation testing too. #netclaw"
+    elif "cisco" in tweet_lower:
+        reply = f"@{author} Cisco gear is bread and butter! What platform are you working with? #netclaw"
+    elif "help" in tweet_lower or "question" in tweet_lower or "?" in tweet_text:
+        # They're asking something - acknowledge it
+        words = tweet_text.split()[:5]
+        topic_hint = " ".join(words)
+        reply = f"@{author} I see you're asking about '{topic_hint}...' - happy to dig into that! #netclaw"
+    elif category == "friendly":
+        # Extract a word or two they used to reference
+        words = [w for w in tweet_text.split() if len(w) > 4 and w.lower() not in ["netclaw", "thanks", "thank"]]
+        if words:
+            reply = f"@{author} Appreciate it! Your mention of '{words[0]}' resonates - that's what we're all about! #netclaw"
+        else:
+            reply = f"@{author} Thanks for the support! What network challenge can I help you tackle next? #netclaw"
+    else:
+        # Last resort - but still try to be somewhat specific
+        first_words = " ".join(tweet_text.split()[:4])
+        reply = f"@{author} Interesting - '{first_words}...' Got my attention! Tell me more? #netclaw"
+
+    return reply
 
 
 def _safe_int(value: str, default: int) -> int:
@@ -1824,19 +1956,17 @@ async def handle_heartbeat_cycle(
                 mentions_skipped += 1
                 continue
 
-            # Generate a contextual reply based on mention category
+            # Generate a CONTEXTUAL reply using Claude - actually READ what they said!
             category = mention.category.value if mention.category else "unknown"
             author = mention.author_handle or "user"
+            tweet_text = mention.text
 
-            # Generate reply based on category
-            if category == "netclaw_request":
-                reply_text = f"@{author} Thanks for the #netclaw request! I've logged this for processing. Network automation in action! 🔧"
-            elif category == "technical_network":
-                reply_text = f"@{author} Good network question! This is exactly what NetClaw helps with - automated network analysis and troubleshooting. #netclaw"
-            elif category == "friendly":
-                reply_text = f"@{author} Thanks for the kind words! The network never sleeps, and neither does NetClaw. 🌐 #netclaw"
-            else:
-                reply_text = f"@{author} Thanks for reaching out! #netclaw is always listening. 🎧"
+            # Use Claude to generate a contextual reply
+            reply_text = await generate_contextual_reply(
+                author=author,
+                tweet_text=tweet_text,
+                category=category
+            )
 
             if dry_run:
                 response_parts.append(f"\n**[DRY RUN]** Would reply to @{author}: {reply_text[:50]}...")
