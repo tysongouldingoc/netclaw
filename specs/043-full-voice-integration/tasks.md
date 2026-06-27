@@ -18,8 +18,8 @@ Voice is just I/O. Claude already has ALL 40+ MCPs and 100+ skills. We're buildi
 
 ## Phase 1: Setup (2 tasks)
 
-- [ ] T001 Create voice config directory and whitelist template at ~/.openclaw/voice/whitelist.json
-- [ ] T002 Create alert triggers config template at ~/.openclaw/voice/alert_triggers.json
+- [x] T001 Create voice config directory and whitelist template at ~/.openclaw/voice/whitelist.json
+- [x] T002 Create alert triggers config template at ~/.openclaw/voice/alert_triggers.json
 
 ---
 
@@ -27,9 +27,9 @@ Voice is just I/O. Claude already has ALL 40+ MCPs and 100+ skills. We're buildi
 
 **Goal**: Format ANY MCP response for natural speech
 
-- [ ] T003 Create SpeechFormatter base class in mcp-servers/twilio-voice-mcp/speech_formatter.py
-- [ ] T004 [P] Implement generic formatters (IPs, UUIDs, numbers, lists, timestamps) in mcp-servers/twilio-voice-mcp/speech_formatter.py
-- [ ] T005 [P] Implement sensitive data detection (never speak credentials) in mcp-servers/twilio-voice-mcp/speech_formatter.py
+- [x] T003 Create SpeechFormatter base class in mcp-servers/twilio-voice-mcp/speech_formatter.py
+- [x] T004 [P] Implement generic formatters (IPs, UUIDs, numbers, lists, timestamps) in mcp-servers/twilio-voice-mcp/speech_formatter.py
+- [x] T005 [P] Implement sensitive data detection (never speak credentials) in mcp-servers/twilio-voice-mcp/speech_formatter.py
 
 ---
 
@@ -37,9 +37,9 @@ Voice is just I/O. Claude already has ALL 40+ MCPs and 100+ skills. We're buildi
 
 **Goal**: Per-caller conversation context via Memory MCP
 
-- [ ] T006 Create ConversationContext dataclass in mcp-servers/twilio-voice-mcp/context_manager.py
-- [ ] T007 Implement ContextManager with Memory MCP load/save per caller ID in mcp-servers/twilio-voice-mcp/context_manager.py
-- [ ] T008 Implement context injection into Claude system prompt in mcp-servers/twilio-voice-mcp/context_manager.py
+- [x] T006 Create ConversationContext dataclass in mcp-servers/twilio-voice-mcp/context_manager.py
+- [x] T007 Implement ContextManager with Memory MCP load/save per caller ID in mcp-servers/twilio-voice-mcp/context_manager.py
+- [x] T008 Implement context injection into Claude system prompt in mcp-servers/twilio-voice-mcp/context_manager.py
 
 ---
 
@@ -47,10 +47,10 @@ Voice is just I/O. Claude already has ALL 40+ MCPs and 100+ skills. We're buildi
 
 **Goal**: Connect voice I/O to Claude with ALL tools
 
-- [ ] T009 [US1] Extend webhook_server.py to pass transcribed speech to Claude with full MCP access in mcp-servers/twilio-voice-mcp/webhook_server.py
-- [ ] T010 [US1] Integrate SpeechFormatter into response pipeline in mcp-servers/twilio-voice-mcp/webhook_server.py
-- [ ] T011 [US1] Integrate ContextManager for per-caller state in mcp-servers/twilio-voice-mcp/webhook_server.py
-- [ ] T012 [US1] Add call duration tracking (warn at 25min, disconnect at 30min) in mcp-servers/twilio-voice-mcp/webhook_server.py
+- [x] T009 [US1] Extend webhook_server.py to pass transcribed speech to Claude with full MCP access in mcp-servers/twilio-voice-mcp/webhook_server.py
+- [x] T010 [US1] Integrate SpeechFormatter into response pipeline in mcp-servers/twilio-voice-mcp/webhook_server.py
+- [x] T011 [US1] Integrate ContextManager for per-caller state in mcp-servers/twilio-voice-mcp/webhook_server.py
+- [x] T012 [US1] Add call duration tracking (warn at 25min, disconnect at 30min) in mcp-servers/twilio-voice-mcp/webhook_server.py
 
 ---
 
@@ -58,14 +58,14 @@ Voice is just I/O. Claude already has ALL 40+ MCPs and 100+ skills. We're buildi
 
 **Goal**: Outbound calls for critical events
 
-- [ ] T013 [US3] Implement AlertTrigger config loading in mcp-servers/twilio-voice-mcp/alert_triggers.py
-- [ ] T014 [US3] Implement outbound call initiation with Twilio in mcp-servers/twilio-voice-mcp/alert_triggers.py
+- [x] T013 [US3] Implement AlertTrigger config loading in mcp-servers/twilio-voice-mcp/alert_triggers.py
+- [x] T014 [US3] Implement outbound call initiation with Twilio in mcp-servers/twilio-voice-mcp/alert_triggers.py
 
 ---
 
 ## Phase 6: Documentation (1 task)
 
-- [ ] T015 Update README.md and SOUL.md with voice integration documentation
+- [x] T015 Update README.md and SOUL.md with voice integration documentation
 
 ---
 

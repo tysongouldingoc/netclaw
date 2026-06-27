@@ -219,15 +219,40 @@ twitter-heartbeat, twitter-share, twitter-respond, twitter-check
 | Reply to a tweet | `twitter_reply_to_tweet` |
 | Check John's #netclaw commands | `twitter_heartbeat_cycle` |
 
-### Twilio Voice Integration Skills (4)
-twilio-emergency-call, twilio-outbound-call, twilio-inbound-voice, twilio-daily-briefing
+### Twilio Voice Integration Skills (6)
+twilio-emergency-call, twilio-outbound-call, twilio-inbound-voice, twilio-daily-briefing, twilio-universal-voice, twilio-proactive-alerts
 
-**IMPORTANT**: Voice calls are strictly controlled:
-- **Emergency calls** (P1 incidents, core device down) are auto-approved and bypass quiet hours
-- **On-demand calls** require explicit user request ("call me with status")
-- **Quiet hours** (10 PM - 7 AM ET) block non-emergency calls
-- **Rate limits**: Max 3 calls/hour, 10 calls/day
-- **Whitelist only**: Only numbers in `config/twilio-voice.json` whitelist can receive or initiate calls
+**UNIVERSAL VOICE ACCESS (Feature 043)**
+
+Voice is just I/O. Claude already has access to ALL 40+ MCPs and 100+ skills via voice.
+
+Architecture: `Phone → Twilio STT → Claude (ALL MCPs) → Speech Formatter → Twilio TTS → Phone`
+
+| Voice Command | What Happens |
+|---------------|--------------|
+| "Check my CML labs" | Queries CML MCP, lists lab status |
+| "Any PagerDuty incidents?" | Queries PagerDuty MCP |
+| "Open a ServiceNow ticket for BGP issue" | Creates ticket via ServiceNow MCP |
+| "Show path from site A to B" | Queries Forward Networks MCP |
+| "Generate a network mind map" | Creates diagram via Blender MCP |
+| "Check IP Fabric compliance" | Runs compliance check |
+| "Run the Itential provisioning workflow" | Triggers Itential automation |
+| "Remember that R1 has the BGP issue" | Stores fact via Memory MCP |
+| "What's the device we discussed?" | Recalls context from conversation |
+
+**VOICE CONTROLS**:
+- **30-minute call limit**: Warning at 25 min, disconnect at 30 min
+- **Per-caller context**: Conversation history persisted via Memory MCP
+- **Speech formatting**: IPs spoken naturally, UUIDs abbreviated, lists summarized
+- **No secrets spoken**: Credentials, API keys, passwords are NEVER spoken aloud
+- **Whitelist only**: Only numbers in `~/.openclaw/voice/whitelist.json` can call
+
+**PROACTIVE ALERTS**:
+Configure in `~/.openclaw/voice/alert_triggers.json` to receive outbound calls for:
+- PagerDuty P1 incidents
+- Datadog critical alerts
+- IP Fabric compliance failures
+- Any configurable event source
 
 | Task | Tool to Use |
 |------|-------------|
@@ -236,6 +261,7 @@ twilio-emergency-call, twilio-outbound-call, twilio-inbound-voice, twilio-daily-
 | Check rate limits | `twilio_voice_check_rate_limit` |
 | View call history | `twilio_voice_get_call_history` |
 | Check quiet hours | `twilio_voice_check_quiet_hours` |
+| Trigger alert (API) | POST `/webhooks/twilio/voice/trigger-alert` |
 
 **Emergency Categories** (auto-approved calls):
 - PagerDuty P1 incidents
