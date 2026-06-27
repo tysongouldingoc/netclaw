@@ -19,7 +19,7 @@ def to_dict(obj) -> dict:
 
 
 def to_json(obj) -> str:
-    """Serialize a dataclass or list of dataclasses using TOON with JSON fallback."""
+    """Serialize a dataclass or list of dataclasses using GCF with JSON fallback."""
     if isinstance(obj, list):
         data = [to_dict(item) for item in obj]
     else:

@@ -2,7 +2,7 @@
 
 This shared library provides:
   - Token counting via Anthropic API with local estimation fallback
-  - GCF serialization for MCP server responses (53-71% token savings)
+  - GCF serialization for MCP server responses (55-83% token savings)
   - Model-aware cost calculation (Opus, Sonnet, Haiku)
   - Session-level cumulative tracking with per-tool breakdown
   - Mandatory token footer formatting for every interaction
@@ -64,6 +64,10 @@ class GCFResponse:
     fallback_used: bool = False
 
 
+# Legacy alias
+TOONResponse = GCFResponse
+
+
 @dataclass
 class ToolUsageRecord:
     """Per-tool tracking entry in the session ledger."""
@@ -92,6 +96,7 @@ __all__ = [
     "CostEstimate",
     "ModelPricing",
     "GCFResponse",
+    "TOONResponse",  # legacy alias
     "ToolUsageRecord",
     # Functions (lazy imports to avoid circular dependencies)
     "count_tokens",
