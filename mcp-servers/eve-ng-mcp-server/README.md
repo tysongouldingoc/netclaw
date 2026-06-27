@@ -9,7 +9,7 @@ MCP server for managing EVE-NG network lab environments. Provides natural langua
 - **Network & Topology**: Create virtual bridges, wire node interfaces to networks, inspect full topology
 - **Console Execution**: Full telnet console access for IOS/IOL, Junos, VPCS, Arista EOS, and NX-OS — mode-aware with automatic bootstrap
 - **Config Management**: Read, push, and clear node startup configs; bulk-export all configs before changes
-- **TOON Serialization**: Structured responses are emitted in TOON format when available, with JSON fallback
+- **GCF Encoding**: Structured responses are encoded in GCF format with graph auto-detection, session dedup, and JSON fallback
 - **Caching**: Cookie auth plus short-lived GET response caching with automatic invalidation after writes
 - **Pagination**: High-cardinality list/read tools support `page` and `page_size`
 - **System**: EVE-NG status, available images, authentication check
@@ -180,7 +180,7 @@ If a guest prompts for credentials, set `EVE_CONSOLE_USER` and `EVE_CONSOLE_PASS
 
 ## Response Format
 
-Tools return the standard success/error envelope, serialized as **TOON when available** and **pretty JSON on fallback**.
+Tools return the standard success/error envelope, serialized as **GCF when available** and **pretty JSON on fallback**.
 
 Paginated tools include `count`, `total_count`, and a `pagination` object.
 

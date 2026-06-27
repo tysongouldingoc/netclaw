@@ -26,13 +26,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 
 def _gcf_dumps(data, **kwargs) -> str:
-    """Serialize data using GCF format with JSON fallback."""
+    """Serialize data using GCF with graph auto-detection and session dedup.
+
+    Auto-detects graph-shaped data (nodes + edges) and uses graph profile.
+    Session dedup tracks previously-sent symbols across calls.
+    Delta encoding sends only changes on re-queries.
+    Falls back to generic profile for flat data, and to JSON on any error.
+    """
     try:
         from netclaw_tokens.gcf_serializer import serialize_response
-        result = serialize_response(data)
-        return result.gcf_data
+        result = serialize_response(data, use_session=True, use_delta=True)
+        return result["encoded_data"]
     except Exception:
         return json.dumps(data, indent=2, default=str)
+
+
+
 
 
 # ---------------------------------------------------------------------------

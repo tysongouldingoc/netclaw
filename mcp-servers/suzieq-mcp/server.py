@@ -29,11 +29,11 @@ from suzieq_client import ASSERT_TABLES, KNOWN_TABLES, SuzieQClient
 # GCF serialization helper
 # ---------------------------------------------------------------------------
 def _gcf_dumps(data: dict, **kwargs) -> str:
-    """Serialize data using GCF format with JSON fallback."""
+    """Serialize data using GCF with graph auto-detection and session dedup."""
     try:
         from netclaw_tokens.gcf_serializer import serialize_response
-        result = serialize_response(data)
-        return result.gcf_data
+        result = serialize_response(data, use_session=True, use_delta=True)
+        return result["encoded_data"]
     except Exception:
         return json.dumps(data, indent=2, **kwargs)
 

@@ -244,7 +244,7 @@ def _serialize_payload(payload: Any) -> str:
     try:
         from netclaw_tokens.gcf_serializer import serialize_response
 
-        return serialize_response(payload).gcf_data
+        return serialize_response(payload, use_session=True, use_delta=True)["encoded_data"]
     except Exception:
         return json.dumps(payload, indent=2, default=str)
 

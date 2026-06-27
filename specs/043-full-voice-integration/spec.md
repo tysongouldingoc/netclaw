@@ -94,12 +94,14 @@ All responses are formatted for natural speech - no UUIDs read aloud, IPs spoken
 
 ### Edge Cases
 
-- **Ambiguous commands**: Claude asks for clarification (same as CLI behavior)
-- **Long-running operations**: Claude provides progress updates, offers callback
-- **Speech recognition failures**: "I didn't catch that. Could you repeat?"
-- **30-minute call limit**: Warning at 25 minutes, disconnect at 30 with summary
-- **MCP unavailable**: Claude reports which capability is down, suggests alternatives
-- **Sensitive data**: Never spoken aloud, offer secure channel
+- **Ambiguous commands**: When user says "Check the router" but multiple routers exist, NetClaw asks for clarification: "I found 3 routers. Which one: R1, R2, or R3?"
+- **Long-running operations**: When lab startup takes 5+ minutes, NetClaw provides periodic progress updates and offers to call back when complete.
+- **Speech recognition failures**: When speech is unclear, NetClaw asks for repetition: "I didn't catch that. Could you repeat your request?"
+- **Extended call duration**: At 25 minutes, NetClaw warns and offers to summarize. At 30 minutes, call auto-disconnects with summary of session.
+- **MCP tool failures**: When tools are unavailable, NetClaw explains which capability is down and suggests alternatives.
+- **Sensitive information**: NetClaw never speaks credentials, keys, or secrets; offers to send via secure channel instead.
+- **Concurrent device queries**: When user asks about multiple devices, NetClaw processes sequentially and reports results per device.
+- **Network timeouts**: When device queries timeout, NetClaw reports partial results and identifies which devices failed.
 
 ## Requirements
 
@@ -124,10 +126,10 @@ All responses are formatted for natural speech - no UUIDs read aloud, IPs spoken
 
 ### Key Entities
 
-- **VoiceSession**: Active call (Twilio SID, caller ID, start time, transcript)
-- **ConversationContext**: Per-caller state persisted in Memory MCP
-- **AlertTrigger**: Config for proactive outbound calls
-- **CallerWhitelist**: Authorized phone numbers
+- **VoiceSession**: Active call (Twilio SID, caller ID, start time, conversation history, current device/lab focus).
+- **ConversationContext**: Per-caller state persisted in Memory MCP - each phone number maintains its own history across calls.
+- **AlertTrigger**: Configuration for proactive outbound calls (event source, filter, recipient phone number, cooldown).
+- **CallerWhitelist**: Authorized phone numbers with roles and call limits.
 
 ## Success Criteria
 
@@ -148,7 +150,10 @@ All responses are formatted for natural speech - no UUIDs read aloud, IPs spoken
 
 ## Assumptions
 
-- Twilio Voice MCP (Feature 042) is deployed
+- Twilio Voice MCP (Feature 042) is deployed and functional
 - All 40+ MCPs are registered and accessible to Claude
-- Caller whitelist is configured
+- Caller whitelist is configured in ~/.openclaw/voice/whitelist.json
 - Memory MCP available for context persistence
+- Twilio account has sufficient credits for voice calls
+- Claude is available with tool calling capabilities
+- Sensitive credentials are stored securely and never spoken aloud

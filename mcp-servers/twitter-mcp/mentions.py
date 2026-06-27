@@ -7,6 +7,7 @@ Part of feature 040-twitter-mentions.
 
 import os
 import re
+import json
 import logging
 import asyncio
 import requests
@@ -14,6 +15,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 
 import tweepy
 
@@ -80,76 +82,90 @@ FRIENDLY_KEYWORDS = [
 class ProcessedMentionTracker:
     """
     Tracks processed mentions to prevent duplicate handling.
-    Uses Memory MCP for persistence with 24-hour TTL.
+    Uses FILE-BASED persistence to survive restarts.
     """
 
     def __init__(self, memory_client=None):
         """
-        Initialize the tracker.
-
-        Args:
-            memory_client: Optional Memory MCP client for persistence.
-                          Falls back to in-memory tracking if not provided.
+        Initialize the tracker with file-based persistence.
         """
         self.memory_client = memory_client
-        self._local_cache: Dict[str, datetime] = {}
-        self._cache_ttl = timedelta(hours=24)
+        self._local_cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_ttl = timedelta(hours=72)  # 3 days retention
+
+        # File-based persistence
+        self._storage_dir = Path.home() / ".openclaw" / "twitter"
+        self._storage_file = self._storage_dir / "processed_mentions.json"
+        self._load_from_file()
+
+    def _load_from_file(self):
+        """Load processed mentions from disk on startup."""
+        try:
+            self._storage_dir.mkdir(parents=True, exist_ok=True)
+            if self._storage_file.exists():
+                with open(self._storage_file, 'r') as f:
+                    data = json.load(f)
+                    # Convert ISO strings back to datetime for TTL checking
+                    now = datetime.utcnow()
+                    for mention_id, info in data.items():
+                        processed_at = datetime.fromisoformat(info.get("processed_at", now.isoformat()))
+                        if now - processed_at < self._cache_ttl:
+                            self._local_cache[mention_id] = info
+                logger.info(f"🔒 Loaded {len(self._local_cache)} processed mentions from disk")
+        except Exception as e:
+            logger.warning(f"Failed to load processed mentions: {e}")
+            self._local_cache = {}
+
+    def _save_to_file(self):
+        """Persist processed mentions to disk."""
+        try:
+            self._storage_dir.mkdir(parents=True, exist_ok=True)
+            with open(self._storage_file, 'w') as f:
+                json.dump(self._local_cache, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Failed to save processed mentions: {e}")
 
     async def is_processed(self, mention_id: str) -> bool:
         """Check if a mention has already been processed."""
-        # Check local cache first
+        # Check local cache (loaded from file on startup)
         if mention_id in self._local_cache:
-            if datetime.utcnow() - self._local_cache[mention_id] < self._cache_ttl:
+            info = self._local_cache[mention_id]
+            processed_at = datetime.fromisoformat(info.get("processed_at", datetime.utcnow().isoformat()))
+            if datetime.utcnow() - processed_at < self._cache_ttl:
                 return True
             else:
                 del self._local_cache[mention_id]
-
-        # Check Memory MCP if available
-        if self.memory_client:
-            try:
-                key = f"twitter_mention_{mention_id}"
-                result = await self.memory_client.recall(key)
-                if result:
-                    return True
-            except Exception as e:
-                logger.warning(f"Memory MCP recall failed: {e}")
+                self._save_to_file()
 
         return False
 
     async def mark_processed(self, mention_id: str, action: str, reply_id: Optional[str] = None):
         """
-        Mark a mention as processed.
-
-        Args:
-            mention_id: The tweet ID of the mention
-            action: What was done (replied, skipped_off_topic, skipped_spam, flagged_review)
-            reply_id: The reply tweet ID if action was 'replied'
+        Mark a mention as processed and persist to disk.
         """
         now = datetime.utcnow()
-        self._local_cache[mention_id] = now
-
-        # Store in Memory MCP if available
-        if self.memory_client:
-            try:
-                key = f"twitter_mention_{mention_id}"
-                value = {
-                    "processed_at": now.isoformat(),
-                    "action": action,
-                    "reply_id": reply_id
-                }
-                await self.memory_client.remember(key, value, ttl_days=1)
-            except Exception as e:
-                logger.warning(f"Memory MCP remember failed: {e}")
+        self._local_cache[mention_id] = {
+            "processed_at": now.isoformat(),
+            "action": action,
+            "reply_id": reply_id
+        }
+        # Persist immediately
+        self._save_to_file()
+        logger.info(f"🔒 Marked mention {mention_id} as processed ({action})")
 
     def cleanup_cache(self):
-        """Remove expired entries from local cache."""
+        """Remove expired entries from cache and save."""
         now = datetime.utcnow()
-        expired = [
-            mid for mid, ts in self._local_cache.items()
-            if now - ts >= self._cache_ttl
-        ]
+        expired = []
+        for mid, info in self._local_cache.items():
+            processed_at = datetime.fromisoformat(info.get("processed_at", now.isoformat()))
+            if now - processed_at >= self._cache_ttl:
+                expired.append(mid)
         for mid in expired:
             del self._local_cache[mid]
+        if expired:
+            self._save_to_file()
+            logger.info(f"🔒 Cleaned up {len(expired)} expired mentions")
 
 
 def classify_mention(text: str, author_data: Optional[Dict] = None) -> MentionCategory:
