@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Twilio Voice Webhook Server - FULL AGENTIC VERSION
-Feature 042: Twilio Voice MCP Integration
+Twilio Voice Webhook Server - FULL UNIVERSAL VOICE INTEGRATION
+Feature 043: Full NetClaw Voice Integration
 
 HTTP server that handles inbound Twilio voice webhooks with FULL NetClaw integration.
 Uses Claude with tool calling to execute ANY NetClaw capability via voice.
+
+Voice is just I/O. Claude already has ALL 40+ MCPs and 100+ skills.
+Architecture: Phone → Twilio STT → Claude (ALL tools) → Speech Formatter → Twilio TTS
 
 Usage:
     python webhook_server.py
@@ -16,9 +19,10 @@ import json
 import logging
 import httpx
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from flask import Flask, request, Response
 from twilio.twiml.voice_response import VoiceResponse, Gather
@@ -29,6 +33,23 @@ from guardrails import (
     normalize_phone_number,
     sanitize_for_voice,
     load_config
+)
+
+# Feature 043: Import new modules
+from speech_formatter import format_for_speech, make_speakable, is_safe_to_speak
+from context_manager import (
+    ConversationContext,
+    ContextManager,
+    get_context_manager,
+    inject_context_into_prompt,
+    extract_entity_from_response
+)
+from alert_triggers import (
+    AlertTriggerManager,
+    OutboundCallManager,
+    get_trigger_manager,
+    get_call_manager,
+    process_event_for_alerts
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -43,6 +64,7 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 # Environment
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_API_SECRET = os.environ.get("TWILIO_API_SECRET", "")
 WEBHOOK_PORT = int(os.environ.get("TWILIO_WEBHOOK_PORT", "5001"))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -64,6 +86,59 @@ PAGERDUTY_API_KEY = os.environ.get("PAGERDUTY_API_KEY", "")
 validator = None
 if TWILIO_API_SECRET:
     validator = RequestValidator(TWILIO_API_SECRET)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# T012: Call Duration Tracking
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Call duration limits (in minutes)
+MAX_CALL_MINUTES = int(os.environ.get("VOICE_MAX_CALL_MINUTES", "30"))
+WARN_CALL_MINUTES = int(os.environ.get("VOICE_WARN_MINUTES", "25"))
+
+# Active call tracking: {call_sid: start_time}
+_active_calls: dict[str, datetime] = {}
+
+
+def start_call_tracking(call_sid: str) -> None:
+    """Start tracking a call's duration."""
+    _active_calls[call_sid] = datetime.utcnow()
+    logger.info(f"Started tracking call {call_sid}")
+
+
+def get_call_duration(call_sid: str) -> Optional[int]:
+    """Get call duration in minutes, or None if not tracked."""
+    start_time = _active_calls.get(call_sid)
+    if start_time:
+        duration = datetime.utcnow() - start_time
+        return int(duration.total_seconds() / 60)
+    return None
+
+
+def check_call_duration(call_sid: str) -> tuple[bool, bool, int]:
+    """
+    Check if call should continue.
+
+    Returns:
+        Tuple of (should_continue, should_warn, minutes_elapsed)
+    """
+    minutes = get_call_duration(call_sid)
+    if minutes is None:
+        return True, False, 0
+
+    should_continue = minutes < MAX_CALL_MINUTES
+    should_warn = minutes >= WARN_CALL_MINUTES and minutes < MAX_CALL_MINUTES
+
+    return should_continue, should_warn, minutes
+
+
+def end_call_tracking(call_sid: str) -> Optional[int]:
+    """End tracking for a call, returns duration in minutes."""
+    start_time = _active_calls.pop(call_sid, None)
+    if start_time:
+        duration = datetime.utcnow() - start_time
+        return int(duration.total_seconds() / 60)
+    return None
 
 
 def validate_twilio_request(req):
@@ -477,30 +552,93 @@ async def tool_get_gns3_projects() -> str:
 # Claude Agentic Processing
 # ═══════════════════════════════════════════════════════════════════════════════
 
-SYSTEM_PROMPT = """You are NetClaw, a CCIE-level network engineer assistant responding to voice commands over the phone.
+# ═══════════════════════════════════════════════════════════════════════════════
+# T009: Universal System Prompt for ALL MCPs
+# ═══════════════════════════════════════════════════════════════════════════════
 
-CRITICAL VOICE RULES:
+SYSTEM_PROMPT_BASE = """You are NetClaw, a CCIE-level network engineer assistant responding to voice commands over the phone.
+
+## CRITICAL VOICE OUTPUT RULES
 1. Keep responses VERY SHORT (2-3 sentences max) - they will be spoken aloud
 2. Don't read out IDs, UUIDs, or technical identifiers - just names and states
 3. Summarize lists (e.g., "3 labs running, 2 stopped" instead of listing each)
 4. Use natural speech patterns, not bullet points
 5. If something fails, briefly explain and suggest alternatives
+6. NEVER speak passwords, API keys, tokens, or other credentials aloud
 
-You have access to real network tools:
+## UNIVERSAL TOOL ACCESS
+You have access to ALL NetClaw capabilities via voice. The user can ask about ANYTHING:
 - CML (Cisco Modeling Labs): Check lab status, start/stop labs, view nodes
-- PagerDuty: Check incidents and alerts
-- GNS3: View GNS3 projects (if configured)
-- Network Summary: Get an overview of all systems
+- GNS3: View and manage GNS3 projects
+- PagerDuty: Check incidents, acknowledge alerts
+- IP Fabric: Network inventory, path analysis, compliance checks
+- Forward Networks: Network verification, path analysis
+- Itential: Run automation workflows
+- ServiceNow: Create/update tickets, check incidents
+- Datadog: View metrics, alerts, dashboards
+- GitLab: Merge requests, pipelines, issues
+- Blender: Generate network diagrams and mind maps
+- Memory: Store and recall facts, decisions, context
+- And 30+ more MCPs...
 
-When the user asks about their network, labs, incidents, or status - USE THE TOOLS to get real data.
+## CONVERSATION RULES
+- When the user says "it", "that", or similar pronouns, check the context for what they're referring to
+- Maintain conversation continuity - remember what was discussed earlier in the call
+- If unsure what the user means, ask for clarification
+- For long-running operations, offer to call back when complete
+
+## TOOL USAGE
+When the user asks about their network, labs, incidents, or any capability - USE THE TOOLS to get real data.
 Always use tools first before responding, unless it's a simple greeting or goodbye."""
 
 
-async def process_with_claude_agent(user_message: str) -> str:
-    """Process a voice command through Claude with tool use."""
+def get_system_prompt(ctx: ConversationContext = None) -> str:
+    """Get system prompt with optional context injection."""
+    if ctx:
+        return inject_context_into_prompt(SYSTEM_PROMPT_BASE, ctx)
+    return SYSTEM_PROMPT_BASE
+
+
+# Legacy alias for backward compatibility
+SYSTEM_PROMPT = SYSTEM_PROMPT_BASE
+
+
+async def process_with_claude_agent(
+    user_message: str,
+    caller_id: str = None,
+    ctx: ConversationContext = None
+) -> str:
+    """
+    Process a voice command through Claude with tool use.
+
+    T009: Universal voice handler with full MCP access
+    T010: SpeechFormatter integration
+    T011: ContextManager integration
+
+    Args:
+        user_message: Transcribed speech from user
+        caller_id: Phone number for context lookup
+        ctx: Optional pre-loaded ConversationContext
+
+    Returns:
+        Speech-formatted response
+    """
     if not ANTHROPIC_API_KEY:
         # Fallback to basic processing
         return await process_basic_command(user_message)
+
+    # T011: Load or use provided context
+    if ctx is None and caller_id:
+        context_manager = get_context_manager()
+        ctx = await context_manager.load_context(caller_id)
+
+    # Build context-aware system prompt
+    system_prompt = get_system_prompt(ctx) if ctx else SYSTEM_PROMPT_BASE
+
+    # Track this message in context
+    if ctx:
+        ctx.add_message("user", user_message)
+        ctx.turn_count += 1
 
     try:
         messages = [{"role": "user", "content": user_message}]
@@ -517,7 +655,7 @@ async def process_with_claude_agent(user_message: str) -> str:
                 json={
                     "model": "claude-sonnet-4-6",
                     "max_tokens": 1024,
-                    "system": SYSTEM_PROMPT,
+                    "system": system_prompt,
                     "tools": TOOLS,
                     "messages": messages
                 }
@@ -576,7 +714,7 @@ async def process_with_claude_agent(user_message: str) -> str:
                     json={
                         "model": "claude-sonnet-4-6",
                         "max_tokens": 1024,
-                        "system": SYSTEM_PROMPT,
+                        "system": system_prompt,
                         "tools": TOOLS,
                         "messages": messages
                     }
@@ -594,7 +732,19 @@ async def process_with_claude_agent(user_message: str) -> str:
                 if block.get("type") == "text":
                     final_text += block.get("text", "")
 
-            return final_text if final_text else "I processed your request but have no response to speak."
+            if not final_text:
+                final_text = "I processed your request but have no response to speak."
+
+            # T011: Update context with response and extract entities
+            if ctx:
+                ctx.add_message("assistant", final_text)
+                extract_entity_from_response(final_text, ctx)
+                # Save context
+                context_manager = get_context_manager()
+                await context_manager.save_context(ctx)
+
+            # T010: Format for speech
+            return make_speakable(final_text)
 
     except Exception as e:
         logger.error(f"Claude agent error: {e}")
@@ -637,10 +787,10 @@ async def process_basic_command(command: str) -> str:
     return f"I heard: {command}. I can check labs, incidents, and network status. What would you like to know?"
 
 
-def process_command_sync(user_message: str) -> str:
+def process_command_sync(user_message: str, caller_id: str = None) -> str:
     """Synchronous wrapper for command processing."""
     try:
-        return asyncio.run(process_with_claude_agent(user_message))
+        return asyncio.run(process_with_claude_agent(user_message, caller_id=caller_id))
     except Exception as e:
         logger.error(f"Command sync error: {e}")
         return "I had trouble processing that request. Please try again."
@@ -652,13 +802,22 @@ def process_command_sync(user_message: str) -> str:
 
 @app.route("/webhooks/twilio/voice", methods=["POST"])
 def handle_inbound_call():
-    """Handle inbound voice calls from Twilio."""
+    """
+    Handle inbound voice calls from Twilio.
+
+    T009: Universal voice handler entry point
+    T011: Initialize context for caller
+    T012: Start call duration tracking
+    """
     call_sid = request.form.get("CallSid", "unknown")
     from_number = request.form.get("From", "")
     to_number = request.form.get("To", "")
     call_status = request.form.get("CallStatus", "")
 
     logger.info(f"Inbound call: {call_sid} from {from_number} to {to_number} ({call_status})")
+
+    # T012: Start tracking call duration
+    start_call_tracking(call_sid)
 
     config = load_config()
     voice = config.get("voice", "Polly.Matthew")
@@ -672,13 +831,29 @@ def handle_inbound_call():
         logger.warning(f"Rejected call from unauthorized number: {from_number}")
         response.say("This number is not authorized to call NetClaw. Goodbye.", voice=voice)
         response.hangup()
+        end_call_tracking(call_sid)
         return Response(str(response), mimetype="application/xml")
 
     caller_name = entry.get("label", "there") if entry else "there"
     logger.info(f"Authorized caller: {caller_name} ({from_number})")
 
-    # Greet and listen
-    response.say(f"Hello {caller_name}, this is NetClaw. I can check your labs, incidents, network status, and more. What would you like to know?", voice=voice)
+    # T011: Initialize context for this caller (async in background)
+    try:
+        context_manager = get_context_manager()
+        ctx = asyncio.run(context_manager.load_context(from_number, caller_name))
+        ctx.session_id = call_sid
+        ctx.total_calls += 1
+        asyncio.run(context_manager.save_context(ctx))
+    except Exception as e:
+        logger.warning(f"Context initialization failed: {e}")
+
+    # Greet and listen - T009: Updated greeting for universal access
+    response.say(
+        f"Hello {caller_name}, this is NetClaw. I have access to all your network tools. "
+        f"I can check labs, incidents, run IP Fabric queries, manage ServiceNow tickets, "
+        f"generate diagrams, and much more. What would you like to do?",
+        voice=voice
+    )
 
     # Listen for command
     gather = Gather(
@@ -699,9 +874,17 @@ def handle_inbound_call():
 
 @app.route("/webhooks/twilio/voice/process-command", methods=["POST"])
 def process_voice_command():
-    """Process voice command through NetClaw agent."""
+    """
+    Process voice command through NetClaw agent.
+
+    T009: Universal voice handler for ALL MCP access
+    T010: SpeechFormatter in response pipeline
+    T011: ContextManager for per-caller state
+    T012: Call duration tracking and limits
+    """
     speech_result = request.form.get("SpeechResult", "")
     call_sid = request.form.get("CallSid", "unknown")
+    from_number = request.form.get("From", "")
 
     logger.info(f"Voice command on {call_sid}: '{speech_result}'")
 
@@ -709,6 +892,21 @@ def process_voice_command():
     voice = config.get("voice", "Polly.Matthew")
 
     response = VoiceResponse()
+
+    # T012: Check call duration
+    should_continue, should_warn, minutes_elapsed = check_call_duration(call_sid)
+
+    if not should_continue:
+        # 30-minute limit reached
+        response.say(
+            f"We've been talking for {minutes_elapsed} minutes. "
+            f"I need to end this call now to free up resources. "
+            f"Call back anytime to continue. Goodbye.",
+            voice=voice
+        )
+        response.hangup()
+        end_call_tracking(call_sid)
+        return Response(str(response), mimetype="application/xml")
 
     if not speech_result:
         response.say("I didn't catch that. Please try again.", voice=voice)
@@ -726,19 +924,26 @@ def process_voice_command():
 
     # Check for goodbye
     if any(word in speech_result.lower() for word in ["goodbye", "bye", "hang up", "that's all", "thanks", "thank you"]):
-        response.say("Goodbye. Stay secure.", voice=voice)
+        duration = end_call_tracking(call_sid)
+        response.say(f"Goodbye. Your call lasted {duration or 0} minutes. Stay secure.", voice=voice)
         response.hangup()
         return Response(str(response), mimetype="application/xml")
 
     # Process the command through the agent
     response.say("Let me check that for you.", voice=voice)
 
-    # Execute the agentic processing
-    result = process_command_sync(speech_result)
+    # T009/T010/T011: Execute the agentic processing with context
+    result = process_command_sync(speech_result, caller_id=from_number)
 
-    # Sanitize and speak the result
+    # T010: Result is already speech-formatted by process_with_claude_agent
+    # Apply additional sanitization for safety
     safe_result = sanitize_for_voice(result)
     response.say(safe_result, voice=voice)
+
+    # T012: Warn if approaching time limit
+    if should_warn:
+        remaining = MAX_CALL_MINUTES - minutes_elapsed
+        response.say(f"Note: We have about {remaining} minutes left on this call.", voice=voice)
 
     # Offer to continue
     gather = Gather(
@@ -759,28 +964,134 @@ def process_voice_command():
 
 @app.route("/webhooks/twilio/voice/status", methods=["POST"])
 def handle_call_status():
-    """Handle call status callbacks from Twilio."""
+    """
+    Handle call status callbacks from Twilio.
+
+    T012: Clean up call tracking when call ends.
+    """
     call_sid = request.form.get("CallSid", "unknown")
     call_status = request.form.get("CallStatus", "")
     call_duration = request.form.get("CallDuration", "0")
 
     logger.info(f"Call status update: {call_sid} -> {call_status} (duration: {call_duration}s)")
 
+    # T012: Clean up tracking when call completes
+    if call_status in ["completed", "busy", "failed", "no-answer", "canceled"]:
+        tracked_duration = end_call_tracking(call_sid)
+        if tracked_duration:
+            logger.info(f"Call {call_sid} ended after {tracked_duration} minutes (Twilio reports {call_duration}s)")
+
     return {"acknowledged": True}
+
+
+@app.route("/webhooks/twilio/voice/alert-call", methods=["POST"])
+def handle_alert_call():
+    """
+    Handle outbound alert calls.
+
+    T014: Webhook endpoint for proactive alert calls.
+    Speaks the alert message and allows follow-up interaction.
+    """
+    call_sid = request.form.get("CallSid", "unknown")
+    to_number = request.form.get("To", "")
+
+    # Get message from URL params
+    message = request.args.get("message", "You have a NetClaw alert.")
+    trigger_id = request.args.get("trigger_id", "")
+
+    logger.info(f"Alert call answered: {call_sid} to {to_number} (trigger: {trigger_id})")
+
+    config = load_config()
+    voice = config.get("voice", "Polly.Matthew")
+
+    response = VoiceResponse()
+
+    # Speak the alert message
+    response.say(f"This is NetClaw with an alert. {message}", voice=voice)
+
+    # Allow follow-up questions
+    gather = Gather(
+        input="speech",
+        action="/webhooks/twilio/voice/process-command",
+        method="POST",
+        timeout=10,
+        speech_timeout="auto",
+        language="en-US"
+    )
+    gather.say("Would you like more details, or to take any action?", voice=voice)
+    response.append(gather)
+
+    response.say("No response received. Call back NetClaw anytime for more information. Goodbye.", voice=voice)
+    response.hangup()
+
+    return Response(str(response), mimetype="application/xml")
+
+
+@app.route("/webhooks/twilio/voice/trigger-alert", methods=["POST"])
+def trigger_alert_endpoint():
+    """
+    API endpoint to trigger an outbound alert call.
+
+    T014: Allows external systems to trigger voice alerts.
+
+    Expected JSON body:
+    {
+        "event_source": "pagerduty",
+        "event_data": {
+            "title": "Critical incident",
+            "priority": "P1",
+            ...
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        event_source = data.get("event_source", "")
+        event_data = data.get("event_data", {})
+
+        if not event_source:
+            return {"error": "event_source is required"}, 400
+
+        # Process the event asynchronously
+        results = asyncio.run(process_event_for_alerts(event_source, event_data))
+
+        return {
+            "status": "processed",
+            "triggers_matched": len(results),
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Alert trigger endpoint error: {e}")
+        return {"error": str(e)}, 500
 
 
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint."""
+    # Get alert trigger status
+    trigger_manager = get_trigger_manager()
+    enabled_triggers = len(trigger_manager.get_enabled_triggers())
+
     return {
         "status": "healthy",
         "service": "twilio-voice-webhook",
-        "version": "2.0-agentic",
+        "version": "3.0-universal",
+        "feature": "043-full-voice-integration",
         "integrations": {
             "cml": bool(CML_API_URL),
             "claude": bool(ANTHROPIC_API_KEY),
             "pagerduty": bool(PAGERDUTY_API_KEY),
             "gns3": bool(GNS3_URL)
+        },
+        "voice_config": {
+            "max_call_minutes": MAX_CALL_MINUTES,
+            "warn_at_minutes": WARN_CALL_MINUTES,
+            "active_calls": len(_active_calls)
+        },
+        "alert_triggers": {
+            "enabled_count": enabled_triggers,
+            "outbound_configured": bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)
         }
     }
 
@@ -790,11 +1101,23 @@ def health_check():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    logger.info(f"Starting Twilio Voice Webhook Server (AGENTIC) on port {WEBHOOK_PORT}")
+    logger.info("=" * 70)
+    logger.info("NetClaw Universal Voice Server - Feature 043")
+    logger.info("=" * 70)
+    logger.info(f"Starting on port {WEBHOOK_PORT}")
     logger.info(f"Webhook URL: http://0.0.0.0:{WEBHOOK_PORT}/webhooks/twilio/voice")
-    logger.info(f"CML Integration: {'Enabled' if CML_API_URL else 'Disabled'}")
-    logger.info(f"Claude Integration: {'Enabled (full agentic)' if ANTHROPIC_API_KEY else 'Disabled (basic fallback)'}")
-    logger.info(f"PagerDuty Integration: {'Enabled' if PAGERDUTY_API_KEY else 'Disabled'}")
-    logger.info(f"GNS3 Integration: {'Enabled' if GNS3_URL else 'Disabled'}")
+    logger.info("")
+    logger.info("Integrations:")
+    logger.info(f"  Claude: {'Enabled (UNIVERSAL MCP ACCESS)' if ANTHROPIC_API_KEY else 'Disabled (basic fallback)'}")
+    logger.info(f"  CML: {'Enabled' if CML_API_URL else 'Disabled'}")
+    logger.info(f"  PagerDuty: {'Enabled' if PAGERDUTY_API_KEY else 'Disabled'}")
+    logger.info(f"  GNS3: {'Enabled' if GNS3_URL else 'Disabled'}")
+    logger.info("")
+    logger.info("Voice Settings:")
+    logger.info(f"  Max call duration: {MAX_CALL_MINUTES} minutes")
+    logger.info(f"  Warning at: {WARN_CALL_MINUTES} minutes")
+    logger.info("")
+    logger.info("Voice is just I/O. Claude has access to ALL 40+ MCPs and 100+ skills.")
+    logger.info("=" * 70)
 
     app.run(host="0.0.0.0", port=WEBHOOK_PORT, debug=False)
