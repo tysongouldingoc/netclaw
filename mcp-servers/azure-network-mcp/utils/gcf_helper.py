@@ -12,7 +12,7 @@ def gcf_dumps(data, **kwargs) -> str:
     """Serialize data using GCF format with JSON fallback."""
     try:
         from netclaw_tokens.gcf_serializer import serialize_response
-        result = serialize_response(data)
-        return result.gcf_data
+        result = serialize_response(data, use_session=True, use_delta=True)
+        return result["encoded_data"]
     except Exception:
         return json.dumps(data, indent=2, default=str)
