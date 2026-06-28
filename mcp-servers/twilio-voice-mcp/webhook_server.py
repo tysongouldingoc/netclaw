@@ -69,6 +69,10 @@ TWILIO_API_SECRET = os.environ.get("TWILIO_API_SECRET", "")
 WEBHOOK_PORT = int(os.environ.get("TWILIO_WEBHOOK_PORT", "5001"))
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
+# OpenClaw Gateway - routes to Claude with ALL MCPs
+OPENCLAW_GATEWAY_URL = os.environ.get("OPENCLAW_GATEWAY_URL", "http://localhost:18789")
+OPENCLAW_GATEWAY_TOKEN = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "7cd7e3ad9acece055b438f97d0bf188c70a44397868832f9")
+
 # MCP Server URLs (for direct integration)
 CML_API_URL = os.environ.get("CML_URL", "")
 CML_USERNAME = os.environ.get("CML_USERNAME", "")
@@ -603,48 +607,59 @@ def get_system_prompt(ctx: ConversationContext = None) -> str:
 SYSTEM_PROMPT = SYSTEM_PROMPT_BASE
 
 
-async def process_with_claude_agent(
-    user_message: str,
-    caller_id: str = None,
-    ctx: ConversationContext = None
-) -> str:
+async def process_with_gateway(user_message: str, ctx: ConversationContext = None) -> str:
     """
-    Process a voice command through Claude with tool use.
+    Process voice command through OpenClaw Gateway with ALL MCPs.
 
-    T009: Universal voice handler with full MCP access
-    T010: SpeechFormatter integration
-    T011: ContextManager integration
-
-    Args:
-        user_message: Transcribed speech from user
-        caller_id: Phone number for context lookup
-        ctx: Optional pre-loaded ConversationContext
-
-    Returns:
-        Speech-formatted response
+    This is the TRUE universal voice handler - routes to the gateway
+    which has access to ALL 40+ MCPs and 100+ skills.
     """
-    if not ANTHROPIC_API_KEY:
-        # Fallback to basic processing
-        return await process_basic_command(user_message)
+    # Build context-aware system message
+    system_content = get_system_prompt(ctx) if ctx else SYSTEM_PROMPT_BASE
 
-    # T011: Load or use provided context
-    if ctx is None and caller_id:
-        context_manager = get_context_manager()
-        ctx = await context_manager.load_context(caller_id)
-
-    # Build context-aware system prompt
-    system_prompt = get_system_prompt(ctx) if ctx else SYSTEM_PROMPT_BASE
-
-    # Track this message in context
-    if ctx:
-        ctx.add_message("user", user_message)
-        ctx.turn_count += 1
+    messages = [
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": user_message}
+    ]
 
     try:
-        messages = [{"role": "user", "content": user_message}]
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{OPENCLAW_GATEWAY_URL}/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENCLAW_GATEWAY_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "openclaw",
+                    "messages": messages,
+                    "max_tokens": 2048
+                }
+            )
 
+            if response.status_code == 200:
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                return content if content else "I processed your request but have no response."
+            else:
+                logger.error(f"Gateway error: {response.status_code} - {response.text}")
+                return await process_with_claude_fallback(user_message, ctx)
+
+    except Exception as e:
+        logger.error(f"Gateway connection error: {e}")
+        return await process_with_claude_fallback(user_message, ctx)
+
+
+async def process_with_claude_fallback(user_message: str, ctx: ConversationContext = None) -> str:
+    """Fallback to direct Claude API with limited tools if gateway unavailable."""
+    if not ANTHROPIC_API_KEY:
+        return await process_basic_command(user_message)
+
+    system_prompt = get_system_prompt(ctx) if ctx else SYSTEM_PROMPT_BASE
+    messages = [{"role": "user", "content": user_message}]
+
+    try:
         async with httpx.AsyncClient(timeout=90.0) as client:
-            # Initial request
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -662,93 +677,86 @@ async def process_with_claude_agent(
             )
 
             if response.status_code != 200:
-                logger.error(f"Claude API error: {response.status_code} - {response.text}")
                 return await process_basic_command(user_message)
 
             result = response.json()
 
-            # Agentic loop - handle tool calls
+            # Handle tool use loop (limited tools only)
             max_iterations = 5
             iteration = 0
 
             while result.get("stop_reason") == "tool_use" and iteration < max_iterations:
                 iteration += 1
-                logger.info(f"Tool use iteration {iteration}")
-
-                # Extract tool calls from response
-                tool_calls = [block for block in result.get("content", []) if block.get("type") == "tool_use"]
-
+                tool_calls = [b for b in result.get("content", []) if b.get("type") == "tool_use"]
                 if not tool_calls:
                     break
 
-                # Add assistant's response to messages
                 messages.append({"role": "assistant", "content": result.get("content", [])})
-
-                # Execute each tool and collect results
                 tool_results = []
-                for tool_call in tool_calls:
-                    tool_name = tool_call.get("name")
-                    tool_input = tool_call.get("input", {})
-                    tool_id = tool_call.get("id")
-
-                    # Execute the tool
-                    tool_result = await execute_tool(tool_name, tool_input)
-
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_id,
-                        "content": tool_result
-                    })
-
-                # Add tool results to messages
+                for tc in tool_calls:
+                    tool_result = await execute_tool(tc.get("name"), tc.get("input", {}))
+                    tool_results.append({"type": "tool_result", "tool_use_id": tc.get("id"), "content": tool_result})
                 messages.append({"role": "user", "content": tool_results})
 
-                # Continue the conversation
                 response = await client.post(
                     "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json"
-                    },
-                    json={
-                        "model": "claude-sonnet-4-6",
-                        "max_tokens": 1024,
-                        "system": system_prompt,
-                        "tools": TOOLS,
-                        "messages": messages
-                    }
+                    headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                    json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "tools": TOOLS, "messages": messages}
                 )
-
                 if response.status_code != 200:
-                    logger.error(f"Claude API error in loop: {response.status_code}")
                     break
-
                 result = response.json()
 
-            # Extract final text response
-            final_text = ""
-            for block in result.get("content", []):
-                if block.get("type") == "text":
-                    final_text += block.get("text", "")
-
-            if not final_text:
-                final_text = "I processed your request but have no response to speak."
-
-            # T011: Update context with response and extract entities
-            if ctx:
-                ctx.add_message("assistant", final_text)
-                extract_entity_from_response(final_text, ctx)
-                # Save context
-                context_manager = get_context_manager()
-                await context_manager.save_context(ctx)
-
-            # T010: Format for speech
-            return make_speakable(final_text)
+            return "".join(b.get("text", "") for b in result.get("content", []) if b.get("type") == "text") or "Request processed."
 
     except Exception as e:
-        logger.error(f"Claude agent error: {e}")
+        logger.error(f"Claude fallback error: {e}")
         return await process_basic_command(user_message)
+
+
+async def process_with_claude_agent(
+    user_message: str,
+    caller_id: str = None,
+    ctx: ConversationContext = None
+) -> str:
+    """
+    Process a voice command through OpenClaw Gateway with ALL MCPs.
+
+    T009: Universal voice handler with full MCP access
+    T010: SpeechFormatter integration
+    T011: ContextManager integration
+
+    Args:
+        user_message: Transcribed speech from user
+        caller_id: Phone number for context lookup
+        ctx: Optional pre-loaded ConversationContext
+
+    Returns:
+        Speech-formatted response
+    """
+    # T011: Load or use provided context
+    if ctx is None and caller_id:
+        context_manager = get_context_manager()
+        ctx = await context_manager.load_context(caller_id)
+
+    # Track this message in context
+    if ctx:
+        ctx.add_message("user", user_message)
+        ctx.turn_count += 1
+
+    # Route through OpenClaw Gateway for FULL MCP access
+    logger.info(f"Routing to OpenClaw Gateway: {OPENCLAW_GATEWAY_URL}")
+    result = await process_with_gateway(user_message, ctx)
+
+    # T011: Update context with response
+    if ctx:
+        ctx.add_message("assistant", result)
+        extract_entity_from_response(result, ctx)
+        context_manager = get_context_manager()
+        await context_manager.save_context(ctx)
+
+    # T010: Format for speech
+    return make_speakable(result)
 
 
 async def process_basic_command(command: str) -> str:
@@ -1073,14 +1081,31 @@ def health_check():
     trigger_manager = get_trigger_manager()
     enabled_triggers = len(trigger_manager.get_enabled_triggers())
 
+    # Check gateway connectivity
+    gateway_ok = False
+    try:
+        import urllib.request
+        req = urllib.request.Request(f"{OPENCLAW_GATEWAY_URL}/v1/models")
+        req.add_header("Authorization", f"Bearer {OPENCLAW_GATEWAY_TOKEN}")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            gateway_ok = resp.status == 200
+    except Exception:
+        pass
+
     return {
         "status": "healthy",
         "service": "twilio-voice-webhook",
-        "version": "3.0-universal",
+        "version": "3.1-gateway",
         "feature": "043-full-voice-integration",
-        "integrations": {
+        "routing": {
+            "mode": "gateway" if gateway_ok else "fallback",
+            "gateway_url": OPENCLAW_GATEWAY_URL,
+            "gateway_connected": gateway_ok,
+            "all_mcps_available": gateway_ok
+        },
+        "fallback_integrations": {
             "cml": bool(CML_API_URL),
-            "claude": bool(ANTHROPIC_API_KEY),
+            "claude_direct": bool(ANTHROPIC_API_KEY),
             "pagerduty": bool(PAGERDUTY_API_KEY),
             "gns3": bool(GNS3_URL)
         },
