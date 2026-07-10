@@ -95,6 +95,30 @@ class FederationService:
     async def _on_inventory_get(self, channel, params):
         return self.inventory.build(channel.peer_identity)
 
+    async def refresh_from(self, ident: str) -> dict:
+        """Actively PULL a federated peer's inventory over the open channel
+        (n2n/inventory_get) and cache it. Recovers from a missed push — e.g.
+        when the peer consented after the channel opened."""
+        ch = self.channels.get(ident)
+        if not ch:
+            return {"error": "no channel to peer"}
+        if not self.manager.is_federated(ident):
+            return {"error": "peer not federated"}
+        try:
+            inv = await ch.call("n2n/inventory_get", {}, timeout=15.0)
+            self.inventory.cache_remote(ident, inv)
+            logger.info("Pulled inventory v%s from %s", inv.get("version"), ident)
+            return {"pulled": True, "version": inv.get("version")}
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def ensure_advertised(self, ident: str):
+        """If a channel exists and the peer is federated, (re)advertise to it.
+        Called when local consent completes federation after the channel opened."""
+        ch = self.channels.get(ident)
+        if ch and self.manager.is_federated(ident):
+            await self._advertise_to(ch)
+
     async def _advertise_to(self, channel):
         """Push our inventory to the peer. Retries briefly because the peer may
         finish its own consent→federated transition a beat after we do (both

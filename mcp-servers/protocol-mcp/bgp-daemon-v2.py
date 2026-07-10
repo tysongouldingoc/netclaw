@@ -220,6 +220,13 @@ async def handle_n2n(method, path, body):
             if body.get("host") and body.get("port"):
                 asyncio.create_task(fed.open_channel(int(peer_as), router_id,
                                                      body["host"], int(body["port"])))
+            # If a channel is already open and this consent just completed
+            # federation, (re)advertise + pull so a late consent still exchanges.
+            if ident in fed.channels:
+                async def _sync():
+                    await fed.ensure_advertised(ident)
+                    await fed.refresh_from(ident)
+                asyncio.create_task(_sync())
             return 200, {"identity": ident, "state": state.value}
 
         if method == "POST" and path == "/n2n/kill":
@@ -255,6 +262,9 @@ async def handle_n2n(method, path, body):
                 return 404, {"error": "unknown peer"}
             peer["budget"] = fed.authz.budget_status(ident)
             return 200, peer
+
+        if len(parts) == 4 and parts[1] == "peers" and parts[3] == "refresh" and method == "POST":
+            return 200, await fed.refresh_from(parts[2])
 
         # ---- US2: grants, invocation, approvals, audit, config ----
         if path == "/n2n/grants" and method == "GET":

@@ -142,6 +142,14 @@ class InventoryBuilder:
 
     # ---- no-secrets guard (FR-007, SC-004) -----------------------------
 
+    # Only values of keys whose NAME signals a secret are scanned. Scanning
+    # every env value caused false positives — a benign hostname, path, URL, or
+    # feature flag would collide with legitimate inventory text and abort the
+    # whole advertisement. Real credentials live under these key patterns.
+    _SECRET_KEY_RE = re.compile(
+        r"(PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIAL|PRIVATE_KEY|APIKEY|API_KEY|"
+        r"ACCESS_KEY|CLIENT_SECRET|AUTH|BEARER|SESSION|COOKIE)", re.IGNORECASE)
+
     def _load_secret_values(self) -> set:
         secrets = set()
         try:
@@ -149,9 +157,10 @@ class InventoryBuilder:
                 line = line.strip()
                 if not line or line.startswith("#") or "=" not in line:
                     continue
-                val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                # Only treat non-trivial values as secrets to avoid false positives
-                if len(val) >= 8:
+                key, val = line.split("=", 1)
+                val = val.strip().strip('"').strip("'")
+                # Scan only secret-named keys, and only non-trivial values.
+                if self._SECRET_KEY_RE.search(key) and len(val) >= 8:
                     secrets.add(val)
         except Exception:
             pass
