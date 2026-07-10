@@ -822,7 +822,10 @@ async function fetchBGPState() {
     // Enrich peers with adj-rib-in route counts, ASN, router-id, and type
     const enrichedPeers = (peers.peers || []).map((p) => {
       const adjRoutes = rib.adj_rib_in?.[p.peer] || [];
-      const isMesh = p.peer.startsWith('mesh-');
+      // Mesh claws appear two ways: inbound sessions keyed "mesh-as<N>", and
+      // outbound sessions keyed by their ngrok hostname (anything that isn't
+      // a bare IPv4/IPv6 literal).
+      const isMesh = p.peer.startsWith('mesh-') || !/^[0-9a-fA-F:.]+$/.test(p.peer);
 
       // Extract ASN: from peer key "mesh-as65002" or from adj-rib-in AS paths
       let peerAs = null;
@@ -883,6 +886,62 @@ async function fetchBGPState() {
 
 app.get('/api/bgp', async (req, res) => {
   res.json(await fetchBGPState());
+});
+
+// ── N2N Federation endpoint (feature 052) ─────────────────────────
+// Aggregates the mesh daemon's /n2n/* state for the HUD federation view.
+// Mirrors the /api/bgp pattern; degrades gracefully when N2N is disabled.
+async function fetchN2NState() {
+  try {
+    const statusRes = await fetch(`${BGP_API}/n2n/status`, { signal: AbortSignal.timeout(3000) });
+    if (!statusRes.ok) return { available: false, peers: [] };
+    const status = await statusRes.json();
+    if (!status || status.enabled === false) return { available: false, peers: [] };
+
+    // Enrich each federated peer with its cached inventory
+    const peers = await Promise.all((status.peers || []).map(async (p) => {
+      let inventory = null;
+      if (p.state === 'federated' && p.inventory_version != null) {
+        try {
+          const invRes = await fetch(`${BGP_API}/n2n/peers/${encodeURIComponent(p.identity)}/inventory`,
+            { signal: AbortSignal.timeout(3000) });
+          if (invRes.ok) inventory = await invRes.json();
+        } catch { /* peer inventory optional */ }
+      }
+      return { ...p, inventory };
+    }));
+
+    let approvals = [];
+    try {
+      const aRes = await fetch(`${BGP_API}/n2n/approvals`, { signal: AbortSignal.timeout(3000) });
+      if (aRes.ok) approvals = (await aRes.json()).pending || [];
+    } catch { /* approvals optional */ }
+
+    return { available: true, identity: status.identity, peers, approvals,
+             generatedAt: new Date().toISOString() };
+  } catch {
+    return { available: false, peers: [], generatedAt: new Date().toISOString() };
+  }
+}
+
+app.get('/api/n2n', async (req, res) => {
+  res.json(await fetchN2NState());
+});
+
+// Proxy a claw-to-claw chat message from the HUD to the daemon (FR-025)
+app.post('/api/n2n/chat', async (req, res) => {
+  const { peer, text, session_id } = req.body || {};
+  if (!peer || !text) return res.status(400).json({ error: 'expected { peer, text }' });
+  try {
+    const r = await fetch(`${BGP_API}/n2n/chat/send`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peer, text, session_id }),
+      signal: AbortSignal.timeout(300000),
+    });
+    res.json(await r.json());
+  } catch (e) {
+    res.status(502).json({ error: `daemon unreachable: ${e.message}` });
+  }
 });
 
 // ── Gateway status endpoint ───────────────────────────────────────
