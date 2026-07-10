@@ -271,6 +271,9 @@ async def handle_n2n(method, path, body):
             return 200, {"grants": fed.authz.list_grants(body.get("peer") if body else None)}
 
         if path == "/n2n/grants" and method == "POST":
+            for k in ("peer", "target_type", "target_name"):
+                if not body.get(k):
+                    return 400, {"error": f"missing required field '{k}'"}
             gid = fed.authz.grant(body["peer"], body["target_type"], body["target_name"],
                                   bool(body.get("requires_approval", False)), body.get("timeout_s"))
             return 200, {"grant_id": gid}
@@ -280,6 +283,8 @@ async def handle_n2n(method, path, body):
             return 200, {"revoked": int(parts[2])}
 
         if path == "/n2n/invoke" and method == "POST":
+            if not body.get("peer") or not body.get("target_name"):
+                return 400, {"error": "missing required field 'peer' or 'target_name'"}
             ident = body["peer"]; ttype = body.get("target_type", "tool")
             try:
                 if ttype == "tool":
@@ -302,6 +307,8 @@ async def handle_n2n(method, path, body):
             return 200, {"records": fed.audit.recent(body.get("peer") if body else None, 50)}
 
         if path == "/n2n/config" and method == "POST":
+            if not body.get("peer"):
+                return 400, {"error": "missing required field 'peer'"}
             ident = body["peer"]
             if "chat_enabled" in body:
                 mgr.set_chat_enabled(ident, bool(body["chat_enabled"]))
@@ -309,11 +316,11 @@ async def handle_n2n(method, path, body):
                          "chat_enabled": bool(mgr.get_peer(ident)["chat_enabled"])}
 
         # ---- US3: chat ----
-        if path == "/n2n/chat/open" and method == "POST":
-            res = await fed.chat.open_and_send(body["peer"], body.get("text", ""), body.get("session_id"))
-            return 200, res
-
-        if path == "/n2n/chat/send" and method == "POST":
+        if path in ("/n2n/chat/open", "/n2n/chat/send") and method == "POST":
+            if not body.get("peer"):
+                return 400, {"error": "missing required field 'peer'"}
+            if not body.get("text"):
+                return 400, {"error": "missing required field 'text'"}
             res = await fed.chat.open_and_send(body["peer"], body["text"], body.get("session_id"))
             return 200, res
 

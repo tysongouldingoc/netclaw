@@ -58,7 +58,7 @@ class ChatManager:
         session_id = params.get("session_id")
         text = params.get("text", "")
         self._append(session_id, f"[{peer}] {text}")
-        reply, tokens = await self._ask_gateway(text)
+        reply, tokens = await self._ask_gateway(text, session_key=f"n2n-chat-{peer}")
         self.authz.debit(peer, requests=1, tokens=tokens)
         self._append(session_id, f"[{self.service.local_identity}] {reply}")
         self._touch(session_id)
@@ -67,32 +67,13 @@ class ChatManager:
                           outcome="success")
         return {"session_id": session_id, "text": reply, "tokens_used": tokens}
 
-    async def _ask_gateway(self, text: str):
-        import httpx
-        cfg = json.loads(Path(os.path.expanduser("~/.openclaw/openclaw.json")).read_text())
-        gw = cfg.get("gateway", {})
-        port = gw.get("port", 18789)
-        token = (gw.get("auth") or {}).get("token", "")
-        headers = {"Content-Type": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        body = {"model": "netclaw", "messages": [
-            {"role": "user", "content": f"[A federated NetClaw peer is asking you this]\n{text}"}]}
+    async def _ask_gateway(self, text: str, session_key: str = "n2n-chat"):
+        # OpenClaw's gateway is WebSocket-only (no /v1/chat/completions REST
+        # route) — run a real agent turn via the CLI instead. See gateway.py.
+        from .gateway import run_agent_turn
         idle = int(os.environ.get("N2N_CHAT_IDLE_TIMEOUT_S", "300"))
-        async with httpx.AsyncClient(timeout=idle) as client:
-            resp = await client.post(f"http://127.0.0.1:{port}/v1/chat/completions",
-                                     json=body, headers=headers)
-            data = resp.json()
-        try:
-            reply = data["choices"][0]["message"]["content"]
-        except Exception:
-            reply = json.dumps(data)[:2000]
-        tokens = 0
-        try:
-            tokens = data.get("usage", {}).get("total_tokens", 0)
-        except Exception:
-            pass
-        return reply, tokens
+        prompt = f"[A federated NetClaw peer is asking you this]\n{text}"
+        return await run_agent_turn(prompt, session_key=session_key, timeout_s=idle)
 
     # ---- outbound: OUR operator chats with the PEER's agent -----------
 

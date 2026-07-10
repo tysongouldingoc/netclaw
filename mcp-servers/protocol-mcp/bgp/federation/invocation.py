@@ -231,32 +231,15 @@ class Invoker:
         return await asyncio.wait_for(run(), timeout=self.tool_timeout)
 
     async def _exec_skill_gateway(self, skill: str, input_text: str):
-        """Delegate a skill to the local gateway (its model/policies/budget)."""
-        import httpx
-        cfg = json.loads(Path(os.path.expanduser("~/.openclaw/openclaw.json")).read_text())
-        gw = cfg.get("gateway", {})
-        port = gw.get("port", 18789)
-        token = (gw.get("auth") or {}).get("token", "")
-        headers = {"Content-Type": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        """Delegate a skill to the local gateway agent (its model/policies/budget).
+
+        Uses the `openclaw agent` CLI — the gateway is WebSocket-only and has no
+        REST completions route (see gateway.py)."""
+        from .gateway import run_agent_turn
         prompt = (f"A federated NetClaw peer has requested you run the '{skill}' skill. "
                   f"Execute it for the following request and return only the result:\n\n{input_text}")
-        body = {"model": "netclaw", "messages": [{"role": "user", "content": prompt}]}
-        async with httpx.AsyncClient(timeout=self.skill_timeout) as client:
-            resp = await client.post(f"http://127.0.0.1:{port}/v1/chat/completions",
-                                     json=body, headers=headers)
-            data = resp.json()
-        try:
-            output = data["choices"][0]["message"]["content"]
-        except Exception:
-            output = json.dumps(data)[:2000]
-        tokens = 0
-        try:
-            tokens = data.get("usage", {}).get("total_tokens", 0)
-        except Exception:
-            pass
-        return output, tokens
+        return await run_agent_turn(prompt, session_key=f"n2n-skill-{skill}",
+                                    timeout_s=self.skill_timeout)
 
     # ---- outbound: WE ask a peer to run something ----------------------
 
