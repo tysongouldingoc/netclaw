@@ -41,13 +41,15 @@ def test_build_includes_skills_and_badges(manager, tmp_path):
     inv = b.build("as65007-7.7.7.7")
     skill_names = {s["name"] for s in inv["skills"]}
     assert "cml-lab-lifecycle" in skill_names          # skills advertised by default
-    assert inv["mcp_servers"] == []                    # MCP servers hidden by default
-    # Skills carry no badges (badges derive from advertised servers); make a server visible:
-    manager._conn.execute("INSERT INTO visibility_setting VALUES ('mcp_server','cml-mcp','all_federated',NULL)")
+    # MCP servers advertised by default now — cml-mcp present, CML badge derived
+    assert any(s["name"] == "cml-mcp" for s in inv["mcp_servers"])
+    assert "CML" in inv["badges"]
+    # Hiding a server removes it (and its badge) from the payload
+    manager._conn.execute("INSERT INTO visibility_setting VALUES ('mcp_server','cml-mcp','hidden',NULL)")
     manager._conn.commit()
     inv2 = b.build("as65007-7.7.7.7")
-    assert any(s["name"] == "cml-mcp" for s in inv2["mcp_servers"])
-    assert "CML" in inv2["badges"]
+    assert not any(s["name"] == "cml-mcp" for s in inv2["mcp_servers"])
+    assert "CML" not in inv2["badges"]
 
 
 def test_hidden_item_absent_from_payload(manager, tmp_path):

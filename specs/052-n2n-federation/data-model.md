@@ -72,7 +72,7 @@ Active federation requires one unrevoked row in each direction.
 |---|---|---|
 | item_type | TEXT | `skill` \| `mcp_server` |
 | item_name | TEXT | |
-| visibility | TEXT | `all_federated` \| `selected_peers` \| `hidden` (default: `hidden` for MCP servers, `all_federated` for skill names — FR-006) |
+| visibility | TEXT | `all_federated` \| `selected_peers` \| `hidden` (default: `all_federated` for both skills and MCP servers — FR-006; operators hide specific items explicitly) |
 | peer_list | TEXT NULL | JSON array when `selected_peers` |
 
 ## Entity: InvocationGrant

@@ -100,8 +100,12 @@ class InventoryBuilder:
             "SELECT visibility, peer_list FROM visibility_setting WHERE item_type=? AND item_name=?",
             (item_type, item_name)).fetchone()
         if row is None:
-            # Defaults (data-model.md): skills advertised, MCP servers hidden
-            return item_type == "skill"
+            # Default: advertise both skills and MCP servers to federated peers.
+            # Inventories carry only names/descriptions/tool-names — never
+            # credentials or secrets (FR-007 guard still applies) — so peers see
+            # each other's full capability surface by default. Operators can hide
+            # specific skills or servers with n2n_set_visibility.
+            return True
         vis = row["visibility"]
         if vis == "hidden":
             return False
