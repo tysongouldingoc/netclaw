@@ -251,6 +251,15 @@ echo ""
 core_onboard() {
 log_step "Running OpenClaw onboard..."
 
+# Already onboarded? Don't drag the user through the wizard again just to
+# add components. NETCLAW_FORCE_ONBOARD=1 re-runs it regardless.
+if [ -f "$HOME/.openclaw/openclaw.json" ] && [ "${NETCLAW_FORCE_ONBOARD:-0}" != "1" ]; then
+    log_info "OpenClaw is already onboarded (~/.openclaw/openclaw.json exists) — skipping the wizard."
+    log_info "Reconfigure provider/gateway/channels anytime: openclaw onboard --install-daemon"
+    echo ""
+    return 0
+fi
+
 echo ""
 echo "  This is OpenClaw's built-in setup wizard."
 echo "  You'll pick your AI provider, set up the gateway, and connect"
@@ -349,6 +358,21 @@ core_mcpdir() {
 log_step "Setting up MCP servers directory..."
 
 mkdir -p "$MCP_DIR"
+
+# Legacy sudo installs leave root-owned clones behind — git then refuses
+# to pull ("dubious ownership") and npm/pip die with EACCES mid-install.
+# Catch it up front with the exact fix instead of failing 9 components in.
+FOREIGN_OWNED="$(find "$NETCLAW_DIR" -maxdepth 2 ! -user "$(id -un)" 2>/dev/null | head -5 || true)"
+if [ -n "$FOREIGN_OWNED" ]; then
+    log_error "Files in this repo are not owned by $(id -un) (leftover from a sudo install):"
+    echo "$FOREIGN_OWNED" | sed 's/^/    /'
+    echo ""
+    log_warn "Fix ownership first, then re-run the installer:"
+    echo "    sudo chown -R $(id -un):$(id -gn) \"$NETCLAW_DIR\""
+    echo ""
+    exit 1
+fi
+
 log_info "MCP servers directory: $MCP_DIR"
 echo ""
 }
@@ -384,12 +408,23 @@ PYATS_MCP_DIR="$MCP_DIR/pyATS_MCP"
 clone_or_pull "$PYATS_MCP_DIR" "https://github.com/automateyournetwork/pyATS_MCP.git"
 
 log_info "Installing Python dependencies..."
-pip3 install -r "$PYATS_MCP_DIR/requirements.txt" 2>/dev/null || \
-    pip3 install "pyats[full]" mcp pydantic python-dotenv
+if ! pip3 install -r "$PYATS_MCP_DIR/requirements.txt" 2>/dev/null; then
+    log_warn "requirements.txt install failed — trying the direct package set..."
+    if ! pip3 install "pyats[full]" mcp pydantic python-dotenv; then
+        log_error "pyATS Python dependencies failed to install (see pip output above)."
+        log_warn "Fix the pip error, then retry with: ./scripts/install.sh --add \"pyats\""
+        echo ""
+        return 1
+    fi
+fi
 
-[ -f "$PYATS_MCP_DIR/pyats_mcp_server.py" ] && \
-    log_info "pyATS MCP ready: $PYATS_MCP_DIR/pyats_mcp_server.py" || \
-    log_error "pyats_mcp_server.py not found"
+if [ -f "$PYATS_MCP_DIR/pyats_mcp_server.py" ]; then
+    log_info "pyATS MCP ready: $PYATS_MCP_DIR/pyats_mcp_server.py"
+else
+    log_error "pyats_mcp_server.py not found after clone"
+    echo ""
+    return 1
+fi
 
 echo ""
 }
@@ -471,13 +506,21 @@ MARKMAP_MCP_DIR="$MCP_DIR/markmap_mcp"
 clone_or_pull "$MARKMAP_MCP_DIR" "https://github.com/automateyournetwork/markmap_mcp.git"
 
 MARKMAP_INNER="$MARKMAP_MCP_DIR/markmap-mcp"
-if [ -d "$MARKMAP_INNER" ]; then
-    log_info "Building Markmap MCP..."
-    cd "$MARKMAP_INNER" && npm install && npm run build && cd "$NETCLAW_DIR"
+BUILD_DIR="$MARKMAP_INNER"
+if [ ! -d "$MARKMAP_INNER" ]; then
+    log_warn "Nested markmap-mcp/ not found, trying top-level..."
+    BUILD_DIR="$MARKMAP_MCP_DIR"
+fi
+
+log_info "Building Markmap MCP..."
+# Subshell keeps the installer's cwd intact even when the build fails.
+if (cd "$BUILD_DIR" && npm install && npm run build); then
     log_info "Markmap MCP ready: node $MARKMAP_INNER/dist/index.js"
 else
-    log_warn "Nested markmap-mcp/ not found, trying top-level..."
-    cd "$MARKMAP_MCP_DIR" && npm install && npm run build && cd "$NETCLAW_DIR"
+    log_error "Markmap npm install/build failed (see npm output above)."
+    log_warn "Fix the error, then retry with: ./scripts/install.sh --add \"markmap\""
+    echo ""
+    return 1
 fi
 
 echo ""
@@ -912,9 +955,16 @@ pip3 install fastmcp 2>/dev/null || log_warn "fastmcp install failed"
 mkdir -p /tmp/netclaw-pcaps
 log_info "Pcap upload directory: /tmp/netclaw-pcaps"
 
-[ -f "$PACKET_BUDDY_MCP_DIR/server.py" ] && \
-    log_info "Packet Buddy MCP ready: $PACKET_BUDDY_MCP_DIR/server.py" || \
-    log_error "packet-buddy-mcp/server.py not found"
+if [ -f "$PACKET_BUDDY_MCP_DIR/server.py" ]; then
+    log_info "Packet Buddy MCP ready: $PACKET_BUDDY_MCP_DIR/server.py"
+else
+    log_error "packet-buddy-mcp/server.py is missing from this checkout."
+    log_warn "packet-buddy-mcp is documented as built-in but was never committed"
+    log_warn "(excluded by .gitignore's mcp-servers/*). Needs an upstream fix in"
+    log_warn "automateyournetwork/netclaw — nothing to retry locally."
+    echo ""
+    return 1
+fi
 
 echo ""
 }
@@ -1586,7 +1636,16 @@ else
     log_warn "edge-tts not installed — voice responses will not work"
 fi
 
-log_info "TTS MCP ready: $TTS_MCP_DIR/server.py (2 tools, no API key required)"
+if [ -f "$TTS_MCP_DIR/server.py" ]; then
+    log_info "TTS MCP ready: $TTS_MCP_DIR/server.py (2 tools, no API key required)"
+else
+    log_error "tts-mcp/server.py is missing from this checkout."
+    log_warn "tts-mcp is documented as built-in but was never committed"
+    log_warn "(excluded by .gitignore's mcp-servers/*). Needs an upstream fix in"
+    log_warn "automateyournetwork/netclaw — nothing to retry locally."
+    echo ""
+    return 1
+fi
 
 echo ""
 }
@@ -1621,163 +1680,20 @@ fi
 echo ""
 }
 
-# ── Step 45: Protocol Peering Wizard (optional) ─────────────────
+# ── Step 45: Protocol Peering (configuration deferred) ──────────
+# The peering wizard is pure configuration, not installation — it now
+# lives in scripts/peering-setup.sh (also offered by setup.sh) so the
+# install loop is never blocked by prompts. Install now, configure later.
 component_install_peering() {
-log_step "Protocol Peering Configuration (optional)..."
-echo ""
-echo "  NetClaw can participate in BGP/OSPF as a real routing peer."
-echo "  This requires a GRE tunnel to a network device and protocol configuration."
-echo ""
+log_step "Protocol Peering selected..."
+echo "  NetClaw can participate in BGP/OSPF as a real routing peer, and mesh"
+echo "  with other NetClaw instances worldwide over BGP via ngrok."
 
-ENABLE_PROTOCOL=y  # selection handled by installer menu
-ENABLE_PROTOCOL="${ENABLE_PROTOCOL:-y}"
-
-if [[ "$ENABLE_PROTOCOL" =~ ^[Yy] ]]; then
-    echo ""
-    read -rp "  Router ID (e.g. 4.4.4.4): " PROTO_ROUTER_ID
-    PROTO_ROUTER_ID="${PROTO_ROUTER_ID:-4.4.4.4}"
-
-    read -rp "  Local BGP AS (e.g. 65001): " PROTO_LOCAL_AS
-    PROTO_LOCAL_AS="${PROTO_LOCAL_AS:-65001}"
-
-    read -rp "  BGP peer IP (e.g. 172.16.0.1): " PROTO_PEER_IP
-    PROTO_PEER_IP="${PROTO_PEER_IP:-172.16.0.1}"
-
-    read -rp "  BGP peer AS (e.g. 65000): " PROTO_PEER_AS
-    PROTO_PEER_AS="${PROTO_PEER_AS:-65000}"
-
-    read -rp "  Lab mode (skip ServiceNow CR)? [Y/n] " PROTO_LAB_MODE
-    PROTO_LAB_MODE="${PROTO_LAB_MODE:-y}"
-    if [[ "$PROTO_LAB_MODE" =~ ^[Yy] ]]; then
-        PROTO_LAB_MODE_VAL="true"
-    else
-        PROTO_LAB_MODE_VAL="false"
-    fi
-
-    # Write protocol env vars to OpenClaw .env
-    OPENCLAW_ENV_PROTO="$HOME/.openclaw/.env"
-    [ -f "$OPENCLAW_ENV_PROTO" ] || touch "$OPENCLAW_ENV_PROTO"
-
-    for key_val in \
-        "NETCLAW_ROUTER_ID=$PROTO_ROUTER_ID" \
-        "NETCLAW_LOCAL_AS=$PROTO_LOCAL_AS" \
-        "NETCLAW_BGP_PEERS=[{\"ip\":\"$PROTO_PEER_IP\",\"as\":$PROTO_PEER_AS}]" \
-        "NETCLAW_LAB_MODE=$PROTO_LAB_MODE_VAL" \
-        "PROTOCOL_MCP_SCRIPT=$PROTOCOL_MCP_DIR/server.py"; do
-        key="${key_val%%=*}"
-        if grep -q "^${key}=" "$OPENCLAW_ENV_PROTO" 2>/dev/null; then
-            sed -i.bak "s|^${key}=.*|${key_val}|" "$OPENCLAW_ENV_PROTO" && rm -f "$OPENCLAW_ENV_PROTO.bak"
-        else
-            echo "$key_val" >> "$OPENCLAW_ENV_PROTO"
-        fi
-    done
-
-    log_info "Protocol peering configured:"
-    log_info "  Router ID: $PROTO_ROUTER_ID"
-    log_info "  Local AS: $PROTO_LOCAL_AS"
-    log_info "  Peer: $PROTO_PEER_IP (AS $PROTO_PEER_AS)"
-    log_info "  Lab mode: $PROTO_LAB_MODE_VAL"
-    echo ""
-    log_info "Tip: Start the FRR lab testbed for testing:"
-    echo "      cd lab/frr-testbed && docker compose up -d"
-    echo "      sudo bash scripts/setup-gre.sh"
-
-    # ─── NetClaw Mesh (BGP over ngrok) ───────────────────────────────
-    echo ""
-    echo "  ── NetClaw Mesh ──────────────────────────────────────────"
-    echo "  Peer your NetClaw with other NetClaw instances worldwide"
-    echo "  over BGP via ngrok TCP tunnels."
-    echo ""
-    read -rp "  Enable NetClaw Mesh peering (BGP over ngrok)? [y/N] " ENABLE_MESH
-    ENABLE_MESH="${ENABLE_MESH:-n}"
-
-    if [[ "$ENABLE_MESH" =~ ^[Yy] ]]; then
-        # BGP listen port (non-privileged)
-        read -rp "  BGP listen port (default 1179): " MESH_BGP_PORT
-        MESH_BGP_PORT="${MESH_BGP_PORT:-1179}"
-
-        # Build mesh peers JSON — start with local FRR peer from above
-        MESH_PEERS_JSON="[{\"ip\":\"$PROTO_PEER_IP\",\"as\":$PROTO_PEER_AS}"
-
-        # Ask for remote NetClaw peers
-        echo ""
-        echo "  Add remote NetClaw peers (other people's ngrok endpoints)."
-        echo "  You can also add peers later via: curl -X POST http://127.0.0.1:8179/add_peer"
-        echo ""
-        read -rp "  Add a remote NetClaw peer? [y/N] " ADD_REMOTE
-        ADD_REMOTE="${ADD_REMOTE:-n}"
-        MESH_REMOTE_COUNT=0
-        while [[ "$ADD_REMOTE" =~ ^[Yy] ]]; do
-            read -rp "    Remote ngrok hostname (e.g. 0.tcp.ngrok.io): " REMOTE_HOST
-            read -rp "    Remote ngrok port (e.g. 12345): " REMOTE_PORT
-            read -rp "    Remote AS number (e.g. 65002): " REMOTE_AS
-
-            # Add outbound mesh peer
-            MESH_PEERS_JSON="${MESH_PEERS_JSON},{\"ip\":\"${REMOTE_HOST}\",\"as\":${REMOTE_AS},\"port\":${REMOTE_PORT},\"hostname\":true}"
-            # Add matching inbound entry so they can connect back to us
-            MESH_PEERS_JSON="${MESH_PEERS_JSON},{\"as\":${REMOTE_AS},\"passive\":true,\"accept_any_source\":true}"
-            MESH_REMOTE_COUNT=$((MESH_REMOTE_COUNT + 1))
-
-            read -rp "    Add another remote peer? [y/N] " ADD_REMOTE
-            ADD_REMOTE="${ADD_REMOTE:-n}"
-        done
-
-        # Accept inbound connections from unknown peers?
-        echo ""
-        read -rp "  Accept inbound mesh connections from any AS? [Y/n] " ACCEPT_INBOUND
-        ACCEPT_INBOUND="${ACCEPT_INBOUND:-y}"
-        if [[ "$ACCEPT_INBOUND" =~ ^[Yy] ]]; then
-            # Add a general inbound acceptor — AS 0 means "match any unconfigured AS"
-            # For now, we rely on per-AS entries added above. This flag is for the env.
-            MESH_ACCEPT_ANY="true"
-        else
-            MESH_ACCEPT_ANY="false"
-        fi
-
-        # Close JSON array
-        MESH_PEERS_JSON="${MESH_PEERS_JSON}]"
-
-        # Write mesh env vars
-        for key_val in \
-            "BGP_LISTEN_PORT=$MESH_BGP_PORT" \
-            "NETCLAW_MESH_ENABLED=true" \
-            "NETCLAW_MESH_ACCEPT_INBOUND=$MESH_ACCEPT_ANY"; do
-            key="${key_val%%=*}"
-            if grep -q "^${key}=" "$OPENCLAW_ENV_PROTO" 2>/dev/null; then
-                sed -i.bak "s|^${key}=.*|${key_val}|" "$OPENCLAW_ENV_PROTO" && rm -f "$OPENCLAW_ENV_PROTO.bak"
-            else
-                echo "$key_val" >> "$OPENCLAW_ENV_PROTO"
-            fi
-        done
-
-        # Overwrite NETCLAW_BGP_PEERS with the combined local + mesh peers
-        if grep -q "^NETCLAW_BGP_PEERS=" "$OPENCLAW_ENV_PROTO" 2>/dev/null; then
-            sed -i.bak "s|^NETCLAW_BGP_PEERS=.*|NETCLAW_BGP_PEERS=$MESH_PEERS_JSON|" "$OPENCLAW_ENV_PROTO" && rm -f "$OPENCLAW_ENV_PROTO.bak"
-        else
-            echo "NETCLAW_BGP_PEERS=$MESH_PEERS_JSON" >> "$OPENCLAW_ENV_PROTO"
-        fi
-
-        echo ""
-        log_info "NetClaw Mesh configured:"
-        log_info "  BGP listen port: $MESH_BGP_PORT"
-        log_info "  Remote peers added: $MESH_REMOTE_COUNT"
-        log_info "  Accept inbound: $MESH_ACCEPT_ANY"
-        echo ""
-        log_info "To expose your BGP port via ngrok, run:"
-        echo "      ngrok tcp $MESH_BGP_PORT"
-        echo ""
-        log_info "Share your ngrok endpoint with other NetClaw operators."
-        log_info "They add it during their install, or at runtime:"
-        echo "      curl -X POST http://127.0.0.1:8179/add_peer \\"
-        echo "        -d '{\"ip\":\"YOUR.tcp.ngrok.io\",\"as\":$PROTO_LOCAL_AS,\"port\":NNNNN,\"hostname\":true}'"
-    else
-        log_info "NetClaw Mesh skipped (enable later by re-running install)"
-    fi
-    # ─── End NetClaw Mesh ────────────────────────────────────────────
-
-else
-    log_info "Protocol participation skipped (enable later by re-running install)"
-fi
+log_info "Nothing to install — peering is configured, not installed."
+log_info "Configure it after the install finishes (setup.sh offers it), or anytime with:"
+echo "      ./scripts/peering-setup.sh          # wizard (re-runnable)"
+echo "      ./scripts/peering-setup.sh start    # start the mesh BGP daemon"
+echo "      ./scripts/peering-setup.sh status   # sessions + RIB"
 
 echo ""
 }
