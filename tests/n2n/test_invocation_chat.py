@@ -104,7 +104,7 @@ async def _run_chat(tmp_path):
     _federate(john, byrn)
 
     # Stub Byrn's gateway call
-    async def fake_ask(text):
+    async def fake_ask(text, session_key="n2n-chat"):
         return (f"Byrn's claw says: re '{text[:20]}' — area 0 is fine.", 42)
     byrn.chat._ask_gateway = fake_ask
 
