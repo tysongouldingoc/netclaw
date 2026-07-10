@@ -48,7 +48,7 @@ Both operators must consent before ANY capability information flows.
 - `n2n_set_visibility(item_type="mcp_server", item_name="cml-mcp", visibility="all_federated")`
   to advertise a server; `visibility="hidden"` removes it from the advertised
   inventory entirely; `visibility="selected_peers"` with `peers="as65007-7.7.7.7"`
-  limits it. Defaults: skills advertised, MCP servers hidden.
+  limits it. Defaults: both skills and MCP servers advertised to federated peers (names/tool-names only, never secrets); hide specific items with visibility=hidden.
 
 ### 4. Sever (kill switch)
 
