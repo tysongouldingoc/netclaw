@@ -337,24 +337,49 @@ async def handle_n2n(method, path, body):
 
 async def handle_http(reader, writer):
     try:
-        data = await reader.read(4096)
-        request = data.decode(errors="replace")
-        lines = request.split("\r\n")
-        if not lines:
+        # Read the full request: headers first (until CRLFCRLF), then the body
+        # per Content-Length. A single read(4096) races TCP segmentation — httpx
+        # often sends headers and body in separate segments, which silently
+        # dropped the JSON body and surfaced as "missing required field 'peer'".
+        buf = b""
+        while b"\r\n\r\n" not in buf:
+            chunk = await reader.read(65536)
+            if not chunk:
+                break
+            buf += chunk
+        header_blob, _, rest = buf.partition(b"\r\n\r\n")
+        header_text = header_blob.decode(errors="replace")
+        lines = header_text.split("\r\n")
+        if not lines or not lines[0]:
             writer.close()
             return
 
         method, path, *_ = lines[0].split(" ")
 
-        # Parse body for POST
-        body = {}
-        if "\r\n\r\n" in request:
-            raw_body = request.split("\r\n\r\n", 1)[1].strip()
-            if raw_body:
+        # Determine Content-Length and read the remainder of the body
+        content_length = 0
+        for h in lines[1:]:
+            if h.lower().startswith("content-length:"):
                 try:
-                    body = json.loads(raw_body)
-                except Exception:
-                    pass
+                    content_length = int(h.split(":", 1)[1].strip())
+                except ValueError:
+                    content_length = 0
+                break
+        body_bytes = rest
+        while len(body_bytes) < content_length:
+            chunk = await reader.read(65536)
+            if not chunk:
+                break
+            body_bytes += chunk
+
+        # Parse JSON body for POST
+        body = {}
+        raw_body = body_bytes.decode(errors="replace").strip()
+        if raw_body:
+            try:
+                body = json.loads(raw_body)
+            except Exception as e:
+                logger.warning("Bad JSON body on %s %s: %s", method, path, e)
 
         resp_code = 200
         resp_body = {}
