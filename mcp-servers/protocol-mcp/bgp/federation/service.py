@@ -162,11 +162,20 @@ class FederationService:
 
     async def open_channel(self, peer_as: int, router_id: str, host: str, port: int):
         ident = peer_identity(peer_as, router_id)
-        if ident in self.channels:
-            return
         if self.local_as >= peer_as:
             logger.debug("Not initiating to %s — higher/equal AS waits", ident)
             return
+        # An explicit (re)dial always replaces any existing channel. A channel
+        # can silently die (ngrok resets the long-lived TCP) without being
+        # removed from the registry, leaving a zombie that makes chat/open time
+        # out forever. Tear it down and build fresh so re-dial actually recovers.
+        old = self.channels.pop(ident, None)
+        if old is not None:
+            logger.info("Replacing existing channel to %s (re-dial)", ident)
+            try:
+                await old.close()
+            except Exception:
+                pass
         try:
             reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=30.0)
             writer.write(build_handshake(self.local_as, self.router_id))
