@@ -67,8 +67,11 @@ async def run_agent_turn(prompt: str, session_key: str = "n2n", timeout_s: int =
     Raises TimeoutError on timeout; on non-zero exit returns the stderr tail as
     the reply so the caller can surface a useful message rather than crashing.
     """
+    # Use --session-id (supported across OpenClaw CLI versions). Older/newer
+    # builds diverge on --session-key vs --session-id; --session-id is the
+    # common one (a peer on a build without --session-key errored otherwise).
     cmd = ["openclaw", "agent", "--agent", AGENT_ID,
-           "--session-key", session_key, "--json", "-m", prompt]
+           "--session-id", session_key, "--json", "-m", prompt]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     try:

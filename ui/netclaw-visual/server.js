@@ -948,7 +948,10 @@ app.post('/api/n2n/chat', async (req, res) => {
 app.get('/api/gateway/status', async (req, res) => {
   const gw = getGatewayConfig();
   try {
+    // The gateway's /v1 API requires the bearer token — without it we get 401
+    // and the HUD falsely shows "offline". Send the token like the chat call does.
     const health = await fetch(`http://127.0.0.1:${gw.port}/v1/models`, {
+      headers: gw.token ? { 'Authorization': `Bearer ${gw.token}` } : {},
       signal: AbortSignal.timeout(2000),
     });
     res.json({ online: health.ok, port: gw.port });
