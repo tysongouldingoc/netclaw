@@ -51,6 +51,7 @@ mcp-servers/*
 # Directory-level documentation (tracked in repo)
 !mcp-servers/README.md
 # Built-in MCP servers (tracked in repo)
+!mcp-servers/n2n-mcp/
 !mcp-servers/protocol-mcp/
 !mcp-servers/suzieq-mcp/
 !mcp-servers/azure-network-mcp/
