@@ -36,15 +36,35 @@ def _extract_reply(stdout: str):
         # No JSON — return raw trailing text so the caller still gets something.
         return stdout.strip()[-2000:], 0
 
-    # Reply text: result.payloads[*].text (concatenated)
-    texts = []
+    # Reply text. OpenClaw builds differ: some put the clean answer in
+    # finalAssistantVisibleText, others in result.payloads[*].text. Prefer the
+    # visible-text field (recursively, since nesting varies), then fall back.
+    def _find(o, keys):
+        if isinstance(o, dict):
+            for k in keys:
+                v = o.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v
+            for v in o.values():
+                r = _find(v, keys)
+                if r:
+                    return r
+        elif isinstance(o, list):
+            for v in o:
+                r = _find(v, keys)
+                if r:
+                    return r
+        return None
+
+    reply = _find(obj, ("finalAssistantVisibleText", "finalAssistantRawText"))
     result = obj.get("result", obj)
-    for p in (result.get("payloads") or []):
-        if isinstance(p, dict) and isinstance(p.get("text"), str):
-            texts.append(p["text"])
-    reply = "\n".join(t for t in texts if t.strip())
     if not reply:
-        # Fallbacks across possible shapes
+        # result.payloads[*].text (concatenated), skipping obvious tool-schema dumps
+        texts = [p["text"] for p in (result.get("payloads") or [])
+                 if isinstance(p, dict) and isinstance(p.get("text"), str)
+                 and '"schemaHash"' not in p["text"]]
+        reply = "\n".join(t for t in texts if t.strip())
+    if not reply:
         for key in ("reply", "text", "message", "output", "response"):
             v = result.get(key)
             if isinstance(v, str) and v.strip():
