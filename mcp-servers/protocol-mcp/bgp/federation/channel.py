@@ -18,7 +18,7 @@ from typing import Awaitable, Callable, Optional
 
 from ..constants import (
     NCFED_MAGIC, NCFED_MAX_PAYLOAD, NCFED_FLAG_CONTINUATION,
-    NCFED_HEARTBEAT_INTERVAL,
+    NCFED_HEARTBEAT_INTERVAL, NCFED_HEARTBEAT_MISS_LIMIT,
 )
 
 logger = logging.getLogger("n2n.channel")
@@ -94,6 +94,7 @@ class FederationChannel:
     # ---- lifecycle ----------------------------------------------------
 
     async def start(self):
+        self._misses = 0
         self._read_task = asyncio.create_task(self._read_loop())
         self._hb_task = asyncio.create_task(self._heartbeat_loop())
 
@@ -108,6 +109,14 @@ class FederationChannel:
             self.writer.close()
         except Exception:
             pass
+        # Notify the owner (service) so a dead channel is deregistered and the
+        # reconnect supervisor can re-dial (US2). Never let a hook error mask close.
+        cb = getattr(self, "on_close", None)
+        if cb:
+            try:
+                cb(self)
+            except Exception:
+                pass
 
     # ---- framing I/O --------------------------------------------------
 
@@ -120,6 +129,7 @@ class FederationChannel:
         try:
             while not self._closed:
                 header = await self.reader.readexactly(5)
+                self._misses = 0  # any inbound frame (incl. heartbeat) proves liveness
                 length, flags = struct.unpack("!IB", header)
                 if length > NCFED_MAX_PAYLOAD:
                     self.logger.warning("Oversized frame %d — closing", length)
@@ -143,15 +153,29 @@ class FederationChannel:
             await self.close()
 
     async def _heartbeat_loop(self):
+        # Send a heartbeat each interval AND track liveness: a failed send or
+        # NCFED_HEARTBEAT_MISS_LIMIT intervals with no inbound frame closes the
+        # channel (which fires on_close → deregister → reconnect). (US2, FR-006)
         try:
             while not self._closed:
                 await asyncio.sleep(NCFED_HEARTBEAT_INTERVAL)
-                self.writer.write(struct.pack("!IB", 0, 0))
-                await self.writer.drain()
-        except (asyncio.CancelledError, ConnectionError):
-            pass
+                self._misses += 1
+                if self._misses >= NCFED_HEARTBEAT_MISS_LIMIT:
+                    self.logger.warning("Channel to %s: %d missed heartbeats — closing",
+                                        self.peer_identity, self._misses)
+                    break
+                try:
+                    self.writer.write(struct.pack("!IB", 0, 0))
+                    await self.writer.drain()
+                except (ConnectionError, OSError) as e:
+                    self.logger.warning("Channel to %s: heartbeat send failed (%s) — closing",
+                                        self.peer_identity, e)
+                    break
+        except asyncio.CancelledError:
+            return
         except Exception:
             pass
+        await self.close()
 
     # ---- dispatch -----------------------------------------------------
 

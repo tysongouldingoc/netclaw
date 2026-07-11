@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS federation_peer (
     endpoint_port INTEGER,
     state         TEXT NOT NULL DEFAULT 'not_federated',
     chat_enabled  INTEGER NOT NULL DEFAULT 0,
+    endpoint_updated_at TEXT,
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
@@ -114,6 +115,24 @@ CREATE TABLE IF NOT EXISTS n2n_chat_session (
     message_count    INTEGER NOT NULL DEFAULT 0,
     transcript_ref   TEXT
 );
+-- feature 053: async delegated tasks (persisted so results survive channel
+-- drops and daemon restarts, FR-004)
+CREATE TABLE IF NOT EXISTS delegated_task (
+    task_id         TEXT PRIMARY KEY,
+    direction       TEXT NOT NULL,          -- inbound (we run it) | outbound (peer runs it)
+    peer_identity   TEXT NOT NULL,
+    target_type     TEXT,                   -- skill | tool
+    target_name     TEXT,
+    input_text      TEXT,
+    state           TEXT NOT NULL DEFAULT 'submitted',  -- submitted|working|completed|failed|cancelled
+    progress        TEXT,
+    result_ref      TEXT,
+    tokens_used     INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT,
+    updated_at      TEXT,
+    completed_at    TEXT,
+    retention_until TEXT
+);
 """
 
 
@@ -129,6 +148,13 @@ class FederationManager:
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
+        # Migrate existing DBs: add columns introduced after first release
+        # (SQLite has no ADD COLUMN IF NOT EXISTS). Safe/idempotent.
+        for table, col, decl in [("federation_peer", "endpoint_updated_at", "TEXT")]:
+            try:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
         self._conn.commit()
         logger.info("FederationManager ready (db=%s)", self.db_path)
 

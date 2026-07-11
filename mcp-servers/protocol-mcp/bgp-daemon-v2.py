@@ -15,6 +15,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import sys
 from ipaddress import IPv4Network
 import struct
@@ -327,6 +328,100 @@ async def handle_n2n(method, path, body):
         if path == "/n2n/chats" and method == "GET":
             return 200, {"sessions": fed.chat.list_sessions()}
 
+        # ---- US1: async delegated tasks ----
+        if path == "/n2n/tasks" and method == "POST":
+            if not body.get("peer") or not body.get("target_name"):
+                return 400, {"error": "missing required field 'peer' or 'target_name'"}
+            ttype = body.get("target_type", "skill")
+            try:
+                if ttype == "skill":
+                    res = await fed.invoker.submit_remote_skill(
+                        body["peer"], body["target_name"], body.get("input_text", ""))
+                else:
+                    # tools are fast/stdio — keep the synchronous 052 path
+                    res = await fed.invoker.invoke_remote_tool(
+                        body["peer"], body["target_name"], body.get("arguments") or {})
+                return 200, res
+            except Exception as e:
+                return 200, {"error": {"code": getattr(e, "code", None),
+                                       "message": getattr(e, "message", str(e))}}
+
+        if path == "/n2n/tasks" and method == "GET":
+            return 200, {"tasks": fed.tasks.list_recent()}
+
+        if len(parts) == 4 and parts[1] == "tasks" and parts[3] == "cancel" and method == "POST":
+            row = mgr._conn.execute("SELECT peer_identity FROM delegated_task WHERE task_id=?",
+                                    (parts[2],)).fetchone()
+            if row:
+                try:
+                    return 200, await fed.invoker.cancel_remote_task(row["peer_identity"], parts[2])
+                except Exception as e:
+                    return 200, {"error": getattr(e, "message", str(e))}
+            return 404, {"error": "unknown task"}
+
+        # ---- US6: health + one-step connect/trust ----
+        if path == "/n2n/health" and method == "GET":
+            peers = []
+            for p in mgr.list_peers():
+                if p["state"] == "not_federated":
+                    continue
+                ident = p["identity"]
+                h = fed.health_of(ident)
+                meta = fed.inventory.load_remote(ident, fed.refresh_s)
+                in_flight = [t for t in fed.tasks.list_recent()
+                             if t["peer_identity"] == ident and t["state"] in ("submitted", "working")]
+                peers.append({
+                    "identity": ident, "display_name": p["display_name"], "state": p["state"],
+                    "channel_state": h["channel_state"], "last_seen": h["last_seen"],
+                    "endpoint": f"{p.get('endpoint_host')}:{p.get('endpoint_port')}",
+                    "endpoint_updated_at": p.get("endpoint_updated_at"),
+                    "inventory_stale": (meta or {}).get("stale") if meta else None,
+                    "in_flight_tasks": [{"task_id": t["task_id"], "state": t["state"],
+                                         "progress": t["progress"], "target": t["target_name"]}
+                                        for t in in_flight],
+                })
+            return 200, {"identity": fed.local_identity, "peers": peers}
+
+        if path == "/n2n/connect" and method == "POST":
+            if not all(body.get(k) for k in ("peer", "host", "port")):
+                return 400, {"error": "missing required field 'peer', 'host', or 'port'"}
+            m = re.match(r"as(\d+)-(.+)", body["peer"])
+            if not m:
+                return 400, {"error": "peer must be 'as<AS>-<router-id>'"}
+            pa, rid = int(m.group(1)), m.group(2)
+            state = mgr.local_consent(pa, rid, body.get("display_name"))
+            asyncio.create_task(fed.open_channel(pa, rid, body["host"], int(body["port"])))
+            return 200, {"identity": body["peer"], "state": state.value, "dialing": True}
+
+        if path == "/n2n/trust" and method == "POST":
+            ident = body.get("peer")
+            if not ident:
+                return 400, {"error": "missing required field 'peer'"}
+            if body.get("chat", True):
+                mgr.set_chat_enabled(ident, True)
+            granted = []
+            for tgt in (body.get("tools") or []):
+                ttype = "tool" if "/" in tgt else "skill"
+                fed.authz.grant(ident, ttype, tgt)
+                granted.append(tgt)
+            return 200, {"peer": ident, "chat_enabled": True, "granted": granted}
+
+        if len(parts) == 3 and parts[1] == "tasks" and method == "GET":
+            # Status; if the task is an outbound one, fetch fresh from the peer
+            task_id = parts[2]
+            row = mgr._conn.execute(
+                "SELECT direction, peer_identity, state FROM delegated_task WHERE task_id=?",
+                (task_id,)).fetchone()
+            if not row:
+                return 404, {"error": "unknown task"}
+            if row["direction"] == "outbound" and row["state"] not in ("completed", "failed", "cancelled"):
+                kind = "result"
+                try:
+                    return 200, await fed.invoker.poll_remote_task(row["peer_identity"], task_id, kind="result")
+                except Exception:
+                    return 200, fed.tasks.status(task_id)
+            return 200, fed.tasks.result(task_id)
+
         return 404, {"error": f"unknown n2n route {path}"}
     except Exception as e:
         logger.error("N2N route error %s %s: %s", method, path, e)
@@ -597,6 +692,43 @@ async def handle_http(reader, writer):
         writer.close()
 
 
+async def _current_ngrok_endpoint():
+    """Return the current ngrok TCP endpoint 'host:port', or None."""
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen("http://127.0.0.1:4040/api/tunnels", timeout=3)
+        for t in json.loads(resp.read()).get("tunnels", []):
+            if t.get("proto") == "tcp":
+                return t["public_url"].replace("tcp://", "")
+    except Exception:
+        pass
+    return None
+
+
+async def _endpoint_watcher():
+    """US3: on ngrok endpoint change, update our mesh endpoint and re-announce
+    it to federated peers over live channels. Also re-announce periodically so
+    peers that (re)connect after our restart learn the current endpoint."""
+    last = _speaker.agent.mesh_endpoint if _speaker else None
+    while True:
+        try:
+            await asyncio.sleep(30)
+            cur = await _current_ngrok_endpoint()
+            if not cur:
+                continue
+            if cur != last:
+                logger.info("ngrok endpoint changed %s → %s — re-announcing to peers", last, cur)
+                if _speaker:
+                    _speaker.agent.mesh_endpoint = cur
+                last = cur
+            if _federation is not None:
+                await _federation.reannounce_endpoint(cur)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.debug("endpoint watcher error: %s", e)
+
+
 async def main():
     global _speaker
 
@@ -684,6 +816,14 @@ async def main():
 
     logger.info("Starting BGP speaker...")
     await _speaker.start()
+
+    # US2: start the N2N reconnect supervisor so federation self-heals across
+    # peer restarts without a manual re-dial.
+    if _federation is not None:
+        _federation.start_supervisor()
+        # US3: watch the ngrok endpoint and re-announce it to federated peers on
+        # change so nobody swaps host:port by hand (FR-010).
+        asyncio.create_task(_endpoint_watcher())
 
     # Auto-advertise identity route (router-id as /32)
     _speaker.agent.originate_route(f"{ROUTER_ID}/32")

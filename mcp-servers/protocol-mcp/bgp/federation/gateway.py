@@ -24,11 +24,16 @@ AGENT_ID = os.environ.get("N2N_AGENT_ID", "main")
 def _extract_reply(stdout: str):
     """Parse the `openclaw agent --json` envelope (which is preceded by banner
     noise) and return (reply_text, tokens_used)."""
+    # US5/FR-018: use raw_decode so a trailing log line after the JSON envelope
+    # (e.g. "[agent] run … stopReason=stop") does NOT break parsing — plain
+    # json.loads(stdout[start:]) fails on trailing content. Try each '{' start
+    # and raw_decode the first complete object there.
+    decoder = json.JSONDecoder()
     start = stdout.find("{")
     obj = None
     while start != -1:
         try:
-            obj = json.loads(stdout[start:])
+            obj, _ = decoder.raw_decode(stdout[start:])
             break
         except Exception:
             start = stdout.find("{", start + 1)
@@ -87,11 +92,12 @@ async def run_agent_turn(prompt: str, session_key: str = "n2n", timeout_s: int =
     Raises TimeoutError on timeout; on non-zero exit returns the stderr tail as
     the reply so the caller can surface a useful message rather than crashing.
     """
-    # Use --session-id (supported across OpenClaw CLI versions). Older/newer
-    # builds diverge on --session-key vs --session-id; --session-id is the
-    # common one (a peer on a build without --session-key errored otherwise).
-    cmd = ["openclaw", "agent", "--agent", AGENT_ID,
-           "--session-id", session_key, "--json", "-m", prompt]
+    # US4: use the flag our OWN CLI supports, probed once and cached in
+    # negotiate.py (builds differ: --session-id vs --session-key). This is the
+    # responder running its own agent, so the local probe is authoritative.
+    from .negotiate import local_descriptor
+    flag = "--" + local_descriptor().get("agent_invoke", "session-id")
+    cmd = ["openclaw", "agent", "--agent", AGENT_ID, flag, session_key, "--json", "-m", prompt]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     try:
