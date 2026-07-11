@@ -69,13 +69,37 @@ Both operators must consent before ANY capability information flows.
 - Daemon: `N2N_ENABLED=true` (plus optional `N2N_*` tuning — see `.env.example`).
 - `n2n-mcp`: `BGP_DAEMON_API` (default `http://127.0.0.1:8179`).
 
+## Long remote operations — delegate, don't chat (feature 053)
+
+For multi-minute work on a peer (e.g. "recreate my CML lab"), use **async
+delegation**, not chat: `n2n_delegate(peer, target_name, input_text)` submits
+the task and returns a `task_id` immediately; the peer runs it in the
+background. Poll with `n2n_task_status(task_id)` and fetch `n2n_task_result(task_id)`
+when it completes (`n2n_task_cancel` to stop). This survives ngrok resets that
+would drop a single long call — the fix for the "Connection lost" mid-build.
+
+## Reliability — it self-heals (feature 053)
+
+- **Auto-reconnect**: if a peer restarts, its channel dies and re-establishes
+  automatically from persisted consent — no manual re-dial.
+- **Endpoint auto-re-announce**: when a peer's ngrok endpoint changes on
+  restart, it tells you over the live session and you re-dial automatically — no
+  host:port swapping.
+- **Version negotiation**: peers on different OpenClaw builds interoperate; a
+  pre-053 peer degrades gracefully to 052 behavior.
+- **Health**: `n2n_health` shows per-peer channel state, last-seen, endpoint
+  freshness, and in-flight tasks (also on the HUD claw node).
+
+## One-step setup (feature 053)
+
+- `n2n_connect(peer, host, port)` — add + consent + dial in one call.
+- `n2n_trust(peer, tools="a,b", chat=true)` — consent + grants + chat in one call.
+
 ## Tools used
 
-`n2n_status`, `n2n_consent`, `n2n_kill`, `n2n_peer_capabilities`,
-`n2n_compare_capabilities`, `n2n_set_visibility` (n2n-mcp).
-
-## Not yet available (later phases)
-
-Remote tool/skill invocation (`n2n_invoke`, grants, approvals) and claw-to-claw
-chat (`n2n_chat`) are specified in `specs/052-n2n-federation/` and land in
-subsequent phases.
+US1 capability: `n2n_status`, `n2n_consent`, `n2n_kill`, `n2n_peer_capabilities`,
+`n2n_compare_capabilities`, `n2n_set_visibility`. US2 invocation: `n2n_grant`,
+`n2n_revoke_grant`, `n2n_list_grants`, `n2n_invoke`, `n2n_approvals`,
+`n2n_approve`, `n2n_deny`, `n2n_audit`, `n2n_config`. US3 chat: `n2n_chat`.
+053 reliability/ergonomics: `n2n_delegate`, `n2n_task_status`,
+`n2n_task_result`, `n2n_task_cancel`, `n2n_health`, `n2n_connect`, `n2n_trust`.

@@ -157,6 +157,32 @@ as *not federated*). To gain N2N they:
 
 ---
 
+## Reliability & ergonomics (feature 053)
+
+The protocol self-heals so you don't babysit it across restarts:
+
+- **Async task delegation** — long remote operations (e.g. recreating a 10-node
+  CML lab) run as background tasks: `n2n_delegate` returns a `task_id`
+  instantly, you poll `n2n_task_status` / fetch `n2n_task_result`. No single
+  call is long enough for ngrok to reset — the fix for "Connection lost"
+  mid-build. Use delegation, not chat, for multi-minute work.
+- **Channel auto-reconnect** — a peer restart no longer wedges federation; the
+  dead channel is detected and re-established automatically from persisted
+  consent (bounded backoff, `peer unreachable` surfaced after repeated failures).
+- **Endpoint auto-re-announce** — when your ngrok endpoint changes on restart,
+  your claw announces it to federated peers over the live session and they
+  re-dial automatically. No more manual host:port swapping.
+- **Capability/version negotiation** — peers on different OpenClaw builds
+  interoperate (agent-flag and reply-shape differences are negotiated); a
+  pre-053 peer degrades gracefully to 052 behavior.
+- **Health & one-step setup** — `n2n_health` (and the HUD claw node) show
+  channel state, last-seen, endpoint freshness, and in-flight tasks;
+  `n2n_connect` and `n2n_trust` collapse the multi-step setup into one call each.
+
+Full spec: [`specs/053-n2n-ergonomics/`](specs/053-n2n-ergonomics/).
+
+---
+
 ## Reference
 
 - Skill: [`workspace/skills/n2n-federation/SKILL.md`](workspace/skills/n2n-federation/SKILL.md)
