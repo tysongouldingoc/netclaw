@@ -105,9 +105,9 @@
 
 **Independent Test**: quickstart.md §6 — each hardened path has a regression test that fails against pre-053 behavior and passes after (SC-008)
 
-- [ ] T026 [P] [US5] Regression test in `tests/n2n/test_robustness.py`: assert the n2n-mcp `_post` client timeout (610s) strictly exceeds the daemon chat/skill timeouts (300/600s) so a completed op is never dropped (FR-017)
-- [ ] T027 [US5] Harden reply parsing in `gateway.py` `_extract_reply` to tolerate trailing non-JSON (e.g. a `[agent] run … stopReason=stop` line after the envelope) via raw-decode of the first JSON object; add a test with a trailing-log fixture (FR-018) — credit Nick's prototype
-- [ ] T028 [P] [US5] Regression tests in `tests/n2n/test_robustness.py` for the 052 daemon HTTP hardening: segmented/chunked request body read in full (FR-019), and missing-field requests return a typed error naming the field (not a bare KeyError)
+- [X] T026 [P] [US5] Regression test in `tests/n2n/test_robustness.py`: assert the n2n-mcp `_post` client timeout (610s) strictly exceeds the daemon chat/skill timeouts (300/600s) so a completed op is never dropped (FR-017)
+- [X] T027 [US5] Harden reply parsing in `gateway.py` `_extract_reply` to tolerate trailing non-JSON (e.g. a `[agent] run … stopReason=stop` line after the envelope) via raw-decode of the first JSON object; add a test with a trailing-log fixture (FR-018) — credit Nick's prototype
+- [X] T028 [P] [US5] Regression tests in `tests/n2n/test_robustness.py` for the 052 daemon HTTP hardening: segmented/chunked request body read in full (FR-019), and missing-field requests return a typed error naming the field (not a bare KeyError)
 
 **Checkpoint**: the whack-a-mole fixes can't silently regress.
 

@@ -24,11 +24,16 @@ AGENT_ID = os.environ.get("N2N_AGENT_ID", "main")
 def _extract_reply(stdout: str):
     """Parse the `openclaw agent --json` envelope (which is preceded by banner
     noise) and return (reply_text, tokens_used)."""
+    # US5/FR-018: use raw_decode so a trailing log line after the JSON envelope
+    # (e.g. "[agent] run … stopReason=stop") does NOT break parsing — plain
+    # json.loads(stdout[start:]) fails on trailing content. Try each '{' start
+    # and raw_decode the first complete object there.
+    decoder = json.JSONDecoder()
     start = stdout.find("{")
     obj = None
     while start != -1:
         try:
-            obj = json.loads(stdout[start:])
+            obj, _ = decoder.raw_decode(stdout[start:])
             break
         except Exception:
             start = stdout.find("{", start + 1)
