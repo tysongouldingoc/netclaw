@@ -38,9 +38,12 @@ class FederationService:
         from .authorization import Authorizer
         from .invocation import Invoker
         from .chat import ChatManager
+        from .tasks import TaskManager
         self.authz = Authorizer(self.manager)
         self.invoker = Invoker(self)
         self.chat = ChatManager(self)
+        self.tasks = TaskManager(self.manager, self.audit,
+                                 retention_s=int(os.environ.get("N2N_TASK_RETENTION_S", "3600")))
         # Optional callback the daemon sets to push approval prompts to the
         # operator's channels (Slack/Webex/CLI) via the gateway (FR-013).
         self.approval_notifier = None
@@ -55,6 +58,9 @@ class FederationService:
             "n2n/inventory_get": self._on_inventory_get,
             "n2n/tools/call": self.invoker.handle_tools_call,
             "n2n/tasks/submit": self.invoker.handle_task_submit,
+            "n2n/tasks/status": self.invoker.handle_task_status,
+            "n2n/tasks/result": self.invoker.handle_task_result,
+            "n2n/tasks/cancel": self.invoker.handle_task_cancel,
             "n2n/chat/open": self.chat.handle_chat_open,
             "n2n/chat/message": self.chat.handle_chat_message,
         }
@@ -77,6 +83,16 @@ class FederationService:
         if state == PeerState.FEDERATED:
             asyncio.create_task(self._advertise_to(channel))
         return {"identity": self.local_identity, "display_name": self.display_name, "version": "1.0"}
+
+    def _register_channel(self, ident, ch):
+        """Track a channel and set its on_close hook so a dead channel
+        deregisters itself (US2) — no zombie channels lingering in the registry."""
+        def _deregister(closed_ch):
+            if self.channels.get(ident) is closed_ch:
+                self.channels.pop(ident, None)
+                logger.info("Channel to %s closed — deregistered", ident)
+        ch.on_close = _deregister
+        self.channels[ident] = ch
 
     async def _on_consent_state(self, channel, params):
         return {"state": self.manager.get_peer(channel.peer_identity)["state"]}
@@ -152,7 +168,7 @@ class FederationService:
         ch = FederationChannel(reader, writer, local_identity=self.local_identity,
                                peer_as=peer_as, peer_router_id=router_id,
                                manager=self.manager, is_initiator=False, handlers=self.handlers)
-        self.channels[ident] = ch
+        self._register_channel(ident, ch)
         await ch.start()
         # The initiator sends n2n/hello; our _on_hello handler replies and, if
         # both consents are present, advertises. Nothing more to do here.
@@ -195,7 +211,7 @@ class FederationService:
             ch = FederationChannel(reader, writer, local_identity=self.local_identity,
                                    peer_as=peer_as, peer_router_id=router_id,
                                    manager=self.manager, is_initiator=True, handlers=self.handlers)
-            self.channels[ident] = ch
+            self._register_channel(ident, ch)
             await ch.start()
             resp = await ch.call("n2n/hello", {"identity": self.local_identity,
                                                "display_name": self.display_name, "versions": ["1.0"]})

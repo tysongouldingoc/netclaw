@@ -130,6 +130,9 @@ class Invoker:
             raise RpcError(ERR_EXECUTION_TIMEOUT, f"tool {tool} timed out")
 
     async def handle_task_submit(self, channel, params):
+        """Async (053): authorize synchronously, then create a task, spawn a
+        background worker, and return {task_id} immediately. The peer polls
+        n2n/tasks/status and fetches n2n/tasks/result — no long call to drop."""
         peer = channel.peer_identity
         skill = params.get("skill", "")
         input_text = params.get("input_text", "")
@@ -141,27 +144,42 @@ class Invoker:
                               target_name=skill, request_id=req_id, decision=decision.code, outcome="denied")
             raise RpcError(_CODE_MAP.get(decision.code, -32000), decision.reason)
 
-        if decision.code == "approval_required":
-            inv_id = self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
-                                       target_name=skill, request_id=req_id, decision="approval_required",
-                                       outcome="pending")
-            appr = self.authz.create_approval(inv_id)
-            self.service.notify_approval(inv_id, peer, "skill", skill)
-            if not await self._await_approval(appr["approval_id"]):
-                raise RpcError(ERR_APPROVAL_EXPIRED, "approval not granted")
+        tm = self.service.tasks
+        task_id = tm.create(direction="inbound", peer_identity=peer, target_type="skill",
+                            target_name=skill, input_text=input_text)
 
-        try:
+        async def worker(progress):
+            # Approval (if required) happens inside the background worker so submit
+            # returns instantly; the task sits in 'working' until approved/expired.
+            if decision.code == "approval_required":
+                inv_id = self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
+                                           target_name=skill, request_id=task_id,
+                                           decision="approval_required", outcome="pending")
+                appr = self.authz.create_approval(inv_id)
+                self.service.notify_approval(inv_id, peer, "skill", skill)
+                progress("awaiting approval")
+                if not await self._await_approval(appr["approval_id"]):
+                    raise RpcError(ERR_APPROVAL_EXPIRED, "approval not granted")
+            progress("running skill")
             output, tokens = await self._exec_skill_gateway(skill, input_text)
             self.authz.debit(peer, requests=1, tokens=tokens)
-            ref = self.audit.store_result(req_id or f"{peer}-{skill}", {"output_text": output})
             self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
-                              target_name=skill, request_id=req_id, decision="allowlisted",
-                              outcome="success", result_ref=ref)
-            return {"status": "completed", "output_text": output, "tokens_used": tokens}
-        except asyncio.TimeoutError:
-            self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
-                              target_name=skill, request_id=req_id, decision="allowlisted", outcome="timeout")
-            raise RpcError(ERR_EXECUTION_TIMEOUT, f"skill {skill} timed out")
+                              target_name=skill, request_id=task_id, decision="allowlisted",
+                              outcome="success")
+            return output, tokens
+
+        tm.run(task_id, worker)
+        return {"task_id": task_id, "state": "submitted"}
+
+    async def handle_task_status(self, channel, params):
+        return self.service.tasks.status(params.get("task_id", ""))
+
+    async def handle_task_result(self, channel, params):
+        return self.service.tasks.result(params.get("task_id", ""))
+
+    async def handle_task_cancel(self, channel, params):
+        task_id = params.get("task_id", "")
+        return {"task_id": task_id, "cancelled": self.service.tasks.cancel(task_id)}
 
     async def _await_approval(self, approval_id: int) -> bool:
         deadline = time.time() + self.authz.approval_window_s
@@ -255,14 +273,42 @@ class Invoker:
                                timeout=self.tool_timeout + 5)
         return {"source": ident, "trust": "remote-untrusted", "result": result}
 
-    async def invoke_remote_skill(self, ident, skill, input_text):
+    async def submit_remote_skill(self, ident, skill, input_text):
+        """Async (053): submit a skill task to a peer, return the task_id
+        immediately. The peer runs it in the background; poll via task_status/
+        task_result. Short call — survives ngrok resets (FR-005)."""
         ch = self.service.channels.get(ident)
         if not ch:
             raise RpcError(ERR_SEVERED, "no channel to peer")
-        req_id = f"{self.service.local_identity}:{int(time.time()*1000)}"
-        self.audit.record(direction="outbound", peer_identity=ident, target_type="skill",
-                          target_name=skill, request_id=req_id, decision="requested", outcome="pending")
-        result = await ch.call("n2n/tasks/submit",
-                               {"skill": skill, "input_text": input_text, "request_id": req_id},
-                               timeout=self.skill_timeout + 5)
-        return {"source": ident, "trust": "remote-untrusted", "result": result}
+        resp = await ch.call("n2n/tasks/submit",
+                             {"skill": skill, "input_text": input_text}, timeout=30.0)
+        task_id = resp.get("task_id")
+        if task_id:
+            self.service.tasks.record_outbound(task_id, ident, "skill", skill)
+            self.audit.record(direction="outbound", peer_identity=ident, target_type="skill",
+                              target_name=skill, request_id=task_id, decision="requested",
+                              outcome="submitted")
+        return {"source": ident, "trust": "remote-untrusted", **resp}
+
+    async def poll_remote_task(self, ident, task_id, kind="status"):
+        """Fetch status or result of an outbound task from the peer (short call).
+        On a completed result, cache it locally so it survives a later drop (FR-004)."""
+        ch = self.service.channels.get(ident)
+        if not ch:
+            # Channel down: fall back to the last locally-cached status/result.
+            tm = self.service.tasks
+            return tm.result(task_id) if kind == "result" else tm.status(task_id)
+        method = "n2n/tasks/result" if kind == "result" else "n2n/tasks/status"
+        resp = await ch.call(method, {"task_id": task_id}, timeout=30.0)
+        # Cache terminal results locally against the outbound row (retrieval after drop)
+        if kind == "result" and resp.get("state") in ("completed", "failed", "cancelled"):
+            ref = self.audit.store_result(task_id, resp)
+            self.service.tasks._set(task_id, state=resp["state"], result_ref=ref,
+                                    completed_at=resp.get("completed_at"))
+        return {"source": ident, "trust": "remote-untrusted", **resp}
+
+    async def cancel_remote_task(self, ident, task_id):
+        ch = self.service.channels.get(ident)
+        if not ch:
+            raise RpcError(ERR_SEVERED, "no channel to peer")
+        return await ch.call("n2n/tasks/cancel", {"task_id": task_id}, timeout=15.0)

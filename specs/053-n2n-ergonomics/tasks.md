@@ -16,8 +16,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Add 053 `N2N_*` tunables (no values) to `.env.example` per contracts/n2n-daemon-api-delta.md: `N2N_TASK_RETENTION_S`, `N2N_RECONNECT_BACKOFF_MIN_S`, `N2N_RECONNECT_BACKOFF_MAX_S`, `N2N_RECONNECT_UNREACHABLE_AFTER`, `N2N_TASK_POLL_S`
-- [ ] T002 [P] Extend `tests/n2n/conftest.py` loopback harness with helpers to: simulate a peer daemon restart (drop + relaunch a service), and inject a slow/long-running stub executor for async-task tests
+- [X] T001 Add 053 `N2N_*` tunables (no values) to `.env.example` per contracts/n2n-daemon-api-delta.md: `N2N_TASK_RETENTION_S`, `N2N_RECONNECT_BACKOFF_MIN_S`, `N2N_RECONNECT_BACKOFF_MAX_S`, `N2N_RECONNECT_UNREACHABLE_AFTER`, `N2N_TASK_POLL_S`
+- [X] T002 [P] Extend `tests/n2n/conftest.py` loopback harness with helpers to: simulate a peer daemon restart (drop + relaunch a service), and inject a slow/long-running stub executor for async-task tests
 
 ---
 
@@ -27,10 +27,10 @@
 
 **⚠️ No user story work begins until this phase is complete**
 
-- [ ] T003 Add `delegated_task` table + `federation_peer.endpoint_updated_at` column (additive, `CREATE TABLE/ALTER IF NOT EXISTS`) to the schema in `mcp-servers/protocol-mcp/bgp/federation/manager.py` per data-model.md; leave all 052 tables untouched (FR-022)
-- [ ] T004 Add an `on_close` hook to `FederationChannel` in `mcp-servers/protocol-mcp/bgp/federation/channel.py` (invoked from `close()`), and make the heartbeat loop increment `consecutive_misses` and call `close()` after `N2N_HEARTBEAT_MISS_LIMIT` misses or a failed send (US2 foundation, FR-006)
-- [ ] T005 Wire `FederationChannel.on_close` in `mcp-servers/protocol-mcp/bgp/federation/service.py` so a closing channel deregisters itself from `self.channels` (kills the zombie-channel class permanently)
-- [ ] T006 [P] Unit test channel death→deregister + heartbeat-miss→close in `tests/n2n/test_reconnect.py` (foundation slice)
+- [X] T003 Add `delegated_task` table + `federation_peer.endpoint_updated_at` column (additive, `CREATE TABLE/ALTER IF NOT EXISTS`) to the schema in `mcp-servers/protocol-mcp/bgp/federation/manager.py` per data-model.md; leave all 052 tables untouched (FR-022)
+- [X] T004 Add an `on_close` hook to `FederationChannel` in `mcp-servers/protocol-mcp/bgp/federation/channel.py` (invoked from `close()`), and make the heartbeat loop increment `consecutive_misses` and call `close()` after `N2N_HEARTBEAT_MISS_LIMIT` misses or a failed send (US2 foundation, FR-006)
+- [X] T005 Wire `FederationChannel.on_close` in `mcp-servers/protocol-mcp/bgp/federation/service.py` so a closing channel deregisters itself from `self.channels` (kills the zombie-channel class permanently)
+- [X] T006 [P] Unit test channel death→deregister + heartbeat-miss→close in `tests/n2n/test_reconnect.py` (foundation slice)
 
 **Checkpoint**: dead channels self-deregister; task table exists.
 
@@ -42,14 +42,14 @@
 
 **Independent Test**: quickstart.md §1 — delegate a multi-minute stub op on the loopback pair; submit returns a task_id in seconds, status polls short, result delivered intact even across a mid-task channel drop
 
-- [ ] T007 [US1] Create `mcp-servers/protocol-mcp/bgp/federation/tasks.py`: `DelegatedTask` dataclass + `TaskManager` — create/persist tasks (manager.py table), spawn asyncio background workers running the existing `_exec_skill_gateway`/`_exec_tool_stdio`, track state/progress, store result via the 052 audit result store, retention sweep on `N2N_TASK_RETENTION_S`
-- [ ] T008 [US1] Rewrite `handle_task_submit` in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` to be async: authorize (unchanged 052 default-deny), create task via TaskManager, spawn worker, return `{task_id, state:"submitted"}` immediately; add `handle_task_status`, `handle_task_result`, `handle_task_cancel` handlers
-- [ ] T009 [US1] Register `n2n/tasks/status`, `n2n/tasks/result`, `n2n/tasks/cancel` on the channel dispatcher in `mcp-servers/protocol-mcp/bgp/federation/service.py` (submit already registered); keep budget debit + audit on completion (052 semantics)
-- [ ] T010 [US1] Implement outbound delegation + requester-side poll in `invocation.py`: `submit_task(peer, ...)` returns task_id; a background poller (cadence `N2N_TASK_POLL_S`) fetches status→result and caches it keyed by task_id for retrieval after a drop (FR-004)
-- [ ] T011 [US1] Add daemon routes `/n2n/tasks` (POST submit, GET list), `/n2n/tasks/<id>` (GET), `/n2n/tasks/<id>/cancel` (POST) in `mcp-servers/protocol-mcp/bgp-daemon-v2.py` per contracts/n2n-task-lifecycle.md (full-body-read + typed errors)
-- [ ] T012 [P] [US1] Add n2n-mcp tools `n2n_delegate`, `n2n_task_status`, `n2n_task_result`, `n2n_task_cancel` in `mcp-servers/n2n-mcp/server.py` (proxy the new routes; `n2n_delegate` may inline-wait briefly then return task_id)
-- [ ] T013 [P] [US1] Unit tests for the task lifecycle in `tests/n2n/test_tasks.py`: submit→working→completed, cancel, unknown task_id → terminal status, retention sweep
-- [ ] T014 [US1] Loopback integration test in `tests/n2n/test_tasks.py`: delegate a slow stub op → task_id in seconds → poll → result. MUST also assert: (a) **each** lifecycle call (submit/status/result) returns in well under the ngrok idle window regardless of total op duration (FR-005 invariant); (b) result survives a mid-task **channel** drop+reconnect (FR-004); (c) result survives a responder **daemon restart** mid-task — restart the responder service, then retrieve the result from the persisted `delegated_task` row (FR-004, US1 scenario 5). Covers US1 scenarios 1–5.
+- [X] T007 [US1] Create `mcp-servers/protocol-mcp/bgp/federation/tasks.py`: `DelegatedTask` dataclass + `TaskManager` — create/persist tasks (manager.py table), spawn asyncio background workers running the existing `_exec_skill_gateway`/`_exec_tool_stdio`, track state/progress, store result via the 052 audit result store, retention sweep on `N2N_TASK_RETENTION_S`
+- [X] T008 [US1] Rewrite `handle_task_submit` in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` to be async: authorize (unchanged 052 default-deny), create task via TaskManager, spawn worker, return `{task_id, state:"submitted"}` immediately; add `handle_task_status`, `handle_task_result`, `handle_task_cancel` handlers
+- [X] T009 [US1] Register `n2n/tasks/status`, `n2n/tasks/result`, `n2n/tasks/cancel` on the channel dispatcher in `mcp-servers/protocol-mcp/bgp/federation/service.py` (submit already registered); keep budget debit + audit on completion (052 semantics)
+- [X] T010 [US1] Implement outbound delegation + requester-side poll in `invocation.py`: `submit_task(peer, ...)` returns task_id; a background poller (cadence `N2N_TASK_POLL_S`) fetches status→result and caches it keyed by task_id for retrieval after a drop (FR-004)
+- [X] T011 [US1] Add daemon routes `/n2n/tasks` (POST submit, GET list), `/n2n/tasks/<id>` (GET), `/n2n/tasks/<id>/cancel` (POST) in `mcp-servers/protocol-mcp/bgp-daemon-v2.py` per contracts/n2n-task-lifecycle.md (full-body-read + typed errors)
+- [X] T012 [P] [US1] Add n2n-mcp tools `n2n_delegate`, `n2n_task_status`, `n2n_task_result`, `n2n_task_cancel` in `mcp-servers/n2n-mcp/server.py` (proxy the new routes; `n2n_delegate` may inline-wait briefly then return task_id)
+- [X] T013 [P] [US1] Unit tests for the task lifecycle in `tests/n2n/test_tasks.py`: submit→working→completed, cancel, unknown task_id → terminal status, retention sweep
+- [X] T014 [US1] Loopback integration test in `tests/n2n/test_tasks.py`: delegate a slow stub op → task_id in seconds → poll → result. MUST also assert: (a) **each** lifecycle call (submit/status/result) returns in well under the ngrok idle window regardless of total op duration (FR-005 invariant); (b) result survives a mid-task **channel** drop+reconnect (FR-004); (c) result survives a responder **daemon restart** mid-task — restart the responder service, then retrieve the result from the persisted `delegated_task` row (FR-004, US1 scenario 5). Covers US1 scenarios 1–5.
 
 **Checkpoint**: MVP — the CML-clone-style long delegation completes reliably on the loopback pair.
 

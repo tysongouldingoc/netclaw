@@ -327,6 +327,53 @@ async def handle_n2n(method, path, body):
         if path == "/n2n/chats" and method == "GET":
             return 200, {"sessions": fed.chat.list_sessions()}
 
+        # ---- US1: async delegated tasks ----
+        if path == "/n2n/tasks" and method == "POST":
+            if not body.get("peer") or not body.get("target_name"):
+                return 400, {"error": "missing required field 'peer' or 'target_name'"}
+            ttype = body.get("target_type", "skill")
+            try:
+                if ttype == "skill":
+                    res = await fed.invoker.submit_remote_skill(
+                        body["peer"], body["target_name"], body.get("input_text", ""))
+                else:
+                    # tools are fast/stdio — keep the synchronous 052 path
+                    res = await fed.invoker.invoke_remote_tool(
+                        body["peer"], body["target_name"], body.get("arguments") or {})
+                return 200, res
+            except Exception as e:
+                return 200, {"error": {"code": getattr(e, "code", None),
+                                       "message": getattr(e, "message", str(e))}}
+
+        if path == "/n2n/tasks" and method == "GET":
+            return 200, {"tasks": fed.tasks.list_recent()}
+
+        if len(parts) == 4 and parts[1] == "tasks" and parts[3] == "cancel" and method == "POST":
+            row = mgr._conn.execute("SELECT peer_identity FROM delegated_task WHERE task_id=?",
+                                    (parts[2],)).fetchone()
+            if row:
+                try:
+                    return 200, await fed.invoker.cancel_remote_task(row["peer_identity"], parts[2])
+                except Exception as e:
+                    return 200, {"error": getattr(e, "message", str(e))}
+            return 404, {"error": "unknown task"}
+
+        if len(parts) == 3 and parts[1] == "tasks" and method == "GET":
+            # Status; if the task is an outbound one, fetch fresh from the peer
+            task_id = parts[2]
+            row = mgr._conn.execute(
+                "SELECT direction, peer_identity, state FROM delegated_task WHERE task_id=?",
+                (task_id,)).fetchone()
+            if not row:
+                return 404, {"error": "unknown task"}
+            if row["direction"] == "outbound" and row["state"] not in ("completed", "failed", "cancelled"):
+                kind = "result"
+                try:
+                    return 200, await fed.invoker.poll_remote_task(row["peer_identity"], task_id, kind="result")
+                except Exception:
+                    return 200, fed.tasks.status(task_id)
+            return 200, fed.tasks.result(task_id)
+
         return 404, {"error": f"unknown n2n route {path}"}
     except Exception as e:
         logger.error("N2N route error %s %s: %s", method, path, e)
