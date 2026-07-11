@@ -49,7 +49,7 @@
 - [ ] T011 [US1] Add daemon routes `/n2n/tasks` (POST submit, GET list), `/n2n/tasks/<id>` (GET), `/n2n/tasks/<id>/cancel` (POST) in `mcp-servers/protocol-mcp/bgp-daemon-v2.py` per contracts/n2n-task-lifecycle.md (full-body-read + typed errors)
 - [ ] T012 [P] [US1] Add n2n-mcp tools `n2n_delegate`, `n2n_task_status`, `n2n_task_result`, `n2n_task_cancel` in `mcp-servers/n2n-mcp/server.py` (proxy the new routes; `n2n_delegate` may inline-wait briefly then return task_id)
 - [ ] T013 [P] [US1] Unit tests for the task lifecycle in `tests/n2n/test_tasks.py`: submit→working→completed, cancel, unknown task_id → terminal status, retention sweep
-- [ ] T014 [US1] Loopback integration test in `tests/n2n/test_tasks.py`: delegate a slow stub op → task_id in seconds → poll → result; drop+reconnect the channel mid-task → task still tracked and result retrievable (FR-004, covers US1 scenarios 1–5)
+- [ ] T014 [US1] Loopback integration test in `tests/n2n/test_tasks.py`: delegate a slow stub op → task_id in seconds → poll → result. MUST also assert: (a) **each** lifecycle call (submit/status/result) returns in well under the ngrok idle window regardless of total op duration (FR-005 invariant); (b) result survives a mid-task **channel** drop+reconnect (FR-004); (c) result survives a responder **daemon restart** mid-task — restart the responder service, then retrieve the result from the persisted `delegated_task` row (FR-004, US1 scenario 5). Covers US1 scenarios 1–5.
 
 **Checkpoint**: MVP — the CML-clone-style long delegation completes reliably on the loopback pair.
 
@@ -77,7 +77,7 @@
 **Independent Test**: quickstart.md §3 — change one service's endpoint; peer learns it and re-dials with no human step
 
 - [ ] T019 [US3] Add `n2n/endpoint_update` handler in `service.py`: accept only for an already-federated identity over its authenticated session (FR-012), update `federation_peer.endpoint_host/port/endpoint_updated_at`, trigger the reconnect supervisor to re-dial preserving lower-AS-initiates role (FR-011)
-- [ ] T020 [US3] Detect local endpoint change in `bgp-daemon-v2.py`/`agent.py` (ngrok endpoint differs from last-announced or on startup) and call `service.reannounce_endpoint()` to send `n2n/endpoint_update` to all federated peers over their live channels (FR-010)
+- [ ] T020 [US3] Detect local endpoint change in `bgp-daemon-v2.py` (it already auto-detects the ngrok endpoint at startup — compare against the last-announced value and detect changes there; `agent.py` stays responsible for mesh-directory only) and call `service.reannounce_endpoint()` to send `n2n/endpoint_update` to all federated peers over their live channels (FR-010)
 - [ ] T021 [P] [US3] Test in `tests/n2n/test_endpoint_reannounce.py`: endpoint_update from a federated identity updates the record + triggers re-dial; an update for a non-federated / wrong-session identity is rejected + logged (FR-012); higher-AS change still results in lower-AS re-dial
 
 **Checkpoint**: endpoint churn no longer needs a human.
@@ -90,9 +90,9 @@
 
 **Independent Test**: quickstart.md §4 — two services with different simulated agent flags/reply shapes complete delegated calls; a descriptor-less peer falls back to 052 behavior
 
-- [ ] T022 [US4] Create `mcp-servers/protocol-mcp/bgp/federation/negotiate.py`: build local `CapabilityDescriptor` (probe `openclaw agent --help` for supported flags, list reply shapes, proto_version="053", features) and a compare/adapt helper
+- [ ] T022 [US4] Create `mcp-servers/protocol-mcp/bgp/federation/negotiate.py`: build local `CapabilityDescriptor` (probe `openclaw agent --help` for supported flags, list reply shapes, proto_version="053", features) and a compare/adapt helper. Probe ONCE and cache the result (module-level/service-held); do NOT shell out to `--help` per invocation — re-probe only on daemon restart.
 - [ ] T023 [US4] Extend `n2n/hello` in `service.py` to send + store the peer's `capabilities` descriptor; treat a missing descriptor as proto_version "052" (graceful degrade, FR-016); gate async-task use on the peer advertising `async_tasks`
-- [ ] T024 [US4] Update `gateway.py` to use the locally-probed agent invoke flag (from negotiate.py) instead of a hardcoded flag, and confirm tolerant reply extraction covers both `finalAssistantVisibleText` and `payloads` shapes (consolidate the 052 parser fix); return a clear "unsupported by peer" error when a needed feature is absent (FR-016)
+- [ ] T024 [US4] Update `gateway.py` to use the locally-probed **cached** agent invoke flag (from negotiate.py, per T022) instead of a hardcoded flag, and confirm tolerant reply extraction covers both `finalAssistantVisibleText` and `payloads` shapes (consolidate the 052 parser fix); return a clear "unsupported by peer" error when a needed feature is absent (FR-016)
 - [ ] T025 [P] [US4] Test in `tests/n2n/test_negotiate.py`: descriptor exchange + adaptation; missing-descriptor peer → 052 fallback path chosen; unsupported-feature → clear error (covers US4 scenarios 1–4)
 
 **Checkpoint**: build drift no longer breaks federation silently.
