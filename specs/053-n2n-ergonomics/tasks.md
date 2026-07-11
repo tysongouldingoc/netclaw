@@ -76,9 +76,9 @@
 
 **Independent Test**: quickstart.md §3 — change one service's endpoint; peer learns it and re-dials with no human step
 
-- [ ] T019 [US3] Add `n2n/endpoint_update` handler in `service.py`: accept only for an already-federated identity over its authenticated session (FR-012), update `federation_peer.endpoint_host/port/endpoint_updated_at`, trigger the reconnect supervisor to re-dial preserving lower-AS-initiates role (FR-011)
-- [ ] T020 [US3] Detect local endpoint change in `bgp-daemon-v2.py` (it already auto-detects the ngrok endpoint at startup — compare against the last-announced value and detect changes there; `agent.py` stays responsible for mesh-directory only) and call `service.reannounce_endpoint()` to send `n2n/endpoint_update` to all federated peers over their live channels (FR-010)
-- [ ] T021 [P] [US3] Test in `tests/n2n/test_endpoint_reannounce.py`: endpoint_update from a federated identity updates the record + triggers re-dial; an update for a non-federated / wrong-session identity is rejected + logged (FR-012); higher-AS change still results in lower-AS re-dial
+- [X] T019 [US3] Add `n2n/endpoint_update` handler in `service.py`: accept only for an already-federated identity over its authenticated session (FR-012), update `federation_peer.endpoint_host/port/endpoint_updated_at`, trigger the reconnect supervisor to re-dial preserving lower-AS-initiates role (FR-011)
+- [X] T020 [US3] Detect local endpoint change in `bgp-daemon-v2.py` (it already auto-detects the ngrok endpoint at startup — compare against the last-announced value and detect changes there; `agent.py` stays responsible for mesh-directory only) and call `service.reannounce_endpoint()` to send `n2n/endpoint_update` to all federated peers over their live channels (FR-010)
+- [X] T021 [P] [US3] Test in `tests/n2n/test_endpoint_reannounce.py`: endpoint_update from a federated identity updates the record + triggers re-dial; an update for a non-federated / wrong-session identity is rejected + logged (FR-012); higher-AS change still results in lower-AS re-dial
 
 **Checkpoint**: endpoint churn no longer needs a human.
 

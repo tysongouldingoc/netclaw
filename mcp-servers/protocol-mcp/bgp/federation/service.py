@@ -61,6 +61,7 @@ class FederationService:
         self.handlers = {
             "n2n/hello": self._on_hello,
             "n2n/consent_state": self._on_consent_state,
+            "n2n/endpoint_update": self._on_endpoint_update,
             "n2n/sever": self._on_sever,
             "n2n/inventory": self._on_inventory,
             "n2n/inventory_get": self._on_inventory_get,
@@ -101,6 +102,42 @@ class FederationService:
                 logger.info("Channel to %s closed — deregistered", ident)
         ch.on_close = _deregister
         self.channels[ident] = ch
+
+    async def _on_endpoint_update(self, channel, params):
+        """US3: a federated peer announced a new public endpoint over its
+        authenticated channel. Trust it only for THIS channel's identity
+        (FR-012), update the record, and let the supervisor re-dial (FR-011)."""
+        endpoint = params.get("endpoint", "")
+        ident = channel.peer_identity  # bound to the authenticated session, not attacker-supplied
+        if not self.manager.is_federated(ident) or ":" not in endpoint:
+            return {"accepted": False}
+        host, _, port = endpoint.rpartition(":")
+        try:
+            port = int(port)
+        except ValueError:
+            return {"accepted": False}
+        self.manager.upsert_peer(channel.peer_as, channel.peer_router_id,
+                                 endpoint_host=host, endpoint_port=port)
+        self.manager._conn.execute(
+            "UPDATE federation_peer SET endpoint_updated_at=? WHERE identity=?",
+            (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), ident))
+        self.manager._conn.commit()
+        # Reset backoff so the supervisor re-dials the new endpoint promptly.
+        self.health.pop(ident, None)
+        logger.info("Peer %s announced new endpoint %s — will re-dial", ident, endpoint)
+        return {"accepted": True}
+
+    async def reannounce_endpoint(self, new_endpoint: str):
+        """US3: tell every federated peer with a live channel our new public
+        endpoint so they re-dial without a manual host:port swap (FR-010)."""
+        for ident, ch in list(self.channels.items()):
+            if self.manager.is_federated(ident):
+                try:
+                    await ch.call("n2n/endpoint_update",
+                                  {"identity": self.local_identity, "endpoint": new_endpoint},
+                                  timeout=15.0)
+                except Exception as e:
+                    logger.debug("endpoint reannounce to %s failed: %s", ident, e)
 
     async def _on_consent_state(self, channel, params):
         return {"state": self.manager.get_peer(channel.peer_identity)["state"]}

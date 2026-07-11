@@ -40,6 +40,6 @@ def test_handshake_roundtrip():
         r.feed_eof()
         return await read_handshake(r)
 
-    peer_as, router_id = asyncio.get_event_loop().run_until_complete(go())
+    peer_as, router_id = asyncio.run(go())
     assert peer_as == 65001
     assert router_id == "4.4.4.4"

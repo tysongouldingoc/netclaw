@@ -644,6 +644,43 @@ async def handle_http(reader, writer):
         writer.close()
 
 
+async def _current_ngrok_endpoint():
+    """Return the current ngrok TCP endpoint 'host:port', or None."""
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen("http://127.0.0.1:4040/api/tunnels", timeout=3)
+        for t in json.loads(resp.read()).get("tunnels", []):
+            if t.get("proto") == "tcp":
+                return t["public_url"].replace("tcp://", "")
+    except Exception:
+        pass
+    return None
+
+
+async def _endpoint_watcher():
+    """US3: on ngrok endpoint change, update our mesh endpoint and re-announce
+    it to federated peers over live channels. Also re-announce periodically so
+    peers that (re)connect after our restart learn the current endpoint."""
+    last = _speaker.agent.mesh_endpoint if _speaker else None
+    while True:
+        try:
+            await asyncio.sleep(30)
+            cur = await _current_ngrok_endpoint()
+            if not cur:
+                continue
+            if cur != last:
+                logger.info("ngrok endpoint changed %s → %s — re-announcing to peers", last, cur)
+                if _speaker:
+                    _speaker.agent.mesh_endpoint = cur
+                last = cur
+            if _federation is not None:
+                await _federation.reannounce_endpoint(cur)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.debug("endpoint watcher error: %s", e)
+
+
 async def main():
     global _speaker
 
@@ -736,6 +773,9 @@ async def main():
     # peer restarts without a manual re-dial.
     if _federation is not None:
         _federation.start_supervisor()
+        # US3: watch the ngrok endpoint and re-announce it to federated peers on
+        # change so nobody swaps host:port by hand (FR-010).
+        asyncio.create_task(_endpoint_watcher())
 
     # Auto-advertise identity route (router-id as /32)
     _speaker.agent.originate_route(f"{ROUTER_ID}/32")
