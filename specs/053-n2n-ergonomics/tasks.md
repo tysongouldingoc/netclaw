@@ -129,12 +129,12 @@
 
 ## Phase 9: Polish & Cross-Cutting (Constitution XI Artifact Coherence)
 
-- [ ] T032 [P] Update `workspace/skills/n2n-federation/SKILL.md`: async delegation (delegate/status/result/cancel), self-heal behavior, connect/trust flow, health tool
-- [ ] T033 [P] Update `mcp-servers/n2n-mcp/README.md` (new tools) and `N2N-PEERING-NETCLAWS.md` (async tasks, auto-reconnect, endpoint re-announce, negotiation)
-- [ ] T034 [P] Update `README.md` (N2N capability description reflects reliability features) and `docs/` reference as needed
-- [ ] T035 Run `python3 scripts/verify-catalog-coverage.py` (n2n catalog id still covered) and full `pytest tests/n2n/ -v`; regression-check daemon with `N2N_ENABLED=false` behaves identically (FR-022, Constitution XV)
+- [X] T032 [P] Update `workspace/skills/n2n-federation/SKILL.md`: async delegation (delegate/status/result/cancel), self-heal behavior, connect/trust flow, health tool
+- [X] T033 [P] Update `mcp-servers/n2n-mcp/README.md` (new tools) and `N2N-PEERING-NETCLAWS.md` (async tasks, auto-reconnect, endpoint re-announce, negotiation)
+- [X] T034 [P] Update `README.md` (N2N capability description reflects reliability features) and `docs/` reference as needed
+- [X] T035 Run `python3 scripts/verify-catalog-coverage.py` (n2n catalog id still covered) and full `pytest tests/n2n/ -v`; regression-check daemon with `N2N_ENABLED=false` behaves identically (FR-022, Constitution XV)
 - [ ] T036 Live 3-claw validation per quickstart.md with Nick (65007) + Byrn (65099): async CML-lab clone completes (SC-001), peer restart self-heals (SC-002), endpoint change auto-propagates (SC-003); schedule the 24h soak (SC-007)
-- [ ] T037 Draft WordPress milestone blog post (the reliability chapter — async delegation, self-healing mesh, the debugging saga that motivated it) for review before publishing (Constitution XVII)
+- [X] T037 Draft WordPress milestone blog post (the reliability chapter — async delegation, self-healing mesh, the debugging saga that motivated it) for review before publishing (Constitution XVII)
 
 ---
 
