@@ -47,7 +47,12 @@ async def _get(path: str, params: Optional[dict] = None) -> dict:
 
 
 async def _post(path: str, body: Optional[dict] = None) -> dict:
-    async with httpx.AsyncClient(base_url=BGP_DAEMON_API, timeout=120) as c:
+    # Must outlast the daemon's own operation timeouts (chat 300s / skill 600s)
+    # so the client never gives up before the daemon returns a definitive result.
+    # A 120s client timeout was dropping federated chat/skill replies before they
+    # arrived — e.g. a peer's Nautobot/CML answer never reached the Slack agent.
+    # (Credit: Nick spotted the 120s<300s mismatch.)
+    async with httpx.AsyncClient(base_url=BGP_DAEMON_API, timeout=610) as c:
         r = await c.post(path, json=body or {})
         return r.json()
 
