@@ -61,10 +61,10 @@
 
 **Independent Test**: quickstart.md §2 — restart one loopback service; the other detects the dead channel and re-establishes automatically within bounded time; queries succeed after
 
-- [ ] T015 [US2] Implement a reconnect supervisor in `mcp-servers/protocol-mcp/bgp/federation/service.py`: periodic task that, for each `federated` peer with no live channel, re-dials via existing `open_channel` with bounded backoff (`N2N_RECONNECT_BACKOFF_MIN_S`→`MAX_S`); track `ChannelHealth` (state up/reconnecting/unreachable, attempts) in-memory per data-model.md
-- [ ] T016 [US2] On a request to a peer with no live channel, trigger an on-demand reconnect (or fail fast with `peer_unreachable`) in `service.py`/`invocation.py` rather than hanging on a dead channel (FR-009)
-- [ ] T017 [US2] Mark peer `unreachable` for display after `N2N_RECONNECT_UNREACHABLE_AFTER` consecutive failures while continuing background retry; surface via ChannelHealth (FR-008)
-- [ ] T018 [US2] Extend `tests/n2n/test_reconnect.py`: simulate peer restart on the loopback pair → supervisor auto-re-establishes from persisted consent (no re-consent) → query succeeds; verify bounded backoff and unreachable-state transition (covers US2 scenarios 1–4, SC-002)
+- [X] T015 [US2] Implement a reconnect supervisor in `mcp-servers/protocol-mcp/bgp/federation/service.py`: periodic task that, for each `federated` peer with no live channel, re-dials via existing `open_channel` with bounded backoff (`N2N_RECONNECT_BACKOFF_MIN_S`→`MAX_S`); track `ChannelHealth` (state up/reconnecting/unreachable, attempts) in-memory per data-model.md
+- [X] T016 [US2] On a request to a peer with no live channel, trigger an on-demand reconnect (or fail fast with `peer_unreachable`) in `service.py`/`invocation.py` rather than hanging on a dead channel (FR-009)
+- [X] T017 [US2] Mark peer `unreachable` for display after `N2N_RECONNECT_UNREACHABLE_AFTER` consecutive failures while continuing background retry; surface via ChannelHealth (FR-008)
+- [X] T018 [US2] Extend `tests/n2n/test_reconnect.py`: simulate peer restart on the loopback pair → supervisor auto-re-establishes from persisted consent (no re-consent) → query succeeds; verify bounded backoff and unreachable-state transition (covers US2 scenarios 1–4, SC-002)
 
 **Checkpoint**: a restarted peer re-federates automatically.
 

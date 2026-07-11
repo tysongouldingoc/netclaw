@@ -44,6 +44,49 @@ async def _closed_channel_deregisters(tmp_path):
     assert ident not in svc.channels, "dead channel must self-deregister (no zombie)"
 
 
+def test_supervisor_reconnects_after_drop(tmp_path):
+    asyncio.run(_supervisor_reconnects(tmp_path))
+
+
+async def _supervisor_reconnects(tmp_path, monkeypatch=None):
+    """US2/T018: with an endpoint recorded, the supervisor re-dials a federated
+    peer whose channel is gone — from persisted consent, no re-consent."""
+    svc = _svc(tmp_path / "a", 65001, "4.4.4.4", "John")
+    svc._backoff_min = 1  # speed up the test
+    # Federate with a higher-AS peer and record an endpoint (John is lower AS → dials)
+    svc.manager.local_consent(65007, "7.7.7.7")
+    svc.manager.remote_consent(65007, "7.7.7.7")
+    svc.manager.upsert_peer(65007, "7.7.7.7", endpoint_host="127.0.0.1", endpoint_port=59999)
+    ident = "as65007-7.7.7.7"
+    assert svc.manager.is_federated(ident)
+    assert ident not in svc.channels
+
+    # Count dial attempts instead of standing up a real listener
+    attempts = {"n": 0}
+    async def fake_open(peer_as, router_id, host, port):
+        attempts["n"] += 1
+    svc.open_channel = fake_open
+
+    svc.start_supervisor()
+    await asyncio.sleep(3)          # supervisor runs every 2s
+    svc._supervisor_task.cancel()
+    assert attempts["n"] >= 1, "supervisor must auto-dial a federated peer with a dead channel"
+
+
+def test_ensure_channel_fails_fast_when_unreachable(tmp_path):
+    asyncio.run(_ensure_fast_fail(tmp_path))
+
+
+async def _ensure_fast_fail(tmp_path):
+    """FR-009: a request to a peer with no endpoint fails fast, doesn't hang."""
+    svc = _svc(tmp_path / "c", 65001, "4.4.4.4", "John")
+    svc.manager.local_consent(65007, "7.7.7.7")
+    svc.manager.remote_consent(65007, "7.7.7.7")  # federated but no endpoint recorded
+    import pytest
+    with pytest.raises(RuntimeError, match="peer_unreachable"):
+        await svc.ensure_channel("as65007-7.7.7.7")
+
+
 def test_close_is_idempotent(tmp_path):
     asyncio.run(_close_idempotent(tmp_path))
 

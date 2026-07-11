@@ -9,6 +9,7 @@ present (lower-AS initiates).
 import asyncio
 import logging
 import os
+import time
 from typing import Dict, Optional
 
 from ..constants import NCFED_MAGIC
@@ -47,6 +48,13 @@ class FederationService:
         # Optional callback the daemon sets to push approval prompts to the
         # operator's channels (Slack/Webex/CLI) via the gateway (FR-013).
         self.approval_notifier = None
+
+        # US2 auto-reconnect: per-peer ChannelHealth (in-memory) + supervisor.
+        self.health: Dict[str, dict] = {}   # ident -> {state, attempts, next_retry_at, last_seen}
+        self._supervisor_task = None
+        self._backoff_min = int(os.environ.get("N2N_RECONNECT_BACKOFF_MIN_S", "5"))
+        self._backoff_max = int(os.environ.get("N2N_RECONNECT_BACKOFF_MAX_S", "60"))
+        self._unreachable_after = int(os.environ.get("N2N_RECONNECT_UNREACHABLE_AFTER", "5"))
 
         # Handler map passed to every channel this service creates (per-service,
         # not global — see FederationChannel).
@@ -220,8 +228,81 @@ class FederationService:
             if self.manager._recompute_state(ident) == PeerState.FEDERATED:
                 await self._advertise_to(ch)
             logger.info("Opened NCFED channel to %s", ident)
+            self.health[ident] = {"state": "up", "attempts": 0, "next_retry_at": 0,
+                                  "last_seen": time.time()}
         except Exception as e:
             logger.warning("open_channel to %s failed: %s", ident, e)
+
+    # ---- US2: auto-reconnect supervisor + health ----------------------
+
+    def start_supervisor(self):
+        """Launch the background reconnect supervisor (call once, from an event
+        loop — e.g. the daemon main after the speaker starts)."""
+        if self._supervisor_task is None:
+            self._supervisor_task = asyncio.create_task(self._reconnect_supervisor())
+            logger.info("N2N reconnect supervisor started")
+
+    async def _reconnect_supervisor(self):
+        """For each federated peer with no live channel, re-dial with bounded
+        backoff (FR-007/008). Consent persists, so no re-consent is needed."""
+        while True:
+            try:
+                await asyncio.sleep(2)
+                now = time.time()
+                for peer in self.manager.list_peers():
+                    ident = peer["identity"]
+                    if peer["state"] != PeerState.FEDERATED.value:
+                        continue
+                    if ident in self.channels:
+                        continue  # live
+                    # Only the lower-AS side dials; higher-AS waits for inbound.
+                    if self.local_as >= peer["peer_as"]:
+                        continue
+                    if not peer.get("endpoint_host") or not peer.get("endpoint_port"):
+                        continue  # no endpoint to dial yet
+                    h = self.health.setdefault(ident, {"state": "reconnecting", "attempts": 0,
+                                                        "next_retry_at": 0, "last_seen": 0})
+                    if now < h["next_retry_at"]:
+                        continue
+                    h["state"] = "reconnecting"
+                    await self.open_channel(peer["peer_as"], peer["router_id"],
+                                            peer["endpoint_host"], peer["endpoint_port"])
+                    if ident not in self.channels:  # dial failed → back off
+                        h["attempts"] += 1
+                        backoff = min(self._backoff_min * (2 ** min(h["attempts"], 6)),
+                                      self._backoff_max)
+                        h["next_retry_at"] = now + backoff
+                        if h["attempts"] >= self._unreachable_after:
+                            h["state"] = "unreachable"  # keep retrying, but flag for display
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.debug("reconnect supervisor loop error: %s", e)
+
+    async def ensure_channel(self, ident: str):
+        """On-demand reconnect: if no live channel, dial now (FR-009). Returns
+        the channel or raises so the caller fails fast rather than hanging."""
+        ch = self.channels.get(ident)
+        if ch:
+            return ch
+        peer = self.manager.get_peer(ident)
+        if not peer or peer["state"] != PeerState.FEDERATED.value:
+            raise RuntimeError("peer_unreachable: not federated")
+        if self.local_as >= peer["peer_as"]:
+            raise RuntimeError("peer_unreachable: awaiting inbound (higher AS)")
+        if not peer.get("endpoint_host"):
+            raise RuntimeError("peer_unreachable: no endpoint")
+        await self.open_channel(peer["peer_as"], peer["router_id"],
+                                peer["endpoint_host"], peer["endpoint_port"])
+        ch = self.channels.get(ident)
+        if not ch:
+            raise RuntimeError("peer_unreachable: reconnect failed")
+        return ch
+
+    def health_of(self, ident: str) -> dict:
+        h = self.health.get(ident, {"state": "unknown", "attempts": 0, "last_seen": 0})
+        return {"channel_state": ("up" if ident in self.channels else h.get("state", "down")),
+                "attempts": h.get("attempts", 0), "last_seen": h.get("last_seen", 0)}
 
     async def sever_local(self, ident: str) -> bool:
         ok = self.manager.sever(ident)

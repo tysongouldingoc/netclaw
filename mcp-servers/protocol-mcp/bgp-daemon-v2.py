@@ -732,6 +732,11 @@ async def main():
     logger.info("Starting BGP speaker...")
     await _speaker.start()
 
+    # US2: start the N2N reconnect supervisor so federation self-heals across
+    # peer restarts without a manual re-dial.
+    if _federation is not None:
+        _federation.start_supervisor()
+
     # Auto-advertise identity route (router-id as /32)
     _speaker.agent.originate_route(f"{ROUTER_ID}/32")
     logger.info("Advertised identity route: %s/32", ROUTER_ID)

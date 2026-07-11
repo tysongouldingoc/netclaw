@@ -261,10 +261,16 @@ class Invoker:
 
     # ---- outbound: WE ask a peer to run something ----------------------
 
+    async def _channel(self, ident):
+        """Get a live channel, reconnecting on demand (FR-009) rather than
+        failing on a dead/absent one."""
+        try:
+            return await self.service.ensure_channel(ident)
+        except Exception as e:
+            raise RpcError(ERR_SEVERED, str(e))
+
     async def invoke_remote_tool(self, ident, tool, arguments):
-        ch = self.service.channels.get(ident)
-        if not ch:
-            raise RpcError(ERR_SEVERED, "no channel to peer")
+        ch = await self._channel(ident)
         req_id = f"{self.service.local_identity}:{int(time.time()*1000)}"
         self.audit.record(direction="outbound", peer_identity=ident, target_type="tool",
                           target_name=tool, request_id=req_id, decision="requested", outcome="pending")
@@ -277,9 +283,7 @@ class Invoker:
         """Async (053): submit a skill task to a peer, return the task_id
         immediately. The peer runs it in the background; poll via task_status/
         task_result. Short call — survives ngrok resets (FR-005)."""
-        ch = self.service.channels.get(ident)
-        if not ch:
-            raise RpcError(ERR_SEVERED, "no channel to peer")
+        ch = await self._channel(ident)
         resp = await ch.call("n2n/tasks/submit",
                              {"skill": skill, "input_text": input_text}, timeout=30.0)
         task_id = resp.get("task_id")
@@ -308,7 +312,5 @@ class Invoker:
         return {"source": ident, "trust": "remote-untrusted", **resp}
 
     async def cancel_remote_task(self, ident, task_id):
-        ch = self.service.channels.get(ident)
-        if not ch:
-            raise RpcError(ERR_SEVERED, "no channel to peer")
+        ch = await self._channel(ident)
         return await ch.call("n2n/tasks/cancel", {"task_id": task_id}, timeout=15.0)
