@@ -70,7 +70,8 @@ async def n2n_status() -> str:
 # ── Consent ────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-async def n2n_consent(peer: str, display_name: Optional[str] = None) -> str:
+async def n2n_consent(peer: str, display_name: Optional[str] = None,
+                      host: Optional[str] = None, port: Optional[int] = None) -> str:
     """Consent to federate with a peer.
 
     IMPORTANT: Confirm the peer's AS number and router-id out-of-band (e.g. Slack)
@@ -79,6 +80,10 @@ async def n2n_consent(peer: str, display_name: Optional[str] = None) -> str:
     Args:
         peer: Peer identity string (e.g. 'as65001-4.4.4.4')
         display_name: Optional friendly name for the peer operator
+        host: Peer's mesh endpoint host (e.g. '0.tcp.ngrok.io'). Provide with
+              port to open the NCFED channel immediately — required when you are
+              the lower-AS side (you dial the peer).
+        port: Peer's mesh endpoint port (e.g. 27725)
     """
     # Parse peer identity string into AS + router_id for the daemon API
     # Format: as<ASN>-<router-id>
@@ -88,6 +93,9 @@ async def n2n_consent(peer: str, display_name: Optional[str] = None) -> str:
     body = {"as": peer_as, "router_id": router_id}
     if display_name:
         body["display_name"] = display_name
+    if host and port:
+        body["host"] = host
+        body["port"] = int(port)
     data = await _post("/n2n/consent", body)
     return _gcf_dumps(data)
 
