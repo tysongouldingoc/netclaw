@@ -399,6 +399,10 @@ fi
 log_info "Component manifest written: $NETCLAW_MANIFEST"
 echo ""
 
+# Top-level `netclaw` command (menu: TUI / installer / protocol peering)
+"$SCRIPT_DIR/netclaw" link
+echo ""
+
 # ═══════════════════════════════════════════
 # Verify installation (selected components only)
 # ═══════════════════════════════════════════
