@@ -90,10 +90,10 @@
 
 **Independent Test**: quickstart.md §4 — two services with different simulated agent flags/reply shapes complete delegated calls; a descriptor-less peer falls back to 052 behavior
 
-- [ ] T022 [US4] Create `mcp-servers/protocol-mcp/bgp/federation/negotiate.py`: build local `CapabilityDescriptor` (probe `openclaw agent --help` for supported flags, list reply shapes, proto_version="053", features) and a compare/adapt helper. Probe ONCE and cache the result (module-level/service-held); do NOT shell out to `--help` per invocation — re-probe only on daemon restart.
-- [ ] T023 [US4] Extend `n2n/hello` in `service.py` to send + store the peer's `capabilities` descriptor; treat a missing descriptor as proto_version "052" (graceful degrade, FR-016); gate async-task use on the peer advertising `async_tasks`
-- [ ] T024 [US4] Update `gateway.py` to use the locally-probed **cached** agent invoke flag (from negotiate.py, per T022) instead of a hardcoded flag, and confirm tolerant reply extraction covers both `finalAssistantVisibleText` and `payloads` shapes (consolidate the 052 parser fix); return a clear "unsupported by peer" error when a needed feature is absent (FR-016)
-- [ ] T025 [P] [US4] Test in `tests/n2n/test_negotiate.py`: descriptor exchange + adaptation; missing-descriptor peer → 052 fallback path chosen; unsupported-feature → clear error (covers US4 scenarios 1–4)
+- [X] T022 [US4] Create `mcp-servers/protocol-mcp/bgp/federation/negotiate.py`: build local `CapabilityDescriptor` (probe `openclaw agent --help` for supported flags, list reply shapes, proto_version="053", features) and a compare/adapt helper. Probe ONCE and cache the result (module-level/service-held); do NOT shell out to `--help` per invocation — re-probe only on daemon restart.
+- [X] T023 [US4] Extend `n2n/hello` in `service.py` to send + store the peer's `capabilities` descriptor; treat a missing descriptor as proto_version "052" (graceful degrade, FR-016); gate async-task use on the peer advertising `async_tasks`
+- [X] T024 [US4] Update `gateway.py` to use the locally-probed **cached** agent invoke flag (from negotiate.py, per T022) instead of a hardcoded flag, and confirm tolerant reply extraction covers both `finalAssistantVisibleText` and `payloads` shapes (consolidate the 052 parser fix); return a clear "unsupported by peer" error when a needed feature is absent (FR-016)
+- [X] T025 [P] [US4] Test in `tests/n2n/test_negotiate.py`: descriptor exchange + adaptation; missing-descriptor peer → 052 fallback path chosen; unsupported-feature → clear error (covers US4 scenarios 1–4)
 
 **Checkpoint**: build drift no longer breaks federation silently.
 

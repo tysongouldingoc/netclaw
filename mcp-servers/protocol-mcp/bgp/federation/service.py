@@ -50,6 +50,7 @@ class FederationService:
         self.approval_notifier = None
 
         # US2 auto-reconnect: per-peer ChannelHealth (in-memory) + supervisor.
+        self.peer_caps: Dict[str, dict] = {}   # ident -> capability descriptor (US4)
         self.health: Dict[str, dict] = {}   # ident -> {state, attempts, next_retry_at, last_seen}
         self._supervisor_task = None
         self._backoff_min = int(os.environ.get("N2N_RECONNECT_BACKOFF_MIN_S", "5"))
@@ -86,12 +87,16 @@ class FederationService:
 
     async def _on_hello(self, channel, params):
         channel.display_name = params.get("display_name")
+        # US4: store the peer's capability descriptor (or 052 baseline if absent)
+        from .negotiate import normalize, local_descriptor
+        self.peer_caps[channel.peer_identity] = normalize(params.get("capabilities"))
         # Peer presence on the channel implies they consented to us.
         self.manager.remote_consent(channel.peer_as, channel.peer_router_id)
         state = self.manager._recompute_state(channel.peer_identity)
         if state == PeerState.FEDERATED:
             asyncio.create_task(self._advertise_to(channel))
-        return {"identity": self.local_identity, "display_name": self.display_name, "version": "1.0"}
+        return {"identity": self.local_identity, "display_name": self.display_name,
+                "version": "1.0", "capabilities": local_descriptor()}
 
     def _register_channel(self, ident, ch):
         """Track a channel and set its on_close hook so a dead channel
@@ -258,9 +263,13 @@ class FederationService:
                                    manager=self.manager, is_initiator=True, handlers=self.handlers)
             self._register_channel(ident, ch)
             await ch.start()
+            from .negotiate import local_descriptor, normalize
             resp = await ch.call("n2n/hello", {"identity": self.local_identity,
-                                               "display_name": self.display_name, "versions": ["1.0"]})
+                                               "display_name": self.display_name,
+                                               "versions": ["1.0"],
+                                               "capabilities": local_descriptor()})
             ch.display_name = resp.get("display_name")
+            self.peer_caps[ident] = normalize(resp.get("capabilities"))  # US4
             self.manager.remote_consent(peer_as, router_id)
             if self.manager._recompute_state(ident) == PeerState.FEDERATED:
                 await self._advertise_to(ch)
