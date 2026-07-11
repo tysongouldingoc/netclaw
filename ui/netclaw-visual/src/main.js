@@ -1384,12 +1384,22 @@ function renderFederationSection(peer) {
     `<li>${s.name} <span class="n2n-muted">(${(s.tools || []).length} tools)</span></li>`).join('') || '<li class="n2n-muted">none advertised</li>';
   const fresh = fp.stale ? `<span class="n2n-stale">STALE</span>` : `<span class="n2n-fresh">fresh</span>`;
   const recv = fp.inventory_received_at || '—';
+  // 053 US6: channel health + in-flight delegated tasks
+  const chState = fp.channel_state || 'up';
+  const chBadge = `<strong class="n2n-state-${chState === 'up' ? 'federated' : (chState === 'reconnecting' ? 'consent-pending-local' : 'not-federated')}">${chState}</strong>`;
+  const tasks = fp.in_flight_tasks || [];
+  const tasksHtml = tasks.length ? `
+      <h4>In-flight tasks (${tasks.length})</h4>
+      <ul class="n2n-list">${tasks.map((t) =>
+        `<li>${t.target || t.task_id.slice(0, 8)} — <span class="n2n-fresh">${t.state}</span>${t.progress ? ` · ${t.progress}` : ''}</li>`).join('')}</ul>` : '';
   return `
     <div class="n2n-section n2n-federated">
       <h3>N2N Federation ${fresh}</h3>
       <div class="detail-row"><span>Status</span><strong class="n2n-state-federated">federated</strong></div>
+      <div class="detail-row"><span>Channel</span>${chBadge}</div>
       <div class="detail-row"><span>Inventory</span><strong>v${inv.version ?? '—'} · ${recv}</strong></div>
       <div class="n2n-badges">${badges}</div>
+      ${tasksHtml}
       <h4>Skills (${(inv.skills || []).length})</h4>
       <ul class="n2n-list">${skills}</ul>
       <h4>MCP Servers (${(inv.mcp_servers || []).length})</h4>

@@ -119,9 +119,9 @@
 
 **Independent Test**: quickstart.md §5 — federate a fresh peer via connect/trust in < 2 min; health surface shows accurate channel/endpoint/task state
 
-- [ ] T029 [US6] Add daemon routes `/n2n/health` (per-peer channel_state/last_seen/endpoint_fresh/in_flight_tasks) and `/n2n/connect`, `/n2n/trust` composites in `bgp-daemon-v2.py` per contracts/n2n-daemon-api-delta.md
-- [ ] T030 [P] [US6] Add n2n-mcp tools `n2n_health`, `n2n_connect`, `n2n_trust` in `mcp-servers/n2n-mcp/server.py`
-- [ ] T031 [US6] Extend HUD `/api/n2n` in `ui/netclaw-visual/server.js` to aggregate `/n2n/health` + `/n2n/tasks`; extend the claw node in `ui/netclaw-visual/src/main.js` to show channel-state ring, last-seen, endpoint-freshness badge, and live in-flight task progress (FR-021)
+- [X] T029 [US6] Add daemon routes `/n2n/health` (per-peer channel_state/last_seen/endpoint_fresh/in_flight_tasks) and `/n2n/connect`, `/n2n/trust` composites in `bgp-daemon-v2.py` per contracts/n2n-daemon-api-delta.md
+- [X] T030 [P] [US6] Add n2n-mcp tools `n2n_health`, `n2n_connect`, `n2n_trust` in `mcp-servers/n2n-mcp/server.py`
+- [X] T031 [US6] Extend HUD `/api/n2n` in `ui/netclaw-visual/server.js` to aggregate `/n2n/health` + `/n2n/tasks`; extend the claw node in `ui/netclaw-visual/src/main.js` to show channel-state ring, last-seen, endpoint-freshness badge, and live in-flight task progress (FR-021)
 
 **Checkpoint**: federation is observable and one-step to set up.
 

@@ -15,6 +15,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import sys
 from ipaddress import IPv4Network
 import struct
@@ -357,6 +358,53 @@ async def handle_n2n(method, path, body):
                 except Exception as e:
                     return 200, {"error": getattr(e, "message", str(e))}
             return 404, {"error": "unknown task"}
+
+        # ---- US6: health + one-step connect/trust ----
+        if path == "/n2n/health" and method == "GET":
+            peers = []
+            for p in mgr.list_peers():
+                if p["state"] == "not_federated":
+                    continue
+                ident = p["identity"]
+                h = fed.health_of(ident)
+                meta = fed.inventory.load_remote(ident, fed.refresh_s)
+                in_flight = [t for t in fed.tasks.list_recent()
+                             if t["peer_identity"] == ident and t["state"] in ("submitted", "working")]
+                peers.append({
+                    "identity": ident, "display_name": p["display_name"], "state": p["state"],
+                    "channel_state": h["channel_state"], "last_seen": h["last_seen"],
+                    "endpoint": f"{p.get('endpoint_host')}:{p.get('endpoint_port')}",
+                    "endpoint_updated_at": p.get("endpoint_updated_at"),
+                    "inventory_stale": (meta or {}).get("stale") if meta else None,
+                    "in_flight_tasks": [{"task_id": t["task_id"], "state": t["state"],
+                                         "progress": t["progress"], "target": t["target_name"]}
+                                        for t in in_flight],
+                })
+            return 200, {"identity": fed.local_identity, "peers": peers}
+
+        if path == "/n2n/connect" and method == "POST":
+            if not all(body.get(k) for k in ("peer", "host", "port")):
+                return 400, {"error": "missing required field 'peer', 'host', or 'port'"}
+            m = re.match(r"as(\d+)-(.+)", body["peer"])
+            if not m:
+                return 400, {"error": "peer must be 'as<AS>-<router-id>'"}
+            pa, rid = int(m.group(1)), m.group(2)
+            state = mgr.local_consent(pa, rid, body.get("display_name"))
+            asyncio.create_task(fed.open_channel(pa, rid, body["host"], int(body["port"])))
+            return 200, {"identity": body["peer"], "state": state.value, "dialing": True}
+
+        if path == "/n2n/trust" and method == "POST":
+            ident = body.get("peer")
+            if not ident:
+                return 400, {"error": "missing required field 'peer'"}
+            if body.get("chat", True):
+                mgr.set_chat_enabled(ident, True)
+            granted = []
+            for tgt in (body.get("tools") or []):
+                ttype = "tool" if "/" in tgt else "skill"
+                fed.authz.grant(ident, ttype, tgt)
+                granted.append(tgt)
+            return 200, {"peer": ident, "chat_enabled": True, "granted": granted}
 
         if len(parts) == 3 and parts[1] == "tasks" and method == "GET":
             # Status; if the task is an outbound one, fetch fresh from the peer

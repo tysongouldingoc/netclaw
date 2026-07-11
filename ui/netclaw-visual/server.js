@@ -917,6 +917,24 @@ async function fetchN2NState() {
       if (aRes.ok) approvals = (await aRes.json()).pending || [];
     } catch { /* approvals optional */ }
 
+    // 053 US6: fold per-peer channel health + in-flight tasks into each peer
+    try {
+      const hRes = await fetch(`${BGP_API}/n2n/health`, { signal: AbortSignal.timeout(3000) });
+      if (hRes.ok) {
+        const health = (await hRes.json()).peers || [];
+        const byId = Object.fromEntries(health.map((h) => [h.identity, h]));
+        peers.forEach((p) => {
+          const h = byId[p.identity];
+          if (h) {
+            p.channel_state = h.channel_state;
+            p.last_seen = h.last_seen;
+            p.endpoint_updated_at = h.endpoint_updated_at;
+            p.in_flight_tasks = h.in_flight_tasks || [];
+          }
+        });
+      }
+    } catch { /* health optional */ }
+
     return { available: true, identity: status.identity, peers, approvals,
              generatedAt: new Date().toISOString() };
   } catch {

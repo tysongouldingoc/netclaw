@@ -390,6 +390,49 @@ async def n2n_task_cancel(task_id: str) -> str:
     return _gcf_dumps(await _post(f"/n2n/tasks/{task_id}/cancel", {}))
 
 
+# ── Health & one-step connect/trust (feature 053, US6) ──────────────────────
+
+@mcp.tool()
+async def n2n_health() -> str:
+    """Federation health overview: per federated peer — channel state
+    (up/reconnecting/unreachable), last-seen, endpoint + freshness, inventory
+    staleness, and any in-flight delegated tasks with progress."""
+    return _gcf_dumps(await _get("/n2n/health"))
+
+
+@mcp.tool()
+async def n2n_connect(peer: str, host: str, port: int, display_name: str = "") -> str:
+    """One-step connect: add the peer, record consent, and dial the NCFED channel.
+    Confirm the peer's AS + router-id out-of-band first.
+
+    Args:
+        peer: peer identity 'as<AS>-<router-id>' (e.g. 'as65007-7.7.7.7')
+        host: peer's mesh endpoint host (e.g. '6.tcp.ngrok.io')
+        port: peer's mesh endpoint port
+        display_name: friendly label
+    """
+    body = {"peer": peer, "host": host, "port": int(port)}
+    if display_name:
+        body["display_name"] = display_name
+    return _gcf_dumps(await _post("/n2n/connect", body))
+
+
+@mcp.tool()
+async def n2n_trust(peer: str, tools: str = "", chat: bool = True) -> str:
+    """One-step trust: enable chat and grant a set of tools/skills to a peer in a
+    single call (instead of separate consent + grant + config steps).
+
+    Args:
+        peer: peer identity
+        tools: comma-separated tool/skill names to grant (e.g. 'cml-lab-lifecycle,cml-mcp/list_labs')
+        chat: enable claw-to-claw chat with this peer (default True)
+    """
+    body = {"peer": peer, "chat": chat}
+    if tools:
+        body["tools"] = [t.strip() for t in tools.split(",") if t.strip()]
+    return _gcf_dumps(await _post("/n2n/trust", body))
+
+
 # ── Entry point ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
