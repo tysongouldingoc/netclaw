@@ -452,11 +452,21 @@ async def handle_n2n(method, path, body):
                          "note": "restart the daemon to (re)start iN2N listeners/dialers"}
 
         if path == "/n2n/members" and method == "GET":
+            def _spec_names(scope):
+                out = []
+                for e in fed.risk._scope_list(scope):
+                    if isinstance(e, str):
+                        if e not in fed.risk._BASE_NAMES:
+                            out.append(e)
+                    elif isinstance(e, dict) and e.get("tier") == "specialty":
+                        out.append(e.get("name"))
+                return out
             return 200, {"members": [
                 {"member_id": m["member_id"], "display_name": m["display_name"],
                  "profile": m["profile"], "state": m["state"],
                  "transport_binding": m["transport_binding"],
                  "specialty_count": fed.risk.specialty_count(m["scope"]),
+                 "skills": _spec_names(m["scope"]),
                  "live": m["member_id"] in fed.member_channels}
                 for m in fed.risk.list_members()]}
 

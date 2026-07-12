@@ -1215,6 +1215,47 @@ function deduplicatePeers(peers) {
   return [...seen.values()];
 }
 
+// 056: render this risk's member claws as spokes SOUTH of the Border, each a
+// core with its own orbiting skills, colored by class. Additive + guarded.
+function buildRiskMembers() {
+  try {
+    const risk = state.n2n && state.n2n.risk;
+    if (!risk || risk.role !== 'border') return;
+    const members = (state.n2n.members) || [];
+    if (!members.length) return;
+    state.memberCores = state.memberCores || [];
+    const C = CORE_CENTROID;
+    const R = (typeof RISK_LAYOUT !== 'undefined' && RISK_LAYOUT.tierRadius) || 46;
+    const col = (typeof RISK_LAYOUT !== 'undefined' && RISK_LAYOUT.colors) || {};
+    const n = members.length;
+    members.forEach((m, i) => {
+      const frac = n > 1 ? i / (n - 1) : 0.5;
+      const spread = (frac - 0.5) * Math.PI * 0.95;              // fan across the south
+      const px = C.x + Math.sin(spread) * R * 1.6;
+      const pz = C.z - (R + 16) - Math.abs(Math.cos(spread)) * 8; // south = -Z
+      const py = -3 - (i % 4) * 4;                                // stagger so labels don't overlap
+      const pos = new THREE.Vector3(px, py, pz);
+      const dead = (m.state === 'quarantined' || m.state === 'removed');
+      const cold = !m.live;
+      const tint = dead ? (col.memberQuarantined || 0xff5d6c)
+                        : (cold ? 0x3a6ea5 : (col.member || 0x68f5b2));
+      const name = String(m.member_id || 'member').split('/').pop().toUpperCase();
+      const core = buildCore(state.graph.identity, pos, name, tint);
+      core.isMember = true;
+      core.memberPayload = m;
+      core.orbit = { center: C.clone(), radius: pos.distanceTo(C),
+        angle: Math.atan2(pos.z - C.z, pos.x - C.x), y: pos.y, speed: 0.0004 };
+      // orbiting skills only for LIVE members (keep the scene light for cold ones)
+      const names = (m.live ? (m.skills || []) : []).slice(0, 12);
+      core.skillSprites = createSkillSprites(pos, names.map((s) => ({ name: s, id: s })), tint, pos);
+      state.cores.push(core);
+      state.memberCores.push(core);
+    });
+  } catch (e) {
+    console.warn('buildRiskMembers failed (non-fatal):', e);
+  }
+}
+
 function buildPeerRoutes(peerCore, peer) {
   const routes = peer.adjRibIn || [];
   peerCore.routeDendrites = [];
@@ -2983,7 +3024,10 @@ async function boot() {
     // Build local core — shifted left to make room for peer cores
     const hasPeers = state.bgp?.available && state.bgp.peers.length > 0;
     const localPos = hasPeers ? CORE_POSITIONS.local : new THREE.Vector3(0, 0, 0);
-    const localCore = buildCore(state.graph.identity, localPos, state.graph.identity.name.toUpperCase(), 0x66ccff);
+    // 056: a Border claw is the amber center of its risk; else default cyan.
+    const _isBorder = state.n2n?.risk?.role === 'border';
+    const _localTint = _isBorder ? RISK_LAYOUT.colors.border : 0x66ccff;
+    const localCore = buildCore(state.graph.identity, localPos, state.graph.identity.name.toUpperCase(), _localTint);
     // Orbit data for local core — orbits around the centroid
     const lcDist = localPos.distanceTo(CORE_CENTROID);
     localCore.orbit = {
@@ -3031,6 +3075,11 @@ async function boot() {
 
     setLoading(58, 'Rendering integration lattice');
     buildIntegrations(state.graph);
+
+    // 056: iN2N risk — render member claws as spokes SOUTH of the Border, each
+    // with its own orbiting skills, colored by class (green member / red
+    // quarantined / dim cold). Additive + guarded: no-op for standalone claws.
+    buildRiskMembers();
 
     setLoading(72, 'Placing device ring');
     buildDevices(state.graph);
