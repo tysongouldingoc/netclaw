@@ -35,19 +35,26 @@ class Auditor:
         return str(path)
 
     def record(self, *, direction: str, peer_identity: str, target_type: Optional[str],
-               target_name: Optional[str], request_id: Optional[str], decision: str,
+               target_name: Optional[str], request_id: Optional[str] = None, decision: str,
                outcome: str, result_ref: Optional[str] = None,
-               requested_at: Optional[str] = None) -> int:
-        """Insert an audit row (FR-015). Returns the row id."""
+               requested_at: Optional[str] = None, channel_kind: str = "en2n",
+               linked_record_id: Optional[int] = None) -> int:
+        """Insert an audit row (FR-015; feature 056 adds channel_kind + linking).
+
+        `channel_kind` discriminates eN2N vs iN2N so the Border's one audit query
+        covers both tiers (FR-024). `linked_record_id` joins an external request
+        to the internal delegation it triggered (FR-025)."""
         conn = self.manager._conn
         cur = conn.execute(
             "INSERT INTO remote_invocation_record (direction, peer_identity, target_type, "
-            "target_name, request_id, decision, outcome, requested_at, completed_at, result_ref, gait_ref) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "target_name, request_id, decision, outcome, requested_at, completed_at, "
+            "result_ref, gait_ref, channel_kind, linked_record_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (direction, peer_identity, target_type, target_name, request_id, decision,
-             outcome, requested_at or _now(), _now(), result_ref, self._gait_ref(peer_identity, decision)))
+             outcome, requested_at or _now(), _now(), result_ref,
+             self._gait_ref(peer_identity, decision), channel_kind, linked_record_id))
         conn.commit()
-        logger.info("AUDIT %s %s %s/%s → %s/%s", direction, peer_identity,
+        logger.info("AUDIT[%s] %s %s %s/%s → %s/%s", channel_kind, direction, peer_identity,
                     target_type, target_name, decision, outcome)
         return cur.lastrowid
 

@@ -19,6 +19,27 @@ import gsap from 'gsap';
 const QUALITY_MODES = ['focus', 'balanced', 'broadcast'];
 const QUALITY_LABELS = { focus: 'FOCUS', balanced: 'BALANCED', broadcast: 'BROADCAST' };
 
+// ── iN2N "risk" HUD layout (feature 056) ────────────────────────────
+// Design (per operator): the Border Claw sits at the CENTER of the universe;
+// EXTERNAL (eN2N) peer claws arc to the NORTH (+Z); INTERNAL member claws arc to
+// the SOUTH (-Z). Every claw — local, remote peer, and member — carries its own
+// orbiting skill sprites. Distinct colors per class. Spacing is widened so the
+// three tiers read clearly. This config is consumed by the scene-layout pass
+// (createMemberCores / positionClawsByRole) — tune live against the HUD.
+const RISK_LAYOUT = {
+  spacing: 34,             // widened inter-claw spacing (was ~18); tune live
+  borderAtOrigin: true,    // Border = center of the universe
+  externalAxis: +1,        // eN2N peer claws to the north (+Z)
+  memberAxis: -1,          // internal member claws to the south (-Z)
+  tierRadius: 46,          // distance of each tier ring from the Border
+  colors: {
+    border:   0xffd166,    // amber — the one you talk to, center of the universe
+    member:   0x68f5b2,    // neon green — internal, trusted, focused specialists
+    external: 0x38e8ff,    // cyan — external peer risks (other operators)
+    memberQuarantined: 0xff5d6c,  // red — an auto-quarantined / removed member
+  },
+};
+
 const state = {
   graph: null,
   scene: null,
@@ -1194,6 +1215,52 @@ function deduplicatePeers(peers) {
   return [...seen.values()];
 }
 
+// 056: render this risk's member claws as spokes SOUTH of the Border, each a
+// core with its own orbiting skills, colored by class. Additive + guarded.
+function buildRiskMembers() {
+  try {
+    const risk = state.n2n && state.n2n.risk;
+    if (!risk || risk.role !== 'border') return;
+    const members = (state.n2n.members) || [];
+    if (!members.length) return;
+    state.memberCores = state.memberCores || [];
+    const C = CORE_CENTROID;
+    const R = (typeof RISK_LAYOUT !== 'undefined' && RISK_LAYOUT.tierRadius) || 46;
+    const col = (typeof RISK_LAYOUT !== 'undefined' && RISK_LAYOUT.colors) || {};
+    const n = members.length;
+    members.forEach((m, i) => {
+      const frac = n > 1 ? i / (n - 1) : 0.5;
+      const spread = (frac - 0.5) * Math.PI * 1.25;               // wide fan across the south
+      const px = C.x + Math.sin(spread) * R * 3.0;                // spread far out in X
+      const pz = C.z - (R + 40) - Math.abs(Math.cos(spread)) * R * 0.9; // push well south (-Z)
+      const py = -6 - (i % 5) * 7;                                // deeper vertical stagger
+      const pos = new THREE.Vector3(px, py, pz);
+      const dead = (m.state === 'quarantined' || m.state === 'removed');
+      const cold = !m.live;
+      const tint = dead ? (col.memberQuarantined || 0xff5d6c)
+                        : (cold ? 0x3a6ea5 : (col.member || 0x68f5b2));
+      const name = String(m.member_id || 'member').split('/').pop().toUpperCase();
+      const core = buildCore(state.graph.identity, pos, name, tint);
+      core.isMember = true;
+      core.memberPayload = m;
+      core.orbit = { center: C.clone(), radius: pos.distanceTo(C),
+        angle: Math.atan2(pos.z - C.z, pos.x - C.x), y: pos.y, speed: 0.0004 };
+      // orbiting skills only for LIVE members (keep the scene light for cold ones)
+      const names = (m.live ? (m.skills || []) : []).slice(0, 12);
+      core.skillSprites = createSkillSprites(pos, names.map((s) => ({ name: s, id: s })), tint, pos);
+      // Show member tools by default (don't hide behind a click like integrations).
+      core.skillSprites.forEach((sp) => {
+        if (sp.mesh) sp.mesh.visible = true;
+        if (sp.wire) sp.wire.visible = true;
+      });
+      state.cores.push(core);
+      state.memberCores.push(core);
+    });
+  } catch (e) {
+    console.warn('buildRiskMembers failed (non-fatal):', e);
+  }
+}
+
 function buildPeerRoutes(peerCore, peer) {
   const routes = peer.adjRibIn || [];
   peerCore.routeDendrites = [];
@@ -1365,6 +1432,38 @@ function findFederationPeer(peer) {
   }) || null;
 }
 
+// 056 iN2N: this claw's own risk view (role + members) for the local-core panel.
+function renderRiskSection() {
+  const risk = state.n2n?.risk;
+  if (!risk || risk.role === 'standalone') {
+    return `<div class="n2n-section"><h3>Risk (iN2N)</h3>
+      <p class="n2n-muted">Standalone claw — a risk of one, its own Border.</p></div>`;
+  }
+  if (risk.role === 'member') {
+    return `<div class="n2n-section"><h3>Risk: ${risk.risk_name} (Member)</h3>
+      <div class="detail-row"><span>Member</span><strong>${risk.self_member_id || '—'}</strong></div>
+      <p class="n2n-muted">Focused specialist — dials the Border; not internet-facing.</p></div>`;
+  }
+  // Border: hub with member spokes
+  const members = state.n2n?.members || [];
+  const rows = members.map((m) => {
+    const dot = m.live ? '<span class="n2n-fresh">●</span>' : '<span class="n2n-muted">○</span>';
+    const stCls = m.state === 'active' ? 'federated'
+      : (m.state === 'quarantined' || m.state === 'removed') ? 'not-federated' : 'consent-pending-local';
+    return `<li>${dot} ${m.member_id}
+      <span class="n2n-muted">(${m.profile || 'custom'})</span>
+      <strong class="n2n-state-${stCls}">${m.state}</strong>
+      <span class="n2n-muted">· ${m.specialty_count} specialty</span></li>`;
+  }).join('') || '<li class="n2n-muted">no members — add with `netclaw risk add`</li>';
+  return `<div class="n2n-section n2n-federated">
+      <h3>Risk: ${risk.risk_name} (Border)</h3>
+      <div class="detail-row"><span>Stacks</span><strong>${risk.enabled_stacks || '—'}</strong></div>
+      <div class="detail-row"><span>Members</span><strong>${risk.members_active ?? 0}/${risk.member_count ?? 0} active</strong></div>
+      <h4>Member spokes (${members.length})</h4>
+      <ul class="n2n-list">${rows}</ul>
+    </div>`;
+}
+
 function renderFederationSection(peer) {
   const fp = findFederationPeer(peer);
   if (!state.n2n?.available) {
@@ -1451,6 +1550,40 @@ function wireFederationChat(peer) {
 }
 
 function setDetail(kind, payload, related = []) {
+  if (kind === 'local-core') {
+    dom.detailPanel.innerHTML = `
+      <h2>This NetClaw</h2>
+      <p>${state.n2n?.identity || 'local claw'}</p>
+      ${renderRiskSection()}
+    `;
+    return;
+  }
+
+  if (kind === 'member-core') {
+    const m = payload || {};
+    const st = m.state || 'unknown';
+    const stCls = m.live ? 'federated'
+      : (st === 'quarantined' || st === 'removed') ? 'not-federated' : 'consent-pending-local';
+    const skills = (m.skills || []).map((s) => `<li>${s}</li>`).join('')
+      || '<li class="n2n-muted">—</li>';
+    dom.detailPanel.innerHTML = `
+      <h2>Member Claw</h2>
+      <p>${m.member_id || '—'}</p>
+      <div class="detail-grid">
+        <div class="detail-row"><span>Risk</span><strong>${(state.n2n?.risk?.risk_name) || '—'}</strong></div>
+        <div class="detail-row"><span>Profile</span><strong>${m.profile || '—'}</strong></div>
+        <div class="detail-row"><span>State</span><strong class="n2n-state-${stCls}">${st}${m.live ? ' · live' : ''}</strong></div>
+        <div class="detail-row"><span>Transport</span><strong>${m.transport_binding || '—'}</strong></div>
+        <div class="detail-row"><span>Specialty skills</span><strong>${m.specialty_count ?? (m.skills || []).length}</strong></div>
+      </div>
+      <div class="n2n-section">
+        <h4>Scope (${(m.skills || []).length})</h4>
+        <ul class="n2n-list">${skills}</ul>
+        <p class="n2n-muted">Delegated to over the internal transport; runs its own scoped model. No external comms.</p>
+      </div>`;
+    return;
+  }
+
   if (kind === 'integration') {
     dom.detailPanel.innerHTML = `
       <h2>${payload.name}</h2>
@@ -2411,6 +2544,15 @@ function onClick(event) {
     if (hitCore === state.localCore) {
       clearSelection();
       focusTarget(state.localCore.position.clone());
+      setDetail('local-core');            // 056: show this claw's risk view (role + member spokes)
+      state.selected = { kind: 'local-core' };
+    } else if (hitCore.isMember) {
+      // 056: member claw selected — focus it and show its detail
+      clearSelection();
+      hitCore.nucleus.material.emissiveIntensity = 1.8;
+      focusTarget(hitCore.position.clone());
+      setDetail('member-core', hitCore.memberPayload);
+      state.selected = { kind: 'member-core', member: hitCore.memberPayload?.member_id };
     } else {
       // Peer core selected — show detail
       clearSelection();
@@ -2919,7 +3061,10 @@ async function boot() {
     // Build local core — shifted left to make room for peer cores
     const hasPeers = state.bgp?.available && state.bgp.peers.length > 0;
     const localPos = hasPeers ? CORE_POSITIONS.local : new THREE.Vector3(0, 0, 0);
-    const localCore = buildCore(state.graph.identity, localPos, state.graph.identity.name.toUpperCase(), 0x66ccff);
+    // 056: a Border claw is the amber center of its risk; else default cyan.
+    const _isBorder = state.n2n?.risk?.role === 'border';
+    const _localTint = _isBorder ? RISK_LAYOUT.colors.border : 0x66ccff;
+    const localCore = buildCore(state.graph.identity, localPos, state.graph.identity.name.toUpperCase(), _localTint);
     // Orbit data for local core — orbits around the centroid
     const lcDist = localPos.distanceTo(CORE_CENTROID);
     localCore.orbit = {
@@ -2966,7 +3111,20 @@ async function boot() {
     }
 
     setLoading(58, 'Rendering integration lattice');
-    buildIntegrations(state.graph);
+    // 056: a Border orbits ONLY its broker skills — the domain integrations moved
+    // to their member spokes, so the Border is no longer the 190-skill monolith.
+    const BORDER_KEEP = new Set(['gait', 'protocol', 'n2n', 'memory', 'mempalace',
+      'humanrail', 'slack', 'webex', 'servicenow', 'pagerduty', 'twilio', 'twitter',
+      'msgraph', 'subnet-calculator', 'subnet', 'rfc', 'wikipedia', 'token-tracker']);
+    const _graphForBorder = (state.n2n?.risk?.role === 'border')
+      ? { ...state.graph, integrations: state.graph.integrations.filter((i) => BORDER_KEEP.has(i.id)) }
+      : state.graph;
+    buildIntegrations(_graphForBorder);
+
+    // 056: iN2N risk — render member claws as spokes SOUTH of the Border, each
+    // with its own orbiting skills, colored by class (green member / red
+    // quarantined / dim cold). Additive + guarded: no-op for standalone claws.
+    buildRiskMembers();
 
     setLoading(72, 'Placing device ring');
     buildDevices(state.graph);

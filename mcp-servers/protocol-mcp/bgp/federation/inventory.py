@@ -118,6 +118,31 @@ class InventoryBuilder:
                 return False
         return False
 
+    def _member_aggregate_skills(self, existing_names: set) -> list:
+        """iN2N (056/FR-016): on a Border, advertise the UNION of member SPECIALTY
+        capabilities under the risk identity — capability NAMES only, never member
+        ids/endpoints/topology. Lets a peer learn 'this risk can do CML/pyATS/…'
+        without seeing the internal member structure."""
+        conn = self.manager._conn
+        try:
+            r = conn.execute("SELECT role FROM risk WHERE id=1").fetchone()
+            if not r or r["role"] != "border":
+                return []
+            rows = conn.execute(
+                "SELECT scope FROM member WHERE state NOT IN ('removed','quarantined')"
+            ).fetchall()
+        except Exception:
+            return []   # risk table absent (pre-056) or unreadable — no aggregate
+        names = set()
+        for row in rows:
+            try:
+                for e in json.loads(row["scope"] or "[]"):
+                    if e.get("tier") == "specialty" and e.get("name") not in existing_names:
+                        names.add(e["name"])
+            except (ValueError, TypeError):
+                continue
+        return [{"name": n, "invocable": True, "risk_aggregate": True} for n in sorted(names)]
+
     def build(self, peer_identity: str) -> dict:
         """Build the inventory to advertise to a specific peer (visibility applied)."""
         self._version += 1
@@ -125,6 +150,8 @@ class InventoryBuilder:
                   if self._visibility("skill", s["name"], peer_identity)]
         for s in skills:
             s["invocable"] = True
+        # Border: fold in member specialties as risk-level capabilities (FR-016).
+        skills += self._member_aggregate_skills({s["name"] for s in skills})
         all_servers = self._load_mcp_servers()
         servers = [s for s in all_servers
                    if self._visibility("mcp_server", s["name"], peer_identity)]

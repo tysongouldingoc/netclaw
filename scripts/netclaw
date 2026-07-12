@@ -37,6 +37,7 @@ render_md() { python3 "$RENDER_MD"; }
 # already-handled condition downstream — it must never trip `set -e` and
 # kill the whole TUI when called bare from a menu case (e.g. `peering_overview; pause`).
 api_get() { curl -s --max-time 3 "$BGP_API$1" 2>/dev/null || true; }
+api_post() { curl -s --max-time 30 -H 'Content-Type: application/json' -d "${2:-{}}" "$BGP_API$1" 2>/dev/null || true; }
 
 ngrok_get() { curl -s --max-time 3 "$NGROK_API$1" 2>/dev/null || true; }
 
@@ -404,6 +405,126 @@ chats_menu() {
     done
 }
 
+# ── iN2N risk views (feature 056) ─────────────────────────────────
+risk_overview() {
+    echo ""
+    echo -e "  ${T_BOLD}Risk — iN2N internal federation${T_NC}"
+    echo ""
+    api_get /n2n/risk | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: print("    daemon not reachable (is the mesh daemon running?)"); sys.exit()
+print("    role         : %s" % d.get("role", "?"))
+print("    risk         : %s" % (d.get("risk_name") or "-"))
+if d.get("role") == "border":
+    print("    stacks       : %s" % (d.get("enabled_stacks") or "-"))
+    print("    members      : %s total, %s active" % (d.get("member_count", 0), d.get("members_active", 0)))
+elif d.get("role") == "member":
+    print("    member_id    : %s" % (d.get("self_member_id") or "-"))
+else:
+    print("    (standalone — a risk of one, its own Border)")
+'
+}
+
+risk_members() {
+    echo ""
+    echo -e "  ${T_BOLD}Risk members${T_NC}"
+    api_get /n2n/members | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: print("    daemon not reachable"); sys.exit()
+ms = d.get("members", [])
+if not ms: print("    (no members — add one: netclaw risk add <profile> <name>)"); sys.exit()
+for m in ms:
+    live = "●" if m.get("live") else "○"
+    print("    %s %-24s %-9s %-10s specialty:%d" % (
+        live, m.get("member_id","?"), m.get("profile","-"), m.get("state","-"),
+        m.get("specialty_count",0)))
+'
+}
+
+risk_health() {
+    echo ""
+    echo -e "  ${T_BOLD}Member health${T_NC}"
+    api_get /n2n/members/health | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: print("    daemon not reachable"); sys.exit()
+for m in d.get("members", []):
+    print("    %-24s %-11s failures:%d live:%s" % (
+        m.get("member_id","?"), m.get("state","-"), m.get("auth_failures",0),
+        m.get("live")))
+'
+}
+
+risk_add() {  # risk_add <profile|custom> <name> [csv-skills]
+    local profile="$1" name="$2" specialty="$3"
+    [ -n "$name" ] || { echo "usage: netclaw risk add <profile|custom> <name> [skill,skill]"; return 1; }
+    local body
+    if [ "$profile" = "custom" ]; then
+        body="{\"name\":\"$name\",\"profile\":\"custom\",\"specialty\":[$(echo "$specialty" | awk -F, '{for(i=1;i<=NF;i++){printf "%s\"%s\"", (i>1?",":""), $i}}')]}"
+    else
+        body="{\"name\":\"$name\",\"profile\":\"$profile\"}"
+    fi
+    api_post /n2n/members/add "$body" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+if "error" in d: print("    error: %s" % d["error"]); sys.exit(1)
+print("    provisioned %s (%s)" % (d["member_id"], d.get("profile")))
+print("    enrollment token: %s" % d["enrollment_token"])
+j = d.get("join", {})
+print("    to bring it up, install NetClaw with:")
+print("      N2N_ROLE=member N2N_RISK_NAME=%s N2N_BORDER_ENDPOINT=%s" % (
+    j.get("N2N_RISK_NAME"), j.get("N2N_BORDER_ENDPOINT")))
+print("      N2N_ENROLLMENT_TOKEN=%s" % j.get("token"))
+'
+}
+
+risk_remove() {  # risk_remove <member_id>
+    local mid="$1"
+    [ -n "$mid" ] || { echo "usage: netclaw risk remove <member_id>"; return 1; }
+    tui_yesno "Remove member '$mid' (unpin key, refuse reconnect)?" n || { echo "  cancelled."; return 0; }
+    api_post /n2n/members/remove "{\"member_id\":\"$mid\"}" | python3 -c '
+import json,sys; d=json.load(sys.stdin); print("    removed:", d.get("removed"), d.get("member_id"))'
+}
+
+risk_token() {  # risk_token [label]
+    api_post /n2n/enroll/token "{\"label\":\"${1:-}\"}" | python3 -c '
+import json,sys; d=json.load(sys.stdin)
+print("    error:", d["error"]) if "error" in d else print("    token:", d["token"])'
+}
+
+risk_route() {  # risk_route "<request>" [capability]
+    local req="$1" cap="$2"
+    [ -n "$req" ] || { echo 'usage: netclaw risk route "<request>" [capability]'; return 1; }
+    local body="{\"request_text\":$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$req")"
+    [ -n "$cap" ] && body="$body,\"capability\":\"$cap\""
+    body="$body}"
+    api_post /n2n/route "$body" | python3 -c '
+import json,sys; d=json.load(sys.stdin)
+if "error" in d: print("    %s: %s" % (d["error"], d.get("message","")))
+else: print("    routed to %s → task %s (%s)" % (d.get("member_id"), d.get("task_id"), d.get("state")))'
+}
+
+risk_menu() {
+    while true; do
+        clear
+        tui_menu "Risk (iN2N members)" \
+            "Overview (role · stacks · members)" \
+            "Members (scope · state · live)" \
+            "Member health (quarantine alerts)" \
+            "Enrollment token (issue single-use)" \
+            "← Back" || return 0
+        case "$TUI_CHOICE" in
+            0) risk_overview; pause ;;
+            1) risk_members; pause ;;
+            2) risk_health; pause ;;
+            3) risk_token; pause ;;
+            4) return 0 ;;
+        esac
+    done
+}
+
 # ── menus ─────────────────────────────────────────────────────────
 peering_menu() {
     while true; do
@@ -444,12 +565,14 @@ main_menu() {
             "Launch NetClaw TUI" \
             "Installer (add/remove components)" \
             "Protocol Peering (BGP · MESH · N2N)" \
+            "Risk (iN2N members)" \
             "Exit" || exit 0
         case "$TUI_CHOICE" in
             0) exec openclaw tui ;;
             1) exec "$NETCLAW_ROOT/scripts/install.sh" ;;
             2) peering_menu ;;
-            3) exit 0 ;;
+            3) risk_menu ;;
+            4) exit 0 ;;
         esac
     done
 }
@@ -476,6 +599,17 @@ case "${1:-}" in
             down)     peering_stop_all ;;
             announce) peer_announce ;;
             *)        echo "Usage: netclaw peering [status|bgp|n2n|ngrok|up|down|announce]"; exit 1 ;;
+        esac ;;
+    risk)
+        case "${2:-status}" in
+            status)   risk_overview ;;
+            members)  risk_members ;;
+            health)   risk_health ;;
+            add)      risk_add "${3:-}" "${4:-}" "${5:-}" ;;
+            remove)   risk_remove "${3:-}" ;;
+            token)    risk_token "${3:-}" ;;
+            route)    risk_route "${3:-}" "${4:-}" ;;
+            *)        echo "Usage: netclaw risk [status|members|health|add|remove|token|route]"; exit 1 ;;
         esac ;;
     chats)
         if [ "${2:-}" = "--watch" ] || [ "${2:-}" = "watch" ]; then

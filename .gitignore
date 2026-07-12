@@ -38,6 +38,10 @@ yarn-error.log*
 # OpenClaw
 .openclaw/
 
+# iN2N keys/certs (feature 056) — runtime-generated self-signed keys, never committed.
+# Live path is ~/.openclaw/n2n/keys/ (already covered by .openclaw/); guard repo-local copies.
+**/n2n/keys/
+
 # Local agent state and audit harnesses
 .gait/
 memory/
@@ -95,3 +99,6 @@ config/twilio-voice.json
 # Generated topology visualizations and downloaded/cached 3D assets (spec 046)
 # — regenerated on demand by output.py/assets.py, never checked in.
 workspace/output/
+
+# iN2N migration scaffold (contains per-member .env slices — never commit)
+migration-staging/

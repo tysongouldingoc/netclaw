@@ -1736,6 +1736,63 @@ echo "      2. Restart the mesh daemon so the NCFED channel is live"
 echo "      3. Reload MCP servers (openclaw mcp reload) to pick up n2n-mcp"
 echo "      4. Mutually consent with a peer — see N2N-PEERING-NETCLAWS.md"
 
+# ── iN2N (feature 056): standalone vs part of a "risk" ──────────────
+_in2n_setenv() {  # _in2n_setenv KEY VALUE — upsert into ~/.openclaw/.env
+    local key="$1" val="$2" f="$HOME/.openclaw/.env"
+    if grep -q "^${key}=" "$f" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=${val}|" "$f"
+    else
+        echo "${key}=${val}" >> "$f"
+    fi
+}
+
+if declare -f tui_menu >/dev/null 2>&1; then
+    echo ""
+    echo "  iN2N — is this claw standalone, or part of a RISK (a group of focused"
+    echo "  claws coordinated by one Border Claw)?"
+    tui_menu "NetClaw deployment" \
+        "Standalone NetClaw (a risk of one)" \
+        "Part of a risk — Border Claw (gateway + eN2N + routes to members)" \
+        "Part of a risk — Member Claw (focused specialist; dials the Border)"
+    case "$TUI_CHOICE" in
+        0)
+            _in2n_setenv N2N_ROLE standalone
+            log_info "Configured as standalone NetClaw."
+            ;;
+        1)
+            read -r -p "  Risk name: " _risk_name
+            read -r -p "  Risk description: " _risk_desc
+            tui_menu "Federation stacks for this Border" \
+                "Both eN2N (external) and iN2N (internal)" \
+                "iN2N only (internal members)" \
+                "eN2N only (external peers)"
+            case "$TUI_CHOICE" in
+                0) _stacks=both ;; 1) _stacks=in2n ;; *) _stacks=en2n ;;
+            esac
+            read -r -p "  iN2N listener port for member dial-ins [11790]: " _p
+            _in2n_setenv N2N_ROLE border
+            _in2n_setenv N2N_RISK_NAME "${_risk_name:-my-risk}"
+            _in2n_setenv N2N_ENABLED_STACKS "$_stacks"
+            _in2n_setenv N2N_IN2N_PORT "${_p:-11790}"
+            log_info "Configured as Border Claw of risk '${_risk_name:-my-risk}' (stacks=$_stacks)."
+            echo "      Add members with: netclaw risk add <profile|custom> <name>"
+            echo "      Profiles available: $(python3 "${NETCLAW_DIR:-.}/scripts/in2n-profiles.py" list 2>/dev/null | awk '{printf "%s ", $1}')"
+            ;;
+        2)
+            read -r -p "  Risk name (must match the Border): " _risk_name
+            read -r -p "  This member's name (member_id will be <risk>/<name>): " _mname
+            read -r -p "  Border endpoint (host:port the member dials): " _bep
+            read -r -p "  Enrollment token from the Border: " _tok
+            _in2n_setenv N2N_ROLE member
+            _in2n_setenv N2N_RISK_NAME "${_risk_name:-my-risk}"
+            _in2n_setenv N2N_BORDER_ENDPOINT "$_bep"
+            _in2n_setenv N2N_MEMBER_ID "${_risk_name:-my-risk}/${_mname:-member}"
+            [ -n "$_tok" ] && _in2n_setenv N2N_ENROLLMENT_TOKEN "$_tok"
+            log_info "Configured as Member Claw ${_risk_name}/${_mname}. It will dial the Border on start."
+            ;;
+    esac
+fi
+
 echo ""
 }
 
