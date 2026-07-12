@@ -8,6 +8,7 @@
 #
 #   ./scripts/peering-setup.sh           # interactive configuration wizard
 #   ./scripts/peering-setup.sh start     # start (or restart) the mesh BGP daemon
+#   ./scripts/peering-setup.sh stop      # stop the mesh BGP daemon
 #   ./scripts/peering-setup.sh status    # show daemon, sessions, and RIB summary
 
 set -euo pipefail
@@ -75,7 +76,7 @@ daemon_start() {
     # Pull only the daemon's keys from .env — values may contain JSON, and
     # other .env lines have unquoted spaces that break plain `source`.
     log_info "Starting mesh BGP daemon..."
-    env $(grep -E "^(NETCLAW_ROUTER_ID|NETCLAW_LOCAL_AS|NETCLAW_LAB_MODE|NETCLAW_MESH_ENABLED|NETCLAW_MESH_OPEN|BGP_LISTEN_PORT|BGP_API_PORT)=" "$OPENCLAW_ENV") \
+    env $(grep -E "^(NETCLAW_ROUTER_ID|NETCLAW_LOCAL_AS|NETCLAW_LAB_MODE|NETCLAW_MESH_ENABLED|NETCLAW_MESH_OPEN|BGP_LISTEN_PORT|BGP_API_PORT|N2N_ENABLED|N2N_DISPLAY_NAME|N2N_RATE_PER_MIN|N2N_DAILY_REQUESTS|N2N_DAILY_TOKENS)=" "$OPENCLAW_ENV") \
         NETCLAW_BGP_PEERS="$(env_get NETCLAW_BGP_PEERS)" \
         nohup python3 "$BGP_DAEMON" >> "$DAEMON_OUT" 2>&1 &
     local pid=$!
@@ -117,11 +118,26 @@ for pfx, r in d.get("loc_rib", {}).items():
     echo "    curl -X POST $BGP_API/add_peer -d '{\"ip\":\"N.tcp.ngrok.io\",\"as\":65001,\"port\":NNNNN,\"hostname\":true}'"
 }
 
+daemon_stop() {
+    if ! daemon_running; then
+        log_info "Mesh daemon is not running."
+        return 0
+    fi
+    pkill -f "bgp-daemon-v2\.py" 2>/dev/null || true
+    sleep 1
+    if daemon_running; then
+        log_error "Daemon did not stop — check for a stuck process."
+        exit 1
+    fi
+    log_info "Mesh daemon stopped."
+}
+
 case "${1:-}" in
     start)  daemon_start;  exit 0 ;;
+    stop)   daemon_stop;   exit 0 ;;
     status) daemon_status; exit 0 ;;
     "") ;;
-    *) echo "Usage: $0 [start|status]"; exit 1 ;;
+    *) echo "Usage: $0 [start|stop|status]"; exit 1 ;;
 esac
 
 # ── configuration wizard ─────────────────────────────────────────
