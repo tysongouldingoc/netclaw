@@ -3,7 +3,10 @@
 **NetClaw-to-NetClaw (N2N) Federation** turns a set of independently-operated
 NetClaw instances into a federated mesh of AI network engineers that can
 discover, use, and converse with one another — safely, and only between
-operators who both opt in.
+operators who both opt in. This document covers **eN2N** (external federation
+between different operators). For **iN2N** — one operator's own group of focused
+claws behind a Border Claw ("a risk of NetClaws") — see
+[docs/N2N-RISK.md](docs/N2N-RISK.md) and the [eN2N vs iN2N](#en2n-vs-in2n--external-federation-vs-a-risk-of-netclaws) summary below.
 
 > **Is N2N a new protocol?** Yes. **NCFED** is a new application-layer protocol
 > introduced by NetClaw. It is *not* BGP and not a reuse of an existing wire
@@ -183,9 +186,36 @@ Full spec: [`specs/053-n2n-ergonomics/`](specs/053-n2n-ergonomics/).
 
 ---
 
+## eN2N vs iN2N — external federation vs "a risk of NetClaws"
+
+Everything above is **eN2N**: federation between **different operators'** claws
+over the NCFED mesh, gated by mutual consent. Feature 056 adds **iN2N**, the
+*internal* counterpart: **one operator** running a group of focused claws — a
+**risk** — coordinated by a single **Border Claw**.
+
+| | eN2N (this document) | iN2N ([docs/N2N-RISK.md](docs/N2N-RISK.md)) |
+|---|---|---|
+| Between | different operators | one operator's own claws |
+| Trust | mutual consent per peer | pinned key + single-use token (one owner) |
+| Transport | NCFED over the BGP mesh (ngrok) | members dial the Border outbound (loopback/VPN) |
+| Topology | peer-to-peer between Borders | hub-and-spoke (Border ↔ members) — no mesh |
+| Identity | each claw's BGP identity | one identity per risk (the Border) |
+
+**How they compose:** a *risk* federates externally through its **Border only** —
+Border-to-Border. To a peer, a risk is one identity; member claws and internal
+topology are never exposed. The Border advertises the **aggregate** of its
+members' capabilities under the risk identity, so a peer can still ask "does that
+risk have CML?" and the Border routes it internally. The eN2N wire format,
+consent, and safety model in this document are **unchanged** by iN2N.
+
+Already federated with a peer who is adopting the risk model? See
+[docs/N2N-RISK-MIGRATION-FOR-PEERS.md](docs/N2N-RISK-MIGRATION-FOR-PEERS.md).
+
 ## Reference
 
+- **A risk of NetClaws (iN2N):** [`docs/N2N-RISK.md`](docs/N2N-RISK.md)
+- **For federated peers (migration readout):** [`docs/N2N-RISK-MIGRATION-FOR-PEERS.md`](docs/N2N-RISK-MIGRATION-FOR-PEERS.md)
 - Skill: [`workspace/skills/n2n-federation/SKILL.md`](workspace/skills/n2n-federation/SKILL.md)
 - MCP server: [`mcp-servers/n2n-mcp/README.md`](mcp-servers/n2n-mcp/README.md)
-- Spec / plan / contracts: [`specs/052-n2n-federation/`](specs/052-n2n-federation/)
+- Spec / plan / contracts: [`specs/052-n2n-federation/`](specs/052-n2n-federation/) (eN2N) · [`specs/056-in2n-internal-federation/`](specs/056-in2n-internal-federation/) (iN2N)
 - Mesh bring-up (BGP layer): [`PEERINGEXAMPLE.md`](PEERINGEXAMPLE.md)

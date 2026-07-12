@@ -19,6 +19,27 @@ import gsap from 'gsap';
 const QUALITY_MODES = ['focus', 'balanced', 'broadcast'];
 const QUALITY_LABELS = { focus: 'FOCUS', balanced: 'BALANCED', broadcast: 'BROADCAST' };
 
+// ── iN2N "risk" HUD layout (feature 056) ────────────────────────────
+// Design (per operator): the Border Claw sits at the CENTER of the universe;
+// EXTERNAL (eN2N) peer claws arc to the NORTH (+Z); INTERNAL member claws arc to
+// the SOUTH (-Z). Every claw — local, remote peer, and member — carries its own
+// orbiting skill sprites. Distinct colors per class. Spacing is widened so the
+// three tiers read clearly. This config is consumed by the scene-layout pass
+// (createMemberCores / positionClawsByRole) — tune live against the HUD.
+const RISK_LAYOUT = {
+  spacing: 34,             // widened inter-claw spacing (was ~18); tune live
+  borderAtOrigin: true,    // Border = center of the universe
+  externalAxis: +1,        // eN2N peer claws to the north (+Z)
+  memberAxis: -1,          // internal member claws to the south (-Z)
+  tierRadius: 46,          // distance of each tier ring from the Border
+  colors: {
+    border:   0xffd166,    // amber — the one you talk to, center of the universe
+    member:   0x68f5b2,    // neon green — internal, trusted, focused specialists
+    external: 0x38e8ff,    // cyan — external peer risks (other operators)
+    memberQuarantined: 0xff5d6c,  // red — an auto-quarantined / removed member
+  },
+};
+
 const state = {
   graph: null,
   scene: null,
@@ -1365,6 +1386,38 @@ function findFederationPeer(peer) {
   }) || null;
 }
 
+// 056 iN2N: this claw's own risk view (role + members) for the local-core panel.
+function renderRiskSection() {
+  const risk = state.n2n?.risk;
+  if (!risk || risk.role === 'standalone') {
+    return `<div class="n2n-section"><h3>Risk (iN2N)</h3>
+      <p class="n2n-muted">Standalone claw — a risk of one, its own Border.</p></div>`;
+  }
+  if (risk.role === 'member') {
+    return `<div class="n2n-section"><h3>Risk: ${risk.risk_name} (Member)</h3>
+      <div class="detail-row"><span>Member</span><strong>${risk.self_member_id || '—'}</strong></div>
+      <p class="n2n-muted">Focused specialist — dials the Border; not internet-facing.</p></div>`;
+  }
+  // Border: hub with member spokes
+  const members = state.n2n?.members || [];
+  const rows = members.map((m) => {
+    const dot = m.live ? '<span class="n2n-fresh">●</span>' : '<span class="n2n-muted">○</span>';
+    const stCls = m.state === 'active' ? 'federated'
+      : (m.state === 'quarantined' || m.state === 'removed') ? 'not-federated' : 'consent-pending-local';
+    return `<li>${dot} ${m.member_id}
+      <span class="n2n-muted">(${m.profile || 'custom'})</span>
+      <strong class="n2n-state-${stCls}">${m.state}</strong>
+      <span class="n2n-muted">· ${m.specialty_count} specialty</span></li>`;
+  }).join('') || '<li class="n2n-muted">no members — add with `netclaw risk add`</li>';
+  return `<div class="n2n-section n2n-federated">
+      <h3>Risk: ${risk.risk_name} (Border)</h3>
+      <div class="detail-row"><span>Stacks</span><strong>${risk.enabled_stacks || '—'}</strong></div>
+      <div class="detail-row"><span>Members</span><strong>${risk.members_active ?? 0}/${risk.member_count ?? 0} active</strong></div>
+      <h4>Member spokes (${members.length})</h4>
+      <ul class="n2n-list">${rows}</ul>
+    </div>`;
+}
+
 function renderFederationSection(peer) {
   const fp = findFederationPeer(peer);
   if (!state.n2n?.available) {
@@ -1451,6 +1504,15 @@ function wireFederationChat(peer) {
 }
 
 function setDetail(kind, payload, related = []) {
+  if (kind === 'local-core') {
+    dom.detailPanel.innerHTML = `
+      <h2>This NetClaw</h2>
+      <p>${state.n2n?.identity || 'local claw'}</p>
+      ${renderRiskSection()}
+    `;
+    return;
+  }
+
   if (kind === 'integration') {
     dom.detailPanel.innerHTML = `
       <h2>${payload.name}</h2>
@@ -2411,6 +2473,8 @@ function onClick(event) {
     if (hitCore === state.localCore) {
       clearSelection();
       focusTarget(state.localCore.position.clone());
+      setDetail('local-core');            // 056: show this claw's risk view (role + member spokes)
+      state.selected = { kind: 'local-core' };
     } else {
       // Peer core selected — show detail
       clearSelection();

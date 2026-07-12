@@ -86,8 +86,18 @@ def _extract_reply(stdout: str):
     return reply or "(no reply text in agent response)", int(tokens or 0)
 
 
-async def run_agent_turn(prompt: str, session_key: str = "n2n", timeout_s: int = 300):
-    """Run one gateway agent turn. Returns (reply_text, tokens_used).
+async def run_agent_turn(prompt: str, session_key: str = "n2n", timeout_s: int = 300,
+                         local: bool = False, model: str = None):
+    """Run one agent turn. Returns (reply_text, tokens_used).
+
+    Two modes:
+      - gateway (default): `openclaw agent --agent <id> …` against the running
+        gateway. Used by the Border / a standalone claw (eN2N responder).
+      - embedded (local=True): `openclaw agent --local --model <model> …` — the
+        agent runs in-process with the member's own provider API keys and ONLY
+        the MCP servers in the member's config dir. This is how an iN2N MEMBER
+        executes a delegated skill: no gateway, no comms, scoped tools, its own
+        model/provider (feature 056). `model` is 'provider/model' or a model id.
 
     Raises TimeoutError on timeout; on non-zero exit returns the stderr tail as
     the reply so the caller can surface a useful message rather than crashing.
@@ -97,7 +107,13 @@ async def run_agent_turn(prompt: str, session_key: str = "n2n", timeout_s: int =
     # responder running its own agent, so the local probe is authoritative.
     from .negotiate import local_descriptor
     flag = "--" + local_descriptor().get("agent_invoke", "session-id")
-    cmd = ["openclaw", "agent", "--agent", AGENT_ID, flag, session_key, "--json", "-m", prompt]
+    if local:
+        cmd = ["openclaw", "agent", "--local"]
+        if model:
+            cmd += ["--model", model]
+        cmd += [flag, session_key, "--json", "-m", prompt]
+    else:
+        cmd = ["openclaw", "agent", "--agent", AGENT_ID, flag, session_key, "--json", "-m", prompt]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     try:

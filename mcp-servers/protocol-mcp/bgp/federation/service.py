@@ -75,6 +75,38 @@ class FederationService:
             "n2n/chat/message": self.chat.handle_chat_message,
         }
 
+        # ── iN2N (feature 056): internal federation within one risk ──────
+        from .risk import RiskManager
+        from .router import RiskRouter
+        self.risk = RiskManager(self.manager)
+        self.router = RiskRouter(self.risk)
+        self.member_channels: Dict[str, object] = {}   # border side: member_id -> InternalChannel
+        self.border_channel = None                      # member side: our channel to the Border
+        self.member_last_activity = time.time()         # member side: for cold/on-demand idle-exit
+        self._spawning = set()                          # border side: members mid cold-start
+        # member side: the capabilities this claw will actually run (its scope).
+        # Populated from N2N_MEMBER_SCOPE (JSON list of capability names) or set
+        # programmatically; enforced on inbound submits (FR-023).
+        self.member_scope = set()
+        try:
+            import json as _json
+            self.member_scope = set(_json.loads(os.environ.get("N2N_MEMBER_SCOPE", "[]")))
+        except Exception:
+            self.member_scope = set()
+        # Border-side iN2N handlers (the member authenticates, then we route to it).
+        self._in2n_border_handlers = {
+            "in2n/enroll": self._in2n_on_enroll,
+            "in2n/hello": self._in2n_on_hello,
+            "n2n/inventory": self._in2n_on_member_inventory,
+        }
+        # Member-side iN2N handlers (the Border delegates work to us).
+        self._in2n_member_handlers = {
+            "n2n/tasks/submit": self._in2n_member_submit,
+            "n2n/tasks/status": self.invoker.handle_task_status,
+            "n2n/tasks/result": self.invoker.handle_task_result,
+            "n2n/tasks/cancel": self.invoker.handle_task_cancel,
+        }
+
     def notify_approval(self, invocation_id, peer, target_type, target_name):
         """Push an approval prompt to the operator's channels (FR-013). Best-effort."""
         logger.info("APPROVAL NEEDED: %s wants to run %s '%s' (invocation %s)",
@@ -202,7 +234,22 @@ class FederationService:
 
     # ---- inbound channel (called from agent discrimination) -----------
 
+    def _en2n_allowed(self) -> bool:
+        """FR-014: only a Border (or a standalone claw) runs the external eN2N
+        stack. A Member never federates externally — it talks only to its Border."""
+        try:
+            return self.risk.role() != "member"
+        except Exception:
+            return True  # fail open to pre-056 behavior if risk state is unavailable
+
     async def accept_channel(self, peer_as: int, router_id: str, reader, writer):
+        if not self._en2n_allowed():
+            logger.info("iN2N Member role — refusing inbound eN2N channel (FR-014)")
+            try:
+                writer.close()
+            except Exception:
+                pass
+            return
         ident = peer_identity(peer_as, router_id)
         # Channel-anchored identity check (FR-003): only accept for a peer we
         # know and have at least locally consented / federated with.
@@ -227,6 +274,9 @@ class FederationService:
     # ---- outbound channel (lower-AS initiates) ------------------------
 
     async def open_channel(self, peer_as: int, router_id: str, host: str, port: int):
+        if not self._en2n_allowed():
+            logger.info("iN2N Member role — not opening outbound eN2N channel (FR-014)")
+            return
         ident = peer_identity(peer_as, router_id)
         if self.local_as >= peer_as:
             logger.debug("Not initiating to %s — higher/equal AS waits", ident)
@@ -360,3 +410,266 @@ class FederationService:
                 pass
             await ch.close()
         return ok
+
+    # ================================================================
+    # iN2N — internal federation within one risk (feature 056)
+    # Hub-and-spoke: members dial the Border outbound; the Border routes and
+    # delegates to them. Trust is a pinned self-signed key (TOFU), not consent.
+    # ================================================================
+
+    # ---- Border side: accept a member dial-in + authenticate ----------
+
+    async def accept_internal(self, reader, writer):
+        """Border side: a member dialed our iN2N listener. Send the challenge
+        preamble, then run an InternalChannel; the member authenticates via
+        in2n/enroll (first time) or in2n/hello (pinned-key proof)."""
+        from .internal_channel import InternalChannel, send_border_preamble
+        nonce = await send_border_preamble(writer)
+        ch = InternalChannel(reader, writer, local_identity=self.local_identity,
+                             member_id=None, is_border_side=True,
+                             handlers=self._in2n_border_handlers, nonce=nonce)
+        await ch.start()
+        logger.info("Accepted iN2N dial-in (awaiting member auth)")
+        return ch
+
+    def _register_member_channel(self, member_id, ch):
+        """Track a member's channel; deregister + mark unreachable on close."""
+        def _deregister(closed_ch):
+            if self.member_channels.get(member_id) is closed_ch:
+                self.member_channels.pop(member_id, None)
+                self.risk.mark_unreachable(member_id)
+                logger.info("iN2N member %s channel closed — deregistered", member_id)
+        ch.on_close = _deregister
+        self.member_channels[member_id] = ch
+
+    async def _in2n_on_enroll(self, channel, params):
+        """First-time enrollment: verify token + proof-of-possession, pin key."""
+        from .internal_channel import _ERR_NOT_TRUSTED, _ERR_NOT_A_BORDER
+        from .channel import RpcError
+        if not self.risk.is_border():
+            raise RpcError(_ERR_NOT_A_BORDER, "this claw is not a Border")
+        token = params.get("token", "")
+        member_id = params.get("member_id", "")
+        cert_pem = params.get("cert_pem", "")
+        signature = bytes.fromhex(params.get("signature", "") or "")
+        # Proof the dialer holds the private key for the cert it presents (FR-013).
+        if not self.risk.verify_possession(cert_pem, channel.nonce, signature):
+            raise RpcError(_ERR_NOT_TRUSTED, "key possession proof failed")
+        try:
+            res = self.risk.consume_token(
+                token, member_id, cert_pem,
+                scope=params.get("scope"),
+                runtime_kind=params.get("runtime_kind", "process"),
+                display_name=params.get("display_name"),
+                transport_binding=params.get("transport_binding", "distributed"))
+        except ValueError as e:
+            raise RpcError(_ERR_NOT_TRUSTED if "TRUSTED" in str(e) else -32021, str(e))
+        channel.member_id = member_id
+        channel.peer_identity = member_id
+        channel.trusted = True
+        self.risk.verify_member(member_id, self.risk.fingerprint_of(cert_pem))
+        self._register_member_channel(member_id, channel)
+        self.audit.record(direction="inbound", peer_identity=member_id,
+                          target_type="enroll", target_name=member_id,
+                          decision="enrolled", outcome="success", channel_kind="in2n")
+        logger.info("iN2N member %s enrolled + active", member_id)
+        return res
+
+    async def _in2n_on_hello(self, channel, params):
+        """Reconnect: authenticate against the pinned key (FR-013a)."""
+        from .internal_channel import _ERR_NOT_TRUSTED
+        from .channel import RpcError
+        member_id = params.get("member_id", "")
+        fingerprint = params.get("key_fingerprint", "")
+        signature = bytes.fromhex(params.get("signature", "") or "")
+        mem = self.risk.get_member(member_id)
+        if not mem or not mem.get("pinned_key"):
+            raise RpcError(_ERR_NOT_TRUSTED, "unknown or unpinned member")
+        ok = (mem["key_fingerprint"] == fingerprint
+              and self.risk.verify_possession(mem["pinned_key"], channel.nonce, signature)
+              and self.risk.verify_member(member_id, fingerprint))
+        if not ok:
+            quarantined = self.risk.record_auth_failure(member_id)
+            if quarantined:
+                self.notify_member_quarantine(member_id)
+            raise RpcError(_ERR_NOT_TRUSTED, "pinned-key auth failed")
+        channel.member_id = member_id
+        channel.peer_identity = member_id
+        channel.trusted = True
+        self._register_member_channel(member_id, channel)
+        return {"risk": self.risk.get_risk().get("risk_name"), "trusted": True,
+                "member_state": "active"}
+
+    async def _in2n_on_member_inventory(self, channel, params):
+        """A member advertises its (scoped) capabilities. We already know its
+        scope from enrollment; record freshness and ack (no secrets, reused guard)."""
+        if channel.member_id:
+            self.risk.update_health(channel.member_id, inventory_at=time.time())
+        return {"accepted": True}
+
+    def notify_member_quarantine(self, member_id):
+        """Surface an auto-quarantine to the operator (in-band; FR-013d). Uses the
+        same approval_notifier hook the daemon wires to the gateway if present."""
+        logger.warning("iN2N ALERT: member %s auto-quarantined (repeated auth/health failure)",
+                       member_id)
+        if self.approval_notifier:
+            try:
+                self.approval_notifier(None, member_id, "quarantine", member_id)
+            except Exception:
+                pass
+
+    # ---- Border side: route + delegate to a member --------------------
+
+    async def route_and_delegate(self, capability: str, input_text: str) -> dict:
+        """Select the owning member (deterministic) and delegate the work as an
+        async task over its channel. Returns {task_id, member_id} or an error."""
+        from .router import NoCapableMember
+        try:
+            member_id = self.router.select_member(capability)["member_id"]
+        except NoCapableMember as e:
+            return {"error": "IN2N_ERR_NO_CAPABLE_MEMBER", "message": str(e)}
+        return await self.delegate_to_member(member_id, capability, input_text)
+
+    async def ensure_member_up(self, member_id: str, wait_s: float = 30.0):
+        """Cold/on-demand: if a member has no live channel but is locally
+        spawnable (has a launch_cmd), start it and wait for it to dial in and
+        authenticate. Returns the channel, or None if it can't be brought up
+        (e.g. a remote member the Border can't spawn)."""
+        ch = self.member_channels.get(member_id)
+        if ch is not None:
+            return ch
+        launch_cmd, on_demand = self.risk.launch_spec(member_id)
+        if not launch_cmd or not on_demand:
+            return None   # remote member (or no spawn spec) — can't cold-start here
+        if member_id in self._spawning:
+            # another route is already cold-starting it; just wait
+            pass
+        else:
+            self._spawning.add(member_id)
+            try:
+                logger.info("iN2N cold-start: spawning on-demand member %s", member_id)
+                await asyncio.create_subprocess_shell(
+                    launch_cmd, stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL)
+            except Exception as e:
+                logger.warning("cold-start spawn of %s failed: %s", member_id, e)
+                self._spawning.discard(member_id)
+                return None
+        # Wait for the member to dial in + authenticate (channel registered).
+        deadline = time.time() + wait_s
+        while time.time() < deadline:
+            ch = self.member_channels.get(member_id)
+            if ch is not None:
+                self._spawning.discard(member_id)
+                return ch
+            await asyncio.sleep(0.5)
+        self._spawning.discard(member_id)
+        logger.warning("iN2N cold-start: %s did not come up within %ss", member_id, wait_s)
+        return None
+
+    async def delegate_to_member(self, member_id: str, capability: str,
+                                 input_text: str) -> dict:
+        from .channel import RpcError
+        ch = self.member_channels.get(member_id)
+        if ch is None:
+            ch = await self.ensure_member_up(member_id)   # cold-start on-demand members
+        if ch is None:
+            return {"error": "member_unreachable",
+                    "message": f"member {member_id} has no live channel "
+                               f"(and could not be cold-started)"}
+        try:
+            resp = await ch.call("n2n/tasks/submit",
+                                 {"skill": capability, "input_text": input_text}, timeout=30.0)
+        except RpcError as e:
+            return {"error": "out_of_scope" if e.code == -32031 else "delegation_failed",
+                    "code": e.code, "message": e.message, "member_id": member_id}
+        task_id = resp.get("task_id")
+        if task_id:
+            self.tasks.record_outbound(task_id, member_id, "skill", capability)
+            self.audit.record(direction="outbound", peer_identity=member_id,
+                              target_type="skill", target_name=capability,
+                              request_id=task_id, decision="requested",
+                              outcome="submitted", channel_kind="in2n")
+        return {"member_id": member_id, **resp}
+
+    # ---- Member side: dial the Border + run delegated work ------------
+
+    async def dial_border(self, host: str, port: int, enrollment_token: str = "",
+                          ssl_context=None):
+        """Member side: connect outbound to the Border, complete the handshake
+        (enroll if we have a token, else hello with pinned-key proof), and stay
+        available for delegated tasks. No inbound port is opened (FR-006/SC-011)."""
+        from .internal_channel import InternalChannel, read_border_preamble
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port, ssl=ssl_context), timeout=30.0)
+        nonce = await read_border_preamble(reader)
+        if nonce is None:
+            writer.close()
+            raise RuntimeError("bad iN2N preamble from Border")
+        ch = InternalChannel(reader, writer, local_identity=self.local_identity,
+                             member_id=self.risk.self_member_id(), is_border_side=False,
+                             handlers=self._in2n_member_handlers, nonce=nonce)
+        await ch.start()
+        cert_pem = self.risk.self_cert_pem()
+        signature = self.risk.self_sign(nonce).hex()
+        member_id = self.risk.self_member_id()
+        if enrollment_token:
+            resp = await ch.call("in2n/enroll", {
+                "token": enrollment_token, "member_id": member_id,
+                "cert_pem": cert_pem, "signature": signature,
+                "scope": list(self.member_scope) or None,
+                "runtime_kind": os.environ.get("N2N_MEMBER_RUNTIME", "process"),
+                "transport_binding": "distributed"}, timeout=30.0)
+        else:
+            resp = await ch.call("in2n/hello", {
+                "member_id": member_id,
+                "key_fingerprint": self.risk.fingerprint_of(cert_pem),
+                "signature": signature}, timeout=30.0)
+        ch.trusted = True   # we pinned the Border endpoint at provisioning
+        self.border_channel = ch
+        logger.info("iN2N: dialed Border %s:%s as %s (%s)", host, port, member_id, resp)
+        return resp
+
+    async def _in2n_member_submit(self, channel, params):
+        """Member side: the Border delegates a task. Enforce scope (FR-023),
+        then run it as a background task reusing the 053 TaskManager + gateway
+        executor. Auth is implicit within the risk (no grants), but scope is not."""
+        from .internal_channel import _ERR_NOT_TRUSTED
+        from .channel import RpcError
+        from ..constants import IN2N_ERR_OUT_OF_SCOPE
+        skill = params.get("skill", "")
+        input_text = params.get("input_text", "")
+        border = channel.member_id or "border"
+        self.member_last_activity = time.time()   # reset idle-exit timer (cold/on-demand)
+        if self.member_scope and skill not in self.member_scope:
+            self.audit.record(direction="inbound", peer_identity=border,
+                              target_type="skill", target_name=skill,
+                              decision="out_of_scope", outcome="denied", channel_kind="in2n")
+            raise RpcError(IN2N_ERR_OUT_OF_SCOPE,
+                           f"'{skill}' is outside this member's scope")
+        tm = self.tasks
+        task_id = tm.create(direction="inbound", peer_identity=border,
+                            target_type="skill", target_name=skill, input_text=input_text)
+
+        async def worker(progress):
+            progress("running skill")
+            # A MEMBER executes in OpenClaw EMBEDDED mode with its OWN provider/
+            # model (N2N_MEMBER_MODEL) over only its scoped MCPs — no gateway
+            # (feature 056). Falls back to the gateway path if not a member.
+            from .gateway import run_agent_turn
+            member_model = os.environ.get("N2N_MEMBER_MODEL")
+            if self.risk.role() == "member":
+                prompt = (f"Execute the '{skill}' skill for the following request "
+                          f"and return only the result:\n\n{input_text}")
+                output, tokens = await run_agent_turn(
+                    prompt, session_key=f"in2n-{skill}",
+                    timeout_s=self.invoker.skill_timeout, local=True, model=member_model)
+            else:
+                output, tokens = await self.invoker._exec_skill_gateway(skill, input_text)
+            self.audit.record(direction="inbound", peer_identity=border,
+                              target_type="skill", target_name=skill, request_id=task_id,
+                              decision="in_scope", outcome="success", channel_kind="in2n")
+            return output, tokens
+
+        tm.run(task_id, worker)
+        return {"task_id": task_id, "state": "submitted"}

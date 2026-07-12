@@ -44,6 +44,30 @@ Scripted / non-interactive installs:
 ./scripts/install.sh --list                       # see all components & profiles
 ```
 
+## A Risk of NetClaws (iN2N)
+
+A **risk** is the (real) collective noun for a group of lobsters — and NetClaw is
+a lobster. You can now run **a risk of NetClaws**: instead of one monolith
+carrying every skill, run a group of **focused, specialized claws** coordinated by
+a single **Border Claw**. You talk only to the Border; it routes each request to
+the member that owns the capability (a CML claw, a pyATS claw, an Azure claw…) and
+returns the result.
+
+- **Focus & token economy** — each member carries a handful of skills, not 190.
+- **Least privilege** — each member gets *only* its integration's secrets.
+- **One door** — the Border is the single interface, single external identity, and
+  single audit trail; members dial it outbound (no ngrok, no mesh, no inbound
+  ports — co-located or across clouds). Any provider/model per claw (incl. local
+  Ollama). Cold/on-demand members spin up on first use.
+
+At install you pick **standalone**, **Border**, or **Member**. This is the
+*internal* counterpart to N2N federation between different operators (eN2N). A
+classic standalone NetClaw is just "a risk of one, its own Border."
+
+**→ Full guide: [docs/N2N-RISK.md](docs/N2N-RISK.md)** · external peering:
+[N2N-PEERING-NETCLAWS.md](N2N-PEERING-NETCLAWS.md) · already federated with a peer?
+[docs/N2N-RISK-MIGRATION-FOR-PEERS.md](docs/N2N-RISK-MIGRATION-FOR-PEERS.md)
+
 Whatever you pick, the installer then runs a two-phase setup:
 
 **Phase 1: `openclaw onboard`** (OpenClaw's built-in wizard)
@@ -500,7 +524,7 @@ NetClaw ships with the full set of OpenClaw workspace markdown files. These are 
 | 109 | Chrome DevTools | [ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) | stdio (Node, npx) | Controlled browser automation/inspection — visualization render QA (screenshot + console check), controller GUI gap-filling, undocumented vendor API discovery via network-request capture, general web-GUI automation. No credentials; auth via one-time manual sign-in into a persistent Chrome profile (~20 tools used across 2 skills) |
 | 110 | Chrome DevTools (Watch Mode) | [ChromeDevTools/chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp) | stdio (Node, npx) | Same server, headed (`--headless=false`) instead of headless — a real Chrome window opens wherever NetClaw runs, so an operator can watch it navigate/click/read live (e.g. via Slack: "watch it log into the NetBox demo and create a site"). Works on any host with a display (Mac, Linux desktop, WSL2 with WSLg); no OS-specific code |
 | 111 | Computer Use | OpenClaw ClawHub skill (`computer-use`, installed via `openclaw skills install`, not `config/openclaw.json`) | Script-based (bash + xdotool, `DISPLAY=:99`) | Full-desktop automation for legacy tools with no browser or API path — virtual Xvfb+XFCE desktop, 17 mouse/keyboard/screenshot actions, VNC/noVNC live-viewing (loopback-only) for Watch Mode. No credentials (used by 1 skill) |
-| 112 | N2N Federation | Built-in (`n2n-mcp`) | stdio (Python) | NetClaw-to-NetClaw federation over the BGP mesh via the new **NCFED** protocol (JSON-RPC 2.0, MCP + A2A semantics) — mutual-consent capability exchange, default-deny remote tool/skill invocation with approvals/budgets/audit, claw-to-claw chat, plus **async task delegation, channel auto-reconnect, endpoint auto-re-announce, and version negotiation** for self-healing reliability (23 tools). See [N2N-PEERING-NETCLAWS.md](N2N-PEERING-NETCLAWS.md) |
+| 112 | N2N Federation | Built-in (`n2n-mcp`) | stdio (Python) | NetClaw-to-NetClaw federation over the BGP mesh via the new **NCFED** protocol (JSON-RPC 2.0, MCP + A2A semantics) — mutual-consent capability exchange, default-deny remote tool/skill invocation with approvals/budgets/audit, claw-to-claw chat, plus **async task delegation, channel auto-reconnect, endpoint auto-re-announce, and version negotiation** for self-healing reliability. Plus **iN2N — "a risk of NetClaws"**: one operator's group of focused member claws behind a single Border Claw (routing, least-privilege per-member secrets, cold/on-demand members, any provider/model incl. local Ollama) (30 tools). See [N2N-PEERING-NETCLAWS.md](N2N-PEERING-NETCLAWS.md) (external) and [docs/N2N-RISK.md](docs/N2N-RISK.md) (internal/risk) |
 
 ### Additional Server Notes
 

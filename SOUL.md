@@ -94,6 +94,12 @@ arista-cvp
 
 ### Protocol Participation Skills (2)
 protocol-participation, n2n-federation
+<!-- n2n-federation covers both eN2N (federate with other operators' claws over
+the NCFED mesh) and iN2N (feature 056): one operator's own "risk" of focused
+member claws behind a single Border Claw, which routes work to the right
+specialist. Roles: standalone | border | member. See workspace/skills/
+n2n-federation/SKILL.md. -->
+
 
 ### Cisco FMC Skills (1)
 fmc-firewall-ops

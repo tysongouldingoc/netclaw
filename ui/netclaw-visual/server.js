@@ -935,10 +935,24 @@ async function fetchN2NState() {
       }
     } catch { /* health optional */ }
 
+    // 056 iN2N: fold this claw's risk role + (on a Border) its members so the
+    // HUD can render the hub-and-spoke risk view alongside eN2N peers.
+    let risk = null;
+    let members = [];
+    try {
+      const rRes = await fetch(`${BGP_API}/n2n/risk`, { signal: AbortSignal.timeout(3000) });
+      if (rRes.ok) risk = await rRes.json();
+      if (risk && risk.role === 'border') {
+        const mRes = await fetch(`${BGP_API}/n2n/members`, { signal: AbortSignal.timeout(3000) });
+        if (mRes.ok) members = (await mRes.json()).members || [];
+      }
+    } catch { /* iN2N optional (standalone/pre-056 daemon) */ }
+
     return { available: true, identity: status.identity, peers, approvals,
-             generatedAt: new Date().toISOString() };
+             risk, members, generatedAt: new Date().toISOString() };
   } catch {
-    return { available: false, peers: [], generatedAt: new Date().toISOString() };
+    return { available: false, peers: [], risk: null, members: [],
+             generatedAt: new Date().toISOString() };
   }
 }
 

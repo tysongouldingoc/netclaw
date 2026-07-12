@@ -426,10 +426,196 @@ async def handle_n2n(method, path, body):
                     return 200, fed.tasks.status(task_id)
             return 200, fed.tasks.result(task_id)
 
+        # ── iN2N: internal federation (feature 056) ──────────────────
+        if path == "/n2n/risk" and method == "GET":
+            r = fed.risk.get_risk()
+            out = {"role": r["role"], "risk_name": r["risk_name"],
+                   "description": r["description"], "enabled_stacks": r["enabled_stacks"],
+                   "self_member_id": r.get("self_member_id")}
+            if r["role"] == "border":
+                members = fed.risk.list_members()
+                out["member_count"] = len(members)
+                out["members_active"] = sum(1 for m in members if m["state"] == "active")
+            return 200, out
+
+        if path == "/n2n/risk" and method == "POST":
+            try:
+                r = fed.risk.set_role(
+                    body.get("role", "standalone"), risk_name=body.get("risk_name"),
+                    description=body.get("description"),
+                    enabled_stacks=body.get("enabled_stacks"),
+                    border_endpoint=body.get("border_endpoint"),
+                    self_member_id=body.get("self_member_id"))
+            except ValueError as e:
+                return 400, {"error": str(e)}
+            return 200, {"role": r["role"], "risk_name": r["risk_name"],
+                         "note": "restart the daemon to (re)start iN2N listeners/dialers"}
+
+        if path == "/n2n/members" and method == "GET":
+            return 200, {"members": [
+                {"member_id": m["member_id"], "display_name": m["display_name"],
+                 "profile": m["profile"], "state": m["state"],
+                 "transport_binding": m["transport_binding"],
+                 "specialty_count": fed.risk.specialty_count(m["scope"]),
+                 "live": m["member_id"] in fed.member_channels}
+                for m in fed.risk.list_members()]}
+
+        if path == "/n2n/members/health" and method == "GET":
+            out = []
+            for m in fed.risk.list_members():
+                health = {}
+                try:
+                    health = json.loads(m["health"]) if m["health"] else {}
+                except (ValueError, TypeError):
+                    health = {}
+                out.append({"member_id": m["member_id"], "state": m["state"],
+                            "auth_failures": m["auth_failures"],
+                            "live": m["member_id"] in fed.member_channels,
+                            "health": health})
+            return 200, {"members": out}
+
+        if path == "/n2n/members/remove" and method == "POST":
+            member_id = body.get("member_id")
+            if not member_id:
+                return 400, {"error": "member_id required"}
+            ch = fed.member_channels.pop(member_id, None)
+            if ch is not None:
+                try:
+                    await ch.close()
+                except Exception:
+                    pass
+            ok = fed.risk.remove_member(member_id)
+            return (200 if ok else 404), {"removed": ok, "member_id": member_id}
+
+        if path == "/n2n/members/add" and method == "POST":
+            name = body.get("name")
+            if not name:
+                return 400, {"error": "name required"}
+            # Resolve a profile → its installed skill list via scripts/in2n-profiles.
+            specialty = body.get("specialty")
+            profile = body.get("profile")
+            if profile and profile != "custom" and not specialty:
+                specialty = _resolve_profile_skills(profile)
+            try:
+                out = fed.risk.add_member(name, profile=profile, specialty=specialty,
+                                          ttl_seconds=body.get("ttl_seconds"),
+                                          launch_cmd=body.get("launch_cmd"),
+                                          on_demand=bool(body.get("on_demand", False)))
+            except ValueError as e:
+                return 400, {"error": str(e)}
+            return 200, out
+
+        if path == "/n2n/enroll/token" and method == "POST":
+            try:
+                tok = fed.risk.issue_token(label=body.get("label"),
+                                           ttl_seconds=body.get("ttl_seconds"))
+            except ValueError as e:
+                return 400, {"error": str(e)}
+            return 200, tok
+
+        if path == "/n2n/route" and method == "POST":
+            capability = body.get("capability") or body.get("target_hint")
+            if not capability:
+                return 400, {"error": "capability (or target_hint) required"}
+            out = await fed.route_and_delegate(capability, body.get("request_text", ""))
+            return (200 if "error" not in out else 409), out
+
         return 404, {"error": f"unknown n2n route {path}"}
     except Exception as e:
         logger.error("N2N route error %s %s: %s", method, path, e)
         return 500, {"error": str(e)}
+
+
+def _resolve_profile_skills(profile: str):
+    """Resolve a profile id → its installed skill names via scripts/in2n-profiles.py
+    (catalog-derived, FR-019). Returns [] if the profile/tool is unavailable."""
+    try:
+        import importlib.util
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        path = os.path.join(repo, "scripts", "in2n-profiles.py")
+        spec = importlib.util.spec_from_file_location("in2n_profiles", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.profiles().get(profile, {}).get("skills", [])
+    except Exception as e:
+        logger.warning("could not resolve profile '%s': %s", profile, e)
+        return []
+
+
+def _sync_risk_from_env(fed):
+    """Populate the risk table from N2N_* env (set by the installer) so a fresh
+    claw boots into its configured role without a manual /n2n/risk call."""
+    role = os.environ.get("N2N_ROLE")
+    if not role:
+        return
+    try:
+        fed.risk.set_role(
+            role,
+            risk_name=os.environ.get("N2N_RISK_NAME"),
+            description=os.environ.get("N2N_RISK_DESCRIPTION"),
+            enabled_stacks=os.environ.get("N2N_ENABLED_STACKS"),
+            border_endpoint=os.environ.get("N2N_BORDER_ENDPOINT"),
+            self_member_id=os.environ.get("N2N_MEMBER_ID"))
+        logger.info("iN2N role from env: %s (risk=%s)", role, os.environ.get("N2N_RISK_NAME"))
+    except ValueError as e:
+        logger.warning("iN2N env role rejected: %s", e)
+
+
+async def _start_in2n(fed):
+    """iN2N (feature 056): start per role. A Border listens for member dial-ins;
+    a Member dials the Border outbound (no inbound port). Standalone does nothing."""
+    try:
+        _sync_risk_from_env(fed)
+        risk = fed.risk.get_risk()
+        role = risk["role"]
+        if role == "border" and fed.risk.stack_enabled("in2n"):
+            port = int(os.environ.get("N2N_IN2N_PORT", "0") or 0)
+            if not port:
+                logger.info("iN2N Border: set N2N_IN2N_PORT to accept member dial-ins")
+                return
+
+            async def on_conn(reader, writer):
+                try:
+                    await fed.accept_internal(reader, writer)
+                except Exception as e:
+                    logger.warning("iN2N accept failed: %s", e)
+
+            server = await asyncio.start_server(on_conn, "0.0.0.0", port)
+            fed._in2n_server = server  # keep a ref
+            logger.info("iN2N Border listener on 0.0.0.0:%d (risk=%s)", port, risk["risk_name"])
+        elif role == "member" and risk.get("border_endpoint"):
+            host, _, port = risk["border_endpoint"].rpartition(":")
+            token = os.environ.get("N2N_ENROLLMENT_TOKEN", "")
+            asyncio.create_task(_in2n_member_dialer(fed, host, int(port), token))
+            logger.info("iN2N Member dialer → Border %s (member=%s)",
+                        risk["border_endpoint"], risk.get("self_member_id"))
+    except Exception as e:
+        logger.error("iN2N start error: %s", e)
+
+
+async def _in2n_member_dialer(fed, host, port, token):
+    """Member side: dial the Border with bounded backoff; re-dial on drop. First
+    dial enrolls (token); once enrolled/pinned, reconnects use the hello path."""
+    backoff = 5
+    used_token = token
+    while True:
+        try:
+            ch = fed.border_channel
+            if ch is None or getattr(ch, "_closed", True):
+                await fed.dial_border(host, port, enrollment_token=used_token)
+                used_token = ""  # spent after a successful enroll
+                backoff = 5
+        except Exception as e:
+            if used_token:
+                # Token may be spent already (e.g. after a restart when we are
+                # still pinned on the Border) — fall back to the pinned-key hello.
+                logger.info("iN2N enroll failed (%s); will retry via pinned-key hello", e)
+                used_token = ""
+            else:
+                logger.info("iN2N dial to Border %s:%d failed (%s) — retry in %ds",
+                            host, port, e, backoff)
+                backoff = min(backoff * 2, 60)
+        await asyncio.sleep(10 if fed.border_channel is not None else backoff)
 
 
 # ---- Asyncio HTTP server ----
@@ -828,6 +1014,9 @@ async def main():
         # US3: watch the ngrok endpoint and re-announce it to federated peers on
         # change so nobody swaps host:port by hand (FR-010).
         asyncio.create_task(_endpoint_watcher())
+        # iN2N (feature 056): start the internal-federation listener (Border) or
+        # dialer (Member) per this claw's role. Members dial outbound only.
+        asyncio.create_task(_start_in2n(_federation))
 
     # Auto-advertise identity route (router-id as /32)
     _speaker.agent.originate_route(f"{ROUTER_ID}/32")
