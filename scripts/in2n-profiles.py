@@ -178,6 +178,30 @@ def env_slice_keys(profile, env_keys):
     return sorted(k for k in env_keys if k.startswith(prefixes))
 
 
+# Profile → OpenClaw mcp.servers names to keep in a member's scoped config
+# (many integrations are skill-driven with no MCP server → empty list is fine;
+# the member still gets its workspace skills + .env creds). memory-mcp is always
+# added as base floor by the provisioner.
+MCP_SERVERS = {
+    "ipfabric": ["ipfabric-mcp"], "suzieq": ["suzieq-mcp"], "batfish": ["batfish-mcp"],
+    "forward": ["forward-mcp"], "gns3": ["gns3-mcp"], "azure": ["azure-network-mcp"],
+    "sdwan": ["prisma-sdwan-mcp"], "splunk": ["splunk-mcp"], "github": ["gitlab-mcp"],
+    "gnmi": ["gnmi-mcp"], "checkpoint": ["chkp-management", "chkp-management-logs",
+        "chkp-policy-insights", "chkp-threat-prevention", "chkp-quantum-gaia"],
+    "viz": ["blender-mcp", "sketchfab-mcp"],
+    # skill-driven (no dedicated MCP server): cml, pyats, aci, catalyst-center,
+    # f5, ise, nso, netbox, infoblox, nmap, gtrace, itential, aap, packet, etc.
+}
+
+# Model tier per member (interview: Border=Opus; heavy members=Sonnet; trivial=Haiku).
+_HEAVY = {"cml", "pyats", "itential", "aap", "nso", "aci", "catalyst-center", "f5",
+          "paloalto", "ise", "forward", "ipfabric", "sdwan", "azure", "netbox",
+          "checkpoint", "fortimanager", "batfish"}
+def model_tier(profile: str) -> str:
+    """Default Claude model id for a member of this profile (operator-overridable)."""
+    return "claude-sonnet-5" if profile in _HEAVY else "claude-haiku-4-5-20251001"
+
+
 def _configured_env():
     """Env keys present in ~/.openclaw/.env plus the process environment."""
     keys = set(os.environ.keys())

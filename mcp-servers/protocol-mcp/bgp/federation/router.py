@@ -10,14 +10,17 @@ actual delegation is done by the Invoker over the internal channel.
 
 import logging
 
-from .risk import RiskManager, STATE_ACTIVE, STATE_ENROLLED, STATE_UNREACHABLE
+from .risk import (
+    RiskManager, STATE_ACTIVE, STATE_ENROLLED, STATE_UNREACHABLE, STATE_PROVISIONED,
+)
 
 logger = logging.getLogger("n2n.router")
 
-# Members eligible for routing: only those with a usable pinned key. We route to
-# active/enrolled (idle-but-trusted); unreachable stays selectable so the invoker
-# can trigger an on-demand redial, but quarantined/removed/provisioned never are.
-_ROUTABLE_STATES = (STATE_ACTIVE, STATE_ENROLLED, STATE_UNREACHABLE)
+# Members eligible for routing. active/enrolled = trusted+ready; unreachable =
+# was live, invoker re-dials; PROVISIONED = a registered cold/on-demand member
+# the Border will cold-start on first route (ensure_member_up). quarantined/
+# removed are never routable.
+_ROUTABLE_STATES = (STATE_ACTIVE, STATE_ENROLLED, STATE_UNREACHABLE, STATE_PROVISIONED)
 
 
 class NoCapableMember(Exception):

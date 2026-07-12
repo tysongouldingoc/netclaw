@@ -84,7 +84,28 @@ async def _idle_watch(svc, idle_exit):
             return
 
 
+def _load_env_file():
+    """Robustly load the member's .env (N2N_MEMBER_ENV_FILE) into os.environ —
+    WITHOUT shell sourcing, so values with spaces/colons/JSON (e.g. an auth
+    header 'X-API-Token: abc', or N2N_MEMBER_SCOPE=[...]) load correctly.
+    Existing environment values win (explicit overrides)."""
+    path = os.environ.get("N2N_MEMBER_ENV_FILE", "")
+    if not path or not os.path.isfile(path):
+        return
+    for line in open(path):
+        line = line.rstrip("\n")
+        if not line.strip() or line.lstrip().startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key = key.strip()
+        val = val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+            val = val[1:-1]
+        os.environ.setdefault(key, val)
+
+
 async def _run(idle_exit):
+    _load_env_file()
     member_id = os.environ.get("N2N_MEMBER_ID", "risk/member")
     base = os.path.expanduser(os.environ.get("N2N_MEMBER_BASE", "~/.openclaw/n2n"))
     mgr = FederationManager(base_dir=base)

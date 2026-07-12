@@ -284,13 +284,16 @@ class RiskManager:
         scope_json = json.dumps(scope) if scope is not None else (
             existing["scope"] if existing else json.dumps(BASE_FLOOR))
         if existing:
+            # Keep the Border-provisioned scope (structured {name,tier} from
+            # add_member) — do NOT overwrite it with the member's advertised scope,
+            # which may be a flat name list. The Border defines scope at
+            # provisioning; the member's advertised list is informational.
             self._conn.execute(
                 "UPDATE member SET pinned_key=?, key_fingerprint=?, runtime_kind=?, "
                 "transport_binding=?, display_name=COALESCE(?, display_name), "
-                "scope=COALESCE(?, scope), state=?, auth_failures=0, updated_at=? "
-                "WHERE member_id=?",
+                "state=?, auth_failures=0, updated_at=? WHERE member_id=?",
                 (cert_pem, fp, runtime_kind, transport_binding, display_name,
-                 scope_json if scope is not None else None, STATE_ENROLLED, now, member_id))
+                 STATE_ENROLLED, now, member_id))
         else:
             self._conn.execute(
                 "INSERT INTO member (member_id, display_name, pinned_key, key_fingerprint, "
@@ -423,23 +426,43 @@ class RiskManager:
                 out.append({"name": str(item), "type": "skill", "tier": "specialty"})
         return out
 
+    # Names that are always base floor (excluded from specialty specificity),
+    # covering both the technical floor and the interview-expanded floor.
+    _BASE_NAMES = {e["name"] for e in BASE_FLOOR} | {
+        "memory", "gait-session-tracking", "humanrail-escalation"}
+
     @staticmethod
-    def specialty_count(scope) -> int:
-        """Count only specialty entries — base floor is excluded (FR-021b)."""
+    def _scope_list(scope):
+        """Normalize a scope column (JSON) to a list; tolerates both the
+        structured [{name,tier}] form and a flat [name,...] form."""
         if isinstance(scope, str):
             try:
                 scope = json.loads(scope)
             except (ValueError, TypeError):
-                return 0
-        return sum(1 for e in (scope or []) if e.get("tier") == "specialty")
+                return []
+        return scope or []
+
+    @classmethod
+    def specialty_count(cls, scope) -> int:
+        """Count only specialty entries — base floor excluded (FR-021b).
+        Tolerant: dict entries use tier; bare-string entries count as specialty
+        unless they are known base-floor names."""
+        n = 0
+        for e in cls._scope_list(scope):
+            if isinstance(e, str):
+                if e not in cls._BASE_NAMES:
+                    n += 1
+            elif isinstance(e, dict) and e.get("tier") == "specialty":
+                n += 1
+        return n
 
     def covers(self, member: dict, capability: str) -> bool:
-        """Does a member's scope (base or specialty) include the capability?"""
-        try:
-            scope = json.loads(member["scope"]) if member.get("scope") else []
-        except (ValueError, TypeError):
-            scope = []
-        return any(e.get("name") == capability for e in scope)
+        """Does a member's scope (base or specialty) include the capability?
+        Tolerant of both structured and flat-string scope shapes."""
+        for e in self._scope_list(member.get("scope")):
+            if (e == capability) or (isinstance(e, dict) and e.get("name") == capability):
+                return True
+        return False
 
     def in_scope(self, member_id: str, capability: str) -> bool:
         mem = self.get_member(member_id)

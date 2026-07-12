@@ -105,7 +105,9 @@ def main():
         idle = 0 if always_on else args.idle_exit
         with open(os.path.join(mdir, "run.sh"), "w") as fh:
             fh.write("#!/usr/bin/env bash\n")
-            fh.write("set -a; . \"$(dirname \"$0\")/.env\"; set +a\n")
+            fh.write("# Robust: the launcher parses the .env itself (values may contain\n")
+            fh.write("# spaces/colons/JSON) — no fragile shell sourcing.\n")
+            fh.write('export N2N_MEMBER_ENV_FILE="$(dirname "$0")/.env"\n')
             fh.write(f"exec python3 {REPO}/scripts/in2n-member.py --idle-exit {idle}\n")
         os.chmod(os.path.join(mdir, "run.sh"), 0o755)
         summary.append((name, member_id, "always-on" if always_on else "on-demand",
