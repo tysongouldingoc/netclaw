@@ -358,6 +358,12 @@ async def handle_n2n(method, path, body):
                                     (parts[2],)).fetchone()
             if row:
                 try:
+                    if fed.is_member_task(row["peer_identity"]):
+                        ch = fed.member_channels.get(row["peer_identity"])
+                        if ch is None:
+                            return 200, {"task_id": parts[2], "cancelled": False,
+                                         "note": "member not connected"}
+                        return 200, await ch.call("n2n/tasks/cancel", {"task_id": parts[2]}, timeout=15.0)
                     return 200, await fed.invoker.cancel_remote_task(row["peer_identity"], parts[2])
                 except Exception as e:
                     return 200, {"error": getattr(e, "message", str(e))}
@@ -419,11 +425,14 @@ async def handle_n2n(method, path, body):
             if not row:
                 return 404, {"error": "unknown task"}
             if row["direction"] == "outbound" and row["state"] not in ("completed", "failed", "cancelled"):
-                kind = "result"
                 try:
+                    # iN2N tasks live on a MEMBER channel, not the eN2N mesh —
+                    # poll the member directly (else it stalls at 'submitted').
+                    if fed.is_member_task(row["peer_identity"]):
+                        return 200, await fed.poll_member_task(row["peer_identity"], task_id, kind="result")
                     return 200, await fed.invoker.poll_remote_task(row["peer_identity"], task_id, kind="result")
                 except Exception:
-                    return 200, fed.tasks.status(task_id)
+                    return 200, fed.tasks.result(task_id)
             return 200, fed.tasks.result(task_id)
 
         # ── iN2N: internal federation (feature 056) ──────────────────

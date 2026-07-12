@@ -592,6 +592,34 @@ class FederationService:
                               outcome="submitted", channel_kind="in2n")
         return {"member_id": member_id, **resp}
 
+    async def poll_member_task(self, member_id: str, task_id: str, kind: str = "status") -> dict:
+        """Border side: fetch an iN2N delegated task's status/result from the
+        MEMBER over its internal channel (NOT the eN2N path). On a terminal
+        result, cache it locally so it survives a member flap/restart."""
+        ch = self.member_channels.get(member_id)
+        if ch is None:
+            # member not connected — try to (cold-)start it, else fall back local
+            ch = await self.ensure_member_up(member_id, wait_s=15)
+        if ch is None:
+            return (self.tasks.result(task_id) if kind == "result"
+                    else self.tasks.status(task_id))
+        method = "n2n/tasks/result" if kind == "result" else "n2n/tasks/status"
+        try:
+            resp = await ch.call(method, {"task_id": task_id}, timeout=30.0)
+        except Exception:
+            return (self.tasks.result(task_id) if kind == "result"
+                    else self.tasks.status(task_id))
+        if kind == "result" and resp.get("state") in ("completed", "failed", "cancelled"):
+            ref = self.audit.store_result(task_id, resp)
+            self.tasks._set(task_id, state=resp["state"], result_ref=ref,
+                            completed_at=resp.get("completed_at"))
+        return {"member_id": member_id, **resp}
+
+    def is_member_task(self, peer_identity: str) -> bool:
+        """True if a delegated_task's peer_identity is one of our risk members
+        (iN2N) rather than an eN2N BGP peer."""
+        return bool(self.risk.get_member(peer_identity))
+
     # ---- Member side: dial the Border + run delegated work ------------
 
     async def dial_border(self, host: str, port: int, enrollment_token: str = "",

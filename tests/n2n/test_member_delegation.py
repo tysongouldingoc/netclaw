@@ -75,6 +75,12 @@ async def _route_and_delegate(tmp_path):
         res = member.tasks.result(task_id)
         assert res["state"] == "completed"
         assert "cml-lab-lifecycle" in res["output_text"]   # embedded run saw the skill
+        # Border-side retrieval must work over the iN2N member channel (regression:
+        # the operator poll used to go down the eN2N path and stall at 'submitted').
+        assert border.is_member_task("risk/cml")
+        polled = await border.poll_member_task("risk/cml", task_id, kind="result")
+        assert polled["state"] == "completed"
+        assert "cml-lab-lifecycle" in polled["output_text"]
     border.manager.close(); member.manager.close()
 
 
