@@ -25,7 +25,12 @@ DAEMON_OUT="/tmp/bgp-daemon-v2.out"
 
 # Read a value from ~/.openclaw/.env ('' if unset)
 env_get() {
-    grep -m1 "^${1}=" "$OPENCLAW_ENV" 2>/dev/null | cut -d= -f2- || true
+    local v
+    v="$(grep -m1 "^${1}=" "$OPENCLAW_ENV" 2>/dev/null | cut -d= -f2-)"
+    # Strip one surrounding pair of single/double quotes — values like
+    # NETCLAW_BGP_PEERS='[...]' must reach json.loads() unquoted.
+    v="${v#\"}"; v="${v%\"}"; v="${v#\'}"; v="${v%\'}"
+    printf '%s' "$v"
 }
 
 # Prompt with default; re-prompts yes/no questions until the answer is valid
@@ -76,7 +81,7 @@ daemon_start() {
     # Pull only the daemon's keys from .env — values may contain JSON, and
     # other .env lines have unquoted spaces that break plain `source`.
     log_info "Starting mesh BGP daemon..."
-    env $(grep -E "^(NETCLAW_ROUTER_ID|NETCLAW_LOCAL_AS|NETCLAW_LAB_MODE|NETCLAW_MESH_ENABLED|NETCLAW_MESH_OPEN|BGP_LISTEN_PORT|BGP_API_PORT|N2N_ENABLED|N2N_DISPLAY_NAME|N2N_RATE_PER_MIN|N2N_DAILY_REQUESTS|N2N_DAILY_TOKENS)=" "$OPENCLAW_ENV") \
+    env $(grep -E "^(NETCLAW_ROUTER_ID|NETCLAW_LOCAL_AS|NETCLAW_LAB_MODE|NETCLAW_MESH_ENABLED|NETCLAW_MESH_OPEN|BGP_LISTEN_PORT|BGP_API_PORT|N2N_ENABLED|N2N_DISPLAY_NAME|N2N_RATE_PER_MIN|N2N_DAILY_REQUESTS|N2N_DAILY_TOKENS|N2N_ROLE|N2N_RISK_NAME|N2N_RISK_DESCRIPTION|N2N_ENABLED_STACKS|N2N_IN2N_PORT|N2N_RISK_MODE|N2N_BORDER_ENDPOINT|N2N_QUARANTINE_THRESHOLD)=" "$OPENCLAW_ENV") \
         NETCLAW_BGP_PEERS="$(env_get NETCLAW_BGP_PEERS)" \
         nohup python3 "$BGP_DAEMON" >> "$DAEMON_OUT" 2>&1 &
     local pid=$!

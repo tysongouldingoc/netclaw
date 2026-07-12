@@ -115,9 +115,11 @@ def main():
     with open(os.path.join(staging, "border.env.additions"), "w") as fh:
         fh.write("\n".join([
             "# Append to ~/.openclaw/.env to promote this claw to Border (additive).",
+            "# (values must be clean — no inline comments; .env loaders keep them literally)",
             "N2N_ROLE=border", f"N2N_RISK_NAME={args.risk}",
             "N2N_ENABLED_STACKS=both", "N2N_IN2N_PORT=11790",
-            "N2N_RISK_MODE=production   # DefenseClaw + OpenShell ON",
+            "# N2N_RISK_MODE=production -> DefenseClaw + OpenShell enforced",
+            "N2N_RISK_MODE=production",
         ]) + "\n")
 
     _write_runbook(staging, args, summary)
@@ -198,6 +200,20 @@ def _write_runbook(staging, args, summary):
     lines += ["# test a cold member end-to-end (Border spawns it, waits, delegates):",
               "#   netclaw risk route \"<task for a cold member>\" <capability>",
               "```", "",
+              "## 4b. Slim the Border INCREMENTALLY (no capability gap)",
+              "The Border stays fat through promotion so nothing breaks. Shed each domain",
+              "ONLY AFTER its member is proven in step 3/4 — never a moment where a capability",
+              "is unavailable. After a member handles its tasks, remove that domain's skills +",
+              "MCP servers from the Border's ~/.openclaw (workspace/skills + openclaw.json),",
+              "then `openclaw mcp reload`. End state — the Border keeps ONLY the broker set:",
+              "```",
+              "comms:      slack* webex* twilio* twitter* pagerduty* servicenow* discord*",
+              "broker/meta: n2n-federation protocol-participation gait-session-tracking",
+              "             memory mempalace humanrail-escalation",
+              "utilities:  subnet-calculator rfc-lookup wikipedia-research token-tracker",
+              "```",
+              "Everything else (all member domains) is REMOVED from the Border — it now routes",
+              "to the member instead. Target: ~25 skills on the Border, down from ~190.", "",
               "## 5. Move comms to the Border / decommission the monolith LAST",
               "Once members are proven, the Border is your single door. Keep the backup.",
               "The monolith is retired last — never a gap where Slack/mesh is dark.",
