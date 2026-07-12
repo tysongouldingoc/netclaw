@@ -142,6 +142,34 @@ See `.env.example` (`N2N_ROLE`, `N2N_RISK_NAME`, `N2N_ENABLED_STACKS`,
 vars `N2N_MEMBER_ID` / `N2N_MEMBER_MODEL` / `N2N_MEMBER_SCOPE` /
 `N2N_ENROLLMENT_TOKEN` / `N2N_IDLE_EXIT_S`).
 
+## Proven live — the full recipe (and gotchas)
+
+Decomposing a real monolith into a risk surfaced details worth writing down:
+
+- **A member runtime** = a *scoped OpenClaw home* (`scripts/in2n-member-home.py`):
+  filtered `mcp.servers`, **comms plugins stripped** (slack/webex crash
+  `openclaw agent --local`), a **direct model provider registered at the member's
+  tier** (and whitelisted in `agents.defaults.models`), workspace shared. The
+  member process is `scripts/in2n-member.py` (dial + enroll + execute; `--idle-exit`
+  for cold/on-demand), launched **detached** (`setsid`) so it survives.
+- **Slimming a Border is TWO things, not one:** (1) trim its `mcp.servers` to the
+  broker set, AND (2) give it its **own workspace + Border persona**
+  (`scripts/in2n-border-workspace.py`) — broker skills only + a SOUL that says
+  "I'm the Border, I DELEGATE domain work to members via `n2n_route`." Without (2)
+  the Border still carries ~190 skill files and answers like the monolith instead
+  of routing. Point `agents.defaults.workspace` at the Border workspace + restart
+  the gateway.
+- **Models:** each claw registers a **direct provider** (any: Anthropic / OpenAI /
+  local Ollama) at its tier — Border=Opus, heavy members=Sonnet, trivial=Haiku.
+  If your model routes through a proxy (e.g. a DefenseClaw LLM gateway) make sure
+  it's running, or register a direct provider so a claw isn't blocked by a down
+  proxy. `agents.defaults.model.primary` needs a matching `models.providers[...]`.
+- **Deploy the `n2n-federation` skill** to a Border's workspace — without it the
+  Border's agent doesn't know the `n2n_*` routing tools exist.
+- **On-demand cold-start** requires members to be *routable while `provisioned`*
+  (the router treats provisioned members as candidates → `ensure_member_up`
+  spawns them on first route).
+
 ## See also
 
 - [N2N-PEERING-NETCLAWS.md](../N2N-PEERING-NETCLAWS.md) — eN2N (external peering)
