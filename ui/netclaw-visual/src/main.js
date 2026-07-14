@@ -1446,6 +1446,7 @@ function renderRiskSection() {
   }
   // Border: hub with member spokes
   const members = state.n2n?.members || [];
+  const postureHtml = renderPostureBadge();
   const rows = members.map((m) => {
     const dot = m.live ? '<span class="n2n-fresh">●</span>' : '<span class="n2n-muted">○</span>';
     const stCls = m.state === 'active' ? 'federated'
@@ -1457,11 +1458,63 @@ function renderRiskSection() {
   }).join('') || '<li class="n2n-muted">no members — add with `netclaw risk add`</li>';
   return `<div class="n2n-section n2n-federated">
       <h3>Risk: ${risk.risk_name} (Border)</h3>
+      ${postureHtml}
       <div class="detail-row"><span>Stacks</span><strong>${risk.enabled_stacks || '—'}</strong></div>
       <div class="detail-row"><span>Members</span><strong>${risk.members_active ?? 0}/${risk.member_count ?? 0} active</strong></div>
       <h4>Member spokes (${members.length})</h4>
       <ul class="n2n-list">${rows}</ul>
+      ${renderGaitTrail()}
     </div>`;
+}
+
+// 057: recent GAIT immutable audit events (delegation/enrollment/removal/quarantine).
+function renderGaitTrail() {
+  const events = state.n2n?.gait || [];
+  if (!events.length) return '';
+  const rows = events.slice(0, 8).map((e) => `<li>
+      <strong>${e.event}</strong> <span class="n2n-muted">${e.subject || ''}</span>
+      <span class="n2n-muted">· ${(e.ts || '').replace('T', ' ').replace('Z', '')}</span></li>`).join('');
+  return `<h4>Audit trail (GAIT · immutable)</h4><ul class="n2n-list">${rows}</ul>`;
+}
+
+// 057: production posture badge — enforced (green) / degraded (amber, names the
+// missing controls) / testing (grey). The Border NEVER shows enforced while a
+// control is missing (FR-002). Renders nothing on a pre-057 daemon.
+function renderPostureBadge() {
+  const p = state.n2n?.posture;
+  if (!p || !p.state) return '';
+  const controls = (p.controls || [])
+    .map((c) => `${c.available ? '✓' : '✗'} ${c.name}`).join(' · ');
+  let cls = 'consent-pending-local', label = p.summary || p.state;
+  if (p.state === 'enforced') cls = 'federated';
+  else if (p.state === 'degraded') cls = 'not-federated';
+  const model = p.model && p.model.primary
+    ? `<div class="detail-row"><span>Model</span><strong>${p.model.primary}${p.model.guarded ? ' 🛡️' : ''}</strong></div>`
+    : '';
+  return `<div class="detail-row"><span>Posture</span>
+      <strong class="n2n-state-${cls}">${label}</strong></div>
+    <div class="detail-row"><span>Controls</span><span class="n2n-muted">${controls}</span></div>
+    ${model}`;
+}
+
+// 057: a federated peer advertises its production posture + LLM capability in its
+// A2A card — surface them so an operator sees a neighbour's security + model.
+function renderPeerPostureLlm(inv) {
+  let html = '';
+  const p = inv.posture;
+  if (p && p.state) {
+    let cls = 'consent-pending-local';
+    if (p.state === 'enforced') cls = 'federated';
+    else if (p.state === 'degraded') cls = 'not-federated';
+    html += `<div class="detail-row"><span>Peer posture</span>
+      <strong class="n2n-state-${cls}">${p.summary || p.state}</strong></div>`;
+  }
+  const l = inv.llm;
+  if (l && l.primary_model) {
+    html += `<div class="detail-row"><span>Peer model</span>
+      <strong>${l.primary_model}${l.guarded ? ' 🛡️' : ''}</strong></div>`;
+  }
+  return html;
 }
 
 function renderFederationSection(peer) {
@@ -1497,6 +1550,7 @@ function renderFederationSection(peer) {
       <div class="detail-row"><span>Status</span><strong class="n2n-state-federated">federated</strong></div>
       <div class="detail-row"><span>Channel</span>${chBadge}</div>
       <div class="detail-row"><span>Inventory</span><strong>v${inv.version ?? '—'} · ${recv}</strong></div>
+      ${renderPeerPostureLlm(inv)}
       <div class="n2n-badges">${badges}</div>
       ${tasksHtml}
       <h4>Skills (${(inv.skills || []).length})</h4>

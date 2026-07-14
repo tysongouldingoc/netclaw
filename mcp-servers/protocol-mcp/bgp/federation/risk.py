@@ -527,3 +527,39 @@ class RiskManager:
         if not mem:
             return None, False
         return mem.get("launch_cmd"), bool(mem.get("on_demand"))
+
+    # ---- durable-runtime binding (feature 057, US5/FR-014) ------------
+
+    def managed_by(self, member_id: str) -> str:
+        """'service' (own durable systemd unit) | 'cold' (spawn on route).
+        Defaults to 'cold' for pre-057 rows."""
+        mem = self.get_member(member_id)
+        return (mem.get("managed_by") if mem else None) or "cold"
+
+    def set_managed_by(self, member_id: str, kind: str,
+                       service_unit: Optional[str] = None):
+        """Bind a member to durable-service management (always-on) or cold-start.
+        kind ∈ {'service','cold'}; service_unit is the systemd unit name when
+        kind='service' (single-owner: the cold-start path skips a service member)."""
+        if kind not in ("service", "cold"):
+            raise ValueError(f"invalid managed_by: {kind!r}")
+        self._conn.execute(
+            "UPDATE member SET managed_by=?, service_unit=?, updated_at=? WHERE member_id=?",
+            (kind, service_unit if kind == "service" else None, _now(), member_id))
+        self._conn.commit()
+
+    def service_unit(self, member_id: str) -> Optional[str]:
+        mem = self.get_member(member_id)
+        return mem.get("service_unit") if mem else None
+
+    def set_component_scan(self, member_id: str, verdict: Optional[str]):
+        """Cache the DefenseClaw component-scan verdict for a member (feature 057,
+        FR-008): 'pass' | 'flagged:<what>' | None (re-scan next start)."""
+        self._conn.execute(
+            "UPDATE member SET component_scan=?, updated_at=? WHERE member_id=?",
+            (verdict, _now(), member_id))
+        self._conn.commit()
+
+    def component_scan(self, member_id: str) -> Optional[str]:
+        mem = self.get_member(member_id)
+        return mem.get("component_scan") if mem else None

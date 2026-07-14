@@ -447,6 +447,26 @@ async def handle_n2n(method, path, body):
                 out["members_active"] = sum(1 for m in members if m["state"] == "active")
             return 200, out
 
+        # ── iN2N production posture (feature 057, US1/FR-003) ─────────
+        if path == "/n2n/posture" and method == "GET":
+            # Prefer the cached posture from the background poller (fresh, cheap);
+            # fall back to an on-demand compute if the poller hasn't run yet.
+            cached = getattr(fed, "posture_cache", None)
+            if cached is not None:
+                return 200, cached
+            from bgp.federation import posture as _posture
+            return 200, await _posture.compute_posture(fed)
+
+        # ── iN2N GAIT immutable audit trail (feature 057, US4) ───────
+        if path == "/n2n/gait" and method == "GET":
+            from bgp.federation import gait as _gait
+            gait_dir = fed.manager.base_dir / "gait"
+            return 200, {"events": _gait.recent(limit=25, gait_dir=gait_dir)}
+
+        # ── iN2N fault isolation (feature 057, US6/FR-017/018) ───────
+        if path == "/n2n/faults" and method == "GET":
+            return 200, fed.health_report()
+
         if path == "/n2n/risk" and method == "POST":
             try:
                 r = fed.risk.set_role(
@@ -602,6 +622,16 @@ async def _start_in2n(fed):
             server = await asyncio.start_server(on_conn, "0.0.0.0", port)
             fed._in2n_server = server  # keep a ref
             logger.info("iN2N Border listener on 0.0.0.0:%d (risk=%s)", port, risk["risk_name"])
+            # feature 057: on entering production, REQUIRE (verify, never mutate)
+            # security.mode=defenseclaw so the Border's OWN model turns (via the
+            # OpenClaw gateway) are guarded (T019a/FR-007), then start the background
+            # posture poller (US1/FR-003a). Check-only: the daemon must not rewrite
+            # host security config.
+            from bgp.federation import controls as _controls
+            if _controls.is_production():
+                ok, detail = _controls.require_defenseclaw_mode()
+                logger.info("iN2N production: %s", detail)
+            asyncio.create_task(_in2n_posture_poller(fed))
         elif role == "member" and risk.get("border_endpoint"):
             host, _, port = risk["border_endpoint"].rpartition(":")
             token = os.environ.get("N2N_ENROLLMENT_TOKEN", "")
@@ -610,6 +640,25 @@ async def _start_in2n(fed):
                         risk["border_endpoint"], risk.get("self_member_id"))
     except Exception as e:
         logger.error("iN2N start error: %s", e)
+
+
+async def _in2n_posture_poller(fed, interval_s: int = 10):
+    """Background poll (feature 057, US1/FR-003a): keep fed.posture_cache fresh so
+    the status tool, operator heartbeat, and HUD show current posture without
+    waiting for the next delegation. The delegation preflight computes posture
+    itself (authoritative fail-closed) and does NOT rely on this cache."""
+    from bgp.federation import posture as _posture
+    prev_summary = None
+    while True:
+        try:
+            p = await _posture.compute_posture(fed)
+            fed.posture_cache = p
+            if p.get("summary") != prev_summary:
+                logger.info("iN2N posture: %s", p.get("summary"))
+                prev_summary = p.get("summary")
+        except Exception as e:
+            logger.warning("posture poll error: %s", e)
+        await asyncio.sleep(interval_s)
 
 
 async def _in2n_member_dialer(fed, host, port, token):

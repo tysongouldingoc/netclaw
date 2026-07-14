@@ -197,6 +197,14 @@ class FederationManager:
             # whether it may (local spawnable) vs must wait for a remote member.
             ("member", "launch_cmd", "TEXT"),
             ("member", "on_demand", "INTEGER NOT NULL DEFAULT 0"),
+            # feature 057: durable runtime + production enforcement.
+            #   managed_by     — 'service' (own durable systemd unit) | 'cold' (spawn on route)
+            #   service_unit   — the systemd unit name when managed_by='service'
+            #   component_scan — cached DefenseClaw component-scan verdict for this
+            #                    member: 'pass' | 'flagged:<what>' | NULL (not scanned)
+            ("member", "managed_by", "TEXT NOT NULL DEFAULT 'cold'"),
+            ("member", "service_unit", "TEXT"),
+            ("member", "component_scan", "TEXT"),
         ]:
             try:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")

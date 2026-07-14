@@ -68,6 +68,7 @@ CATALOG=(
     "protocol|Labs & Simulation|Protocol MCP|Live BGP/OSPF peering + GRE tunnels (10 tools)"
     "peering|Labs & Simulation|Protocol Peering Wizard|Configure BGP/OSPF participation + NetClaw Mesh (interactive)"
     "n2n|Labs & Simulation|N2N Federation|Peer NetClaws: capability exchange, remote tool/skill invocation, claw-to-claw chat"
+    "in2n-production|Labs & Simulation|iN2N Production Enforcement|Enforce production mode (OpenShell sandbox, DefenseClaw guard, GAIT audit) + durable systemd services with honest posture"
 
     "servicenow|ITSM & DevOps|ServiceNow|Incidents, changes, CMDB"
     "github|ITSM & DevOps|GitHub|Issues, PRs, code search, Actions (Docker)"
@@ -142,7 +143,7 @@ PROFILE_CLOUD="aws azure gcp cloudflare terraform vault github gait drawio-rfc u
 PROFILE_SECURITY="ise fmc panorama fortimanager checkpoint claroty zscaler nvd-cve nmap \
 fwrule gait servicenow"
 
-PROFILE_LABS="cml containerlab batfish protocol peering n2n suzieq gait subnet-calc drawio-rfc uml"
+PROFILE_LABS="cml containerlab batfish protocol peering n2n in2n-production suzieq gait subnet-calc drawio-rfc uml"
 
 PROFILE_OBSERVABILITY="grafana prometheus datadog splunk pagerduty te-community te-official \
 suzieq kubeshark gtrace gait"

@@ -72,6 +72,30 @@ async def n2n_status() -> str:
     return _gcf_dumps(data)
 
 
+@mcp.tool()
+async def n2n_posture() -> str:
+    """iN2N production posture (feature 057): whether the risk is `testing`,
+    `production — enforced`, or `production — DEGRADED` and which enforcement
+    controls (OpenShell sandbox / DefenseClaw model-guard / GAIT audit) are active.
+    The Border NEVER claims full production while a control is missing."""
+    data = await _get("/n2n/posture")
+    return _gcf_dumps(data)
+
+
+@mcp.tool()
+async def n2n_faults() -> str:
+    """iN2N fault isolation (feature 057): the truthful cause of any trouble —
+    `daemon` (federation layer down), `member` (a specific member down; whether it
+    will cold-start), `backend` (a member is up but its device/API is unreachable),
+    or `none`. Use in the operator heartbeat so the diagnosis matches the real cause
+    rather than mislabeling a daemon or backend problem as a member flap.
+
+    If this call itself errors/times out, the mesh DAEMON is down — report a
+    federation-layer/daemon fault (the daemon serves this endpoint)."""
+    data = await _get("/n2n/faults")
+    return _gcf_dumps(data)
+
+
 # ── Consent ────────────────────────────────────────────────────────────────
 
 @mcp.tool()

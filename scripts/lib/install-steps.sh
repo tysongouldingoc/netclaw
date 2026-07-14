@@ -1796,6 +1796,56 @@ fi
 echo ""
 }
 
+# ── iN2N production enforcement + durable runtime (feature 057) ──────
+component_install_in2n_production() {
+log_step "Installing iN2N production enforcement + durable runtime..."
+echo "  Makes N2N_RISK_MODE=production actually enforce (OpenShell sandbox,"
+echo "  DefenseClaw model-guard + component scan, GAIT git audit) and makes the"
+echo "  mesh daemon + always-on members durable systemd --user services."
+
+# 1. Verify the security apparatus this feature enforces WITH (reuse, not reinvent).
+if command -v openshell >/dev/null 2>&1; then
+    log_info "OpenShell sandbox CLI present ($(command -v openshell))."
+else
+    log_warn "openshell CLI not found — production sandboxing will report DEGRADED."
+    echo "      Install NVIDIA OpenShell, then re-run; testing mode is unaffected."
+fi
+if command -v defenseclaw >/dev/null 2>&1; then
+    log_info "DefenseClaw CLI present ($(command -v defenseclaw))."
+    echo "      Production requires security.mode=defenseclaw — the daemon asserts it"
+    echo "      on entering production (guards the Border's own model turns)."
+else
+    log_warn "defenseclaw CLI not found — production model-guard will report DEGRADED."
+    echo "      Enable it via ./scripts/defenseclaw-enable.sh; testing mode is unaffected."
+fi
+
+# 2. Generate + enable the durable services (mesh daemon + always-on members).
+if declare -f tui_confirm >/dev/null 2>&1 && tui_confirm "Generate + enable durable systemd --user services now?"; then
+    python3 "${NETCLAW_DIR:-.}/scripts/in2n-services.py" generate || \
+        log_warn "service generate failed (run scripts/in2n-services.py generate manually)"
+    python3 "${NETCLAW_DIR:-.}/scripts/in2n-services.py" enable || \
+        log_warn "service enable failed (systemctl --user may be unavailable on this host)"
+else
+    echo "      Later: python3 scripts/in2n-services.py generate && \\"
+    echo "             python3 scripts/in2n-services.py enable"
+fi
+
+# 3. Offer to flip the risk to production (enforced iff all controls are up).
+if declare -f _in2n_setenv >/dev/null 2>&1 && declare -f tui_confirm >/dev/null 2>&1; then
+    if tui_confirm "Set this risk to production mode (fail-closed enforcement)?"; then
+        _in2n_setenv N2N_RISK_MODE production
+        log_info "N2N_RISK_MODE=production — the Border will report enforced/degraded honestly."
+    else
+        _in2n_setenv N2N_RISK_MODE testing
+        log_info "N2N_RISK_MODE=testing — guards off for iteration."
+    fi
+fi
+
+log_info "iN2N production enforcement installed. Verify with: ask the Border its posture,"
+echo "      or GET /n2n/posture. It reports testing / production — enforced / — DEGRADED."
+echo ""
+}
+
 # ── Infoblox DDI MCP backend ────────────────────────────────────
 component_install_infoblox() {
 log_step "Installing Infoblox DDI MCP Server..."
