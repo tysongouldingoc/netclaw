@@ -64,6 +64,11 @@ At install you pick **standalone**, **Border**, or **Member**. This is the
 *internal* counterpart to N2N federation between different operators (eN2N). A
 classic standalone NetClaw is just "a risk of one, its own Border."
 
+> **NCFED is documented as an IETF Internet-Draft** — `draft-capobianco-ncfed-00`
+> (Experimental), specifying the wire protocol (BGP-multiplexed discrimination,
+> 13-octet handshake, framing, eN2N consent + iN2N TOFU trust models) for the IETF
+> `agentproto` effort: [`docs/ietf/draft-capobianco-ncfed-00.md`](docs/ietf/draft-capobianco-ncfed-00.md).
+
 ### Production mode — enforced, honest, and durable (feature 057)
 
 `N2N_RISK_MODE=production` **enforces**, fail-closed, rather than merely flagging.

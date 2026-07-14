@@ -113,3 +113,10 @@ federation-events.jsonl
 gait/
 *.systemd.env
 mesh.systemd.env
+
+# NCFED Internet-Draft (feature 059) — generated build outputs; keep the .md source
+docs/ietf/*.xml
+docs/ietf/*.txt
+docs/ietf/*.html
+docs/ietf/.refcache/
+docs/ietf/kdrfc-err.txt
