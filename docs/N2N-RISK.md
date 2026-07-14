@@ -321,5 +321,7 @@ Decomposing a real monolith into a risk surfaced details worth writing down:
 - [N2N-RISK-MIGRATION-FOR-PEERS.md](N2N-RISK-MIGRATION-FOR-PEERS.md) — for peers
   (Nick/Byrn): what changed and whether you need to do anything
 - [DEFENSECLAW.md](DEFENSECLAW.md) — the production-mode security layer
+- **NCFED protocol spec (IETF Internet-Draft):** [`docs/ietf/draft-capobianco-ncfed-00.md`](ietf/draft-capobianco-ncfed-00.md) — the wire protocol (discrimination, handshake, framing, trust models) written up as `draft-capobianco-ncfed-00` (Experimental) for IETF `agentproto`
 - Spec: `specs/056-in2n-internal-federation/` (the risk) ·
-  `specs/057-in2n-production-enforcement/` (production enforcement + durable runtime)
+  `specs/057-in2n-production-enforcement/` (production enforcement + durable runtime) ·
+  `specs/059-ncfed-internet-draft/` (the NCFED I-D)
