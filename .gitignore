@@ -102,3 +102,14 @@ workspace/output/
 
 # iN2N migration scaffold (contains per-member .env slices — never commit)
 migration-staging/
+
+# iN2N production enforcement + durable runtime (feature 057).
+# Live/generated state belongs under ~/.openclaw (already ignored) or
+# ~/.config/systemd/user — NEVER in the repo. Guard against repo-local copies:
+#   - the GAIT immutable audit trail (git repo of federation events)
+#   - generated systemd units / env (the checked-in TEMPLATE scripts/systemd/*.service stays)
+#   - any member scoped .env slices
+federation-events.jsonl
+gait/
+*.systemd.env
+mesh.systemd.env

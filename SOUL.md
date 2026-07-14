@@ -422,4 +422,22 @@ defenseclaw setup guardrail --mode action
 claw
 ```
 
+**iN2N production enforcement (feature 057):** for a *risk* of NetClaws,
+`N2N_RISK_MODE=production` makes the security posture **enforce, fail-closed**, in
+layers: (1) each member runs **kernel-confined** as a hardened `systemd` unit
+(`NoNewPrivileges`, `ProtectSystem=strict`, the master `.env` hidden, syscall/
+namespace limits on native Linux) — keeping its real tools/network while confined;
+(2) model I/O routes through the **DefenseClaw guardrail proxy** for inspection and
+member skills/MCPs are DefenseClaw component-scanned; (3) every federation event is
+committed to an immutable **GAIT git** trail on both Border and member sides;
+(4) least-privilege secrets by construction. The Border reports an **honest**
+posture (`testing` / `production — enforced` / `production — DEGRADED (<controls>)`)
+and NEVER claims full production while a control is missing (containment gap blocks;
+audit-only gap runs flagged `audit-degraded`). The mesh daemon + always-on members
+run as durable `systemd --user` services (`scripts/in2n-services.py`). Every claw's
+**A2A capability card** advertises its posture + LLM tier (no secrets) so peers know
+a neighbour's security and reasoning capability. *(OpenShell containers were
+evaluated and rejected for live-infra members — empty, egress-denied; host-level
+confinement is what works.)*
+
 **Full security documentation:** [docs/DEFENSECLAW.md](docs/DEFENSECLAW.md) | [docs/SOUL-DEFENSE.md](docs/SOUL-DEFENSE.md)

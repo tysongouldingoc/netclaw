@@ -939,6 +939,7 @@ async function fetchN2NState() {
     // HUD can render the hub-and-spoke risk view alongside eN2N peers.
     let risk = null;
     let members = [];
+    let posture = null;
     try {
       const rRes = await fetch(`${BGP_API}/n2n/risk`, { signal: AbortSignal.timeout(3000) });
       if (rRes.ok) risk = await rRes.json();
@@ -948,8 +949,21 @@ async function fetchN2NState() {
       }
     } catch { /* iN2N optional (standalone/pre-056 daemon) */ }
 
+    // 057: production posture (enforced/degraded/testing) for the risk panel.
+    try {
+      const pRes = await fetch(`${BGP_API}/n2n/posture`, { signal: AbortSignal.timeout(3000) });
+      if (pRes.ok) posture = await pRes.json();
+    } catch { /* posture optional (pre-057 daemon) */ }
+
+    // 057: GAIT immutable audit trail (recent federation events) for the risk panel.
+    let gait = [];
+    try {
+      const gRes = await fetch(`${BGP_API}/n2n/gait`, { signal: AbortSignal.timeout(3000) });
+      if (gRes.ok) gait = (await gRes.json()).events || [];
+    } catch { /* gait optional (pre-057 daemon) */ }
+
     return { available: true, identity: status.identity, peers, approvals,
-             risk, members, generatedAt: new Date().toISOString() };
+             risk, members, posture, gait, generatedAt: new Date().toISOString() };
   } catch {
     return { available: false, peers: [], risk: null, members: [],
              generatedAt: new Date().toISOString() };

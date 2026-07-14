@@ -7,6 +7,7 @@ present (lower-AS initiates).
 """
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -191,7 +192,7 @@ class FederationService:
         return {"accepted": True, "version": params.get("version")}
 
     async def _on_inventory_get(self, channel, params):
-        return self.inventory.build(channel.peer_identity)
+        return self.inventory.build(channel.peer_identity, posture=getattr(self, 'posture_cache', None))
 
     async def refresh_from(self, ident: str) -> dict:
         """Actively PULL a federated peer's inventory over the open channel
@@ -221,7 +222,7 @@ class FederationService:
         """Push our inventory to the peer. Retries briefly because the peer may
         finish its own consent→federated transition a beat after we do (both
         sides advertise on federate, which can race)."""
-        inv = self.inventory.build(channel.peer_identity)
+        inv = self.inventory.build(channel.peer_identity, posture=getattr(self, 'posture_cache', None))
         for attempt in range(4):
             try:
                 await channel.call("n2n/inventory", inv, timeout=30.0)
@@ -400,6 +401,54 @@ class FederationService:
         return {"channel_state": ("up" if ident in self.channels else h.get("state", "down")),
                 "attempts": h.get("attempts", 0), "last_seen": h.get("last_seen", 0)}
 
+    def health_report(self) -> dict:
+        """iN2N truthful fault isolation (feature 057, US6/FR-017/018).
+
+        Distinguishes three causes so the operator heartbeat gives an accurate
+        diagnosis instead of the 056 misdiagnosis (a poll bug read as a member
+        flap). Precedence: daemon > member > backend > none — a daemon-down masks
+        member reports (you can't know member state if the daemon is down), and a
+        backend fault is only reported when the daemon AND the member are up.
+
+          * daemon-down       — the iN2N listener isn't bound (federation layer fault)
+          * member-down       — daemon up, but a member has no live channel
+          * backend-unreachable — member up, but its last task reported its backend
+                                  (device/API) unreachable — NOT a federation fault
+        """
+        daemon_up = self.risk.is_border() and getattr(self, "_in2n_server", None) is not None
+        members, backends = {}, {}
+        member_fault = backend_fault = False
+        for m in self.risk.list_members():
+            mid = m["member_id"]
+            live = mid in self.member_channels
+            will_cold = (not live) and bool(m.get("launch_cmd")) and (
+                bool(m.get("on_demand")) or self.risk.managed_by(mid) == "service")
+            members[mid] = {"state": "up" if live else "down", "will_cold_start": will_cold}
+            if not live and m.get("state") == "active":
+                member_fault = True
+            # backend reachability is reported by the member in its health JSON
+            # (set from a task result); absence = unknown, not a fault.
+            backend = "unknown"
+            try:
+                h = json.loads(m["health"]) if m.get("health") else {}
+                backend = h.get("backend", "unknown")
+            except (ValueError, TypeError):
+                backend = "unknown"
+            backends[mid] = backend
+            if live and backend == "unreachable":
+                backend_fault = True
+
+        if not daemon_up:
+            fault_class = "daemon"
+        elif member_fault:
+            fault_class = "member"
+        elif backend_fault:
+            fault_class = "backend"
+        else:
+            fault_class = "none"
+        return {"daemon": "up" if daemon_up else "down", "members": members,
+                "backends": backends, "fault_class": fault_class}
+
     async def sever_local(self, ident: str) -> bool:
         ok = self.manager.sever(ident)
         ch = self.channels.pop(ident, None)
@@ -520,6 +569,40 @@ class FederationService:
 
     # ---- Border side: route + delegate to a member --------------------
 
+    def _audit_actor(self) -> str:
+        """Attributable actor for the GAIT trail (FR-012): '<risk>/border' when
+        this claw is a Border, else its federation identity."""
+        try:
+            risk = self.risk.get_risk()
+            if risk.get("role") == "border" and risk.get("risk_name"):
+                return f"{risk['risk_name']}/border"
+        except Exception:
+            pass
+        return self.local_identity
+
+    async def _component_scan_member(self, member_id: str):
+        """US3/FR-008: DefenseClaw component scan of a member's scoped skills,
+        cached in the member row. Returns (ok, verdict). 'pass' is cached and
+        short-circuits re-scan; a flag blocks the member until re-provisioned."""
+        from . import controls
+        cached = self.risk.component_scan(member_id)
+        if cached == "pass":
+            return True, "pass"
+        if cached and cached.startswith("flagged:"):
+            return False, cached
+        mem = self.risk.get_member(member_id)
+        skills = []
+        for e in self.risk._scope_list(mem.get("scope") if mem else None):
+            if isinstance(e, dict) and e.get("tier") == "specialty":
+                skills.append(e.get("name"))
+            elif isinstance(e, str) and e not in self.risk._BASE_NAMES:
+                skills.append(e)
+        ok, verdict = await controls.component_scan(skills)
+        # Cache only definitive verdicts (pass/flagged); transient errors re-scan.
+        if verdict == "pass" or verdict.startswith("flagged:"):
+            self.risk.set_component_scan(member_id, verdict)
+        return ok, verdict
+
     async def route_and_delegate(self, capability: str, input_text: str) -> dict:
         """Select the owning member (deterministic) and delegate the work as an
         async task over its channel. Returns {task_id, member_id} or an error."""
@@ -531,50 +614,138 @@ class FederationService:
         return await self.delegate_to_member(member_id, capability, input_text)
 
     async def ensure_member_up(self, member_id: str, wait_s: float = 30.0):
-        """Cold/on-demand: if a member has no live channel but is locally
-        spawnable (has a launch_cmd), start it and wait for it to dial in and
-        authenticate. Returns the channel, or None if it can't be brought up
-        (e.g. a remote member the Border can't spawn)."""
+        """Cold/on-demand: if a member has no live channel, bring it up and wait
+        for it to dial in and authenticate. Returns the channel, or None if it
+        can't be brought up (e.g. a remote member the Border can't spawn).
+
+        Feature 057:
+          * single-owner (US5/FR-014): a member managed by its own durable service
+            is NOT shell-spawned — the cold-start path ensures its unit is active
+            instead (no double-launch).
+          * fail-closed sandbox (US2/FR-005): in production a member that cannot be
+            sandboxed is NOT cold-started; the cold-start wait is widened to absorb
+            OpenShell spin-up so a sandboxed cold member isn't falsely unreachable."""
+        from . import controls
         ch = self.member_channels.get(member_id)
         if ch is not None:
             return ch
+
+        # US5 single-owner: a service-managed member is owned by its systemd unit.
+        if self.risk.managed_by(member_id) == "service":
+            unit = self.risk.service_unit(member_id) or f"netclaw-member-{member_id.replace('/', '-')}.service"
+            await self._ensure_unit_active(unit)
+            return await self._wait_for_dial(member_id, wait_s)
+
         launch_cmd, on_demand = self.risk.launch_spec(member_id)
         if not launch_cmd or not on_demand:
             return None   # remote member (or no spawn spec) — can't cold-start here
+
+        # US2 fail-closed: in production a member must run CONFINED. Refuse to
+        # cold-start if the confinement mechanism is unavailable; otherwise launch
+        # the on-demand member inside a transient confined systemd unit.
+        confined = False
+        if controls.is_production():
+            ok, detail = await controls.sandbox_available()
+            if not ok:
+                logger.warning("iN2N production: refusing cold-start of %s — "
+                               "confinement unavailable (%s)", member_id, detail)
+                return None
+            confined = True
+            wait_s = max(wait_s, 90.0)   # absorb confined-launch overhead
         if member_id in self._spawning:
             # another route is already cold-starting it; just wait
             pass
         else:
             self._spawning.add(member_id)
             try:
-                logger.info("iN2N cold-start: spawning on-demand member %s", member_id)
-                await asyncio.create_subprocess_shell(
-                    launch_cmd, stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL)
+                if confined:
+                    argv = controls.confined_cold_start(launch_cmd, member_id)
+                    logger.info("iN2N cold-start (confined): %s", member_id)
+                    await asyncio.create_subprocess_exec(
+                        *argv, stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL)
+                else:
+                    logger.info("iN2N cold-start: spawning on-demand member %s", member_id)
+                    await asyncio.create_subprocess_shell(
+                        launch_cmd, stdout=asyncio.subprocess.DEVNULL,
+                        stderr=asyncio.subprocess.DEVNULL)
             except Exception as e:
                 logger.warning("cold-start spawn of %s failed: %s", member_id, e)
                 self._spawning.discard(member_id)
                 return None
         # Wait for the member to dial in + authenticate (channel registered).
+        ch = await self._wait_for_dial(member_id, wait_s)
+        self._spawning.discard(member_id)
+        if ch is None:
+            logger.warning("iN2N cold-start: %s did not come up within %ss", member_id, wait_s)
+        return ch
+
+    async def _wait_for_dial(self, member_id: str, wait_s: float = 30.0):
+        """Wait until a member's channel is registered (it dialed in + authed)."""
         deadline = time.time() + wait_s
         while time.time() < deadline:
             ch = self.member_channels.get(member_id)
             if ch is not None:
-                self._spawning.discard(member_id)
                 return ch
             await asyncio.sleep(0.5)
-        self._spawning.discard(member_id)
-        logger.warning("iN2N cold-start: %s did not come up within %ss", member_id, wait_s)
         return None
+
+    async def _ensure_unit_active(self, unit: str) -> bool:
+        """US5 single-owner: start a member's durable systemd --user unit if it
+        isn't already active (never shell-spawn a service-managed member).
+        Best-effort; returns True if the unit is (now) active."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "systemctl", "--user", "is-active", "--quiet", unit)
+            if await proc.wait() == 0:
+                return True
+            logger.info("iN2N: starting durable member unit %s", unit)
+            proc = await asyncio.create_subprocess_exec(
+                "systemctl", "--user", "start", unit,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            return await proc.wait() == 0
+        except FileNotFoundError:
+            logger.warning("systemctl --user not available; cannot manage unit %s", unit)
+            return False
+        except Exception as e:
+            logger.warning("could not ensure unit %s active: %s", unit, e)
+            return False
 
     async def delegate_to_member(self, member_id: str, capability: str,
                                  input_text: str) -> dict:
         from .channel import RpcError
+        from . import controls, posture
+
+        # US1/FR-003a: synchronous production preflight — the authoritative
+        # fail-closed check. Skipped entirely in testing mode (guards off), which
+        # also keeps this off the hot path / out of the frozen regression suite.
+        enforcement = "testing"
+        if controls.is_production():
+            p = await posture.compute_posture(self)
+            decision = posture.posture_ok_for_delegation(p)
+            if not decision["allow"]:
+                logger.warning("iN2N production preflight REFUSED delegation to %s: %s",
+                               member_id, decision["reason"])
+                return {"error": "production_degraded", "member_id": member_id,
+                        "enforcement": decision["enforcement"],
+                        "refused_control": decision["refused_control"],
+                        "message": decision["reason"]}
+            enforcement = decision["enforcement"]
+            # US3/FR-008: component scan the member's scoped skills before it runs
+            # (cached per member; a flagged component blocks that member).
+            scan_ok, verdict = await self._component_scan_member(member_id)
+            if not scan_ok:
+                logger.warning("iN2N production: member %s blocked by component scan (%s)",
+                               member_id, verdict)
+                return {"error": "component_flagged", "member_id": member_id,
+                        "enforcement": "refused:model-guard", "refused_control": "model-guard",
+                        "message": f"DefenseClaw component scan blocked {member_id}: {verdict}"}
+
         ch = self.member_channels.get(member_id)
         if ch is None:
             ch = await self.ensure_member_up(member_id)   # cold-start on-demand members
         if ch is None:
-            return {"error": "member_unreachable",
+            return {"error": "member_unreachable", "enforcement": enforcement,
                     "message": f"member {member_id} has no live channel "
                                f"(and could not be cold-started)"}
         try:
@@ -582,15 +753,19 @@ class FederationService:
                                  {"skill": capability, "input_text": input_text}, timeout=30.0)
         except RpcError as e:
             return {"error": "out_of_scope" if e.code == -32031 else "delegation_failed",
-                    "code": e.code, "message": e.message, "member_id": member_id}
+                    "code": e.code, "message": e.message, "member_id": member_id,
+                    "enforcement": enforcement}
         task_id = resp.get("task_id")
         if task_id:
             self.tasks.record_outbound(task_id, member_id, "skill", capability)
+            # FR-020/C2: attribute the audit + GAIT event to the Border, tag the
+            # channel, and flag audit-degraded runs.
             self.audit.record(direction="outbound", peer_identity=member_id,
                               target_type="skill", target_name=capability,
                               request_id=task_id, decision="requested",
-                              outcome="submitted", channel_kind="in2n")
-        return {"member_id": member_id, **resp}
+                              outcome="submitted", channel_kind="in2n",
+                              event="delegation", actor=self._audit_actor())
+        return {"member_id": member_id, "enforcement": enforcement, **resp}
 
     async def poll_member_task(self, member_id: str, task_id: str, kind: str = "status") -> dict:
         """Border side: fetch an iN2N delegated task's status/result from the

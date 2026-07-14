@@ -217,5 +217,5 @@ Already federated with a peer who is adopting the risk model? See
 - **For federated peers (migration readout):** [`docs/N2N-RISK-MIGRATION-FOR-PEERS.md`](docs/N2N-RISK-MIGRATION-FOR-PEERS.md)
 - Skill: [`workspace/skills/n2n-federation/SKILL.md`](workspace/skills/n2n-federation/SKILL.md)
 - MCP server: [`mcp-servers/n2n-mcp/README.md`](mcp-servers/n2n-mcp/README.md)
-- Spec / plan / contracts: [`specs/052-n2n-federation/`](specs/052-n2n-federation/) (eN2N) · [`specs/056-in2n-internal-federation/`](specs/056-in2n-internal-federation/) (iN2N)
+- Spec / plan / contracts: [`specs/052-n2n-federation/`](specs/052-n2n-federation/) (eN2N) · [`specs/056-in2n-internal-federation/`](specs/056-in2n-internal-federation/) (iN2N) · [`specs/057-in2n-production-enforcement/`](specs/057-in2n-production-enforcement/) (iN2N production enforcement + durable runtime)
 - Mesh bring-up (BGP layer): [`PEERINGEXAMPLE.md`](PEERINGEXAMPLE.md)
