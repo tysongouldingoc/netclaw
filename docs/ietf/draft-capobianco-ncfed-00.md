@@ -227,7 +227,7 @@ discrimination.
 # Protocol Discrimination {#discrimination}
 
 An NCFED node listens on a single configured TCP port. (In the reference deployment
-this is the operator's BGP/mesh port; NCFED defines no fixed well-known port — see
+this is the operator's BGP/mesh port; NCFED defines no fixed well-known port -- see
 {{iana}}.) The peer that opened the TCP connection is the **initiator** and MUST send
 its protocol preamble (the 0xFF BGP marker, or the 5-octet 'N' magic of
 {{handshake}}) immediately upon connection establishment; the peer that accepted the
@@ -305,7 +305,7 @@ presents its claimed identity to the other at the binary layer. Mutual capabilit
 exchange and the remainder of session establishment then proceed at the JSON-RPC
 layer via `n2n/hello` ({{semantics}}, {{negotiation}}), which the initiator sends
 first. The peer identity used throughout this document is the string
-`as<AS>-<router-id>` (for example, `as65001-4.4.4.4`).
+`as<AS>-<router-id>` (for example, `as65001-192.0.2.1`).
 
 To avoid a simultaneous-open ambiguity (both peers dialing at once), NCFED designates
 a deterministic initiator: of any two peers, the one with the numerically **lower** AS
@@ -506,11 +506,11 @@ version: an unrecognized feature name is simply not used, and no failure is defi
 for a feature one side requires but the other lacks.
 
 Because the binary handshake carries no version indicator, an incompatible change
-cannot be signaled below the JSON-RPC layer, and — as noted in {{handshake}} — a
+cannot be signaled below the JSON-RPC layer, and -- as noted in {{handshake}} -- a
 version octet cannot simply be appended to the handshake. It is RECOMMENDED that any
 future incompatible change be negotiated in-band through this mechanism. A true
-version-negotiation scheme — selecting a common protocol version and defining
-behavior when one side requires a feature the other does not support — is left to a
+version-negotiation scheme -- selecting a common protocol version and defining
+behavior when one side requires a feature the other does not support -- is left to a
 future revision (see {{impl-status}}).
 
 # Capability Cards {#cards}
@@ -526,7 +526,7 @@ An endpoint advertises its capabilities in a card exchanged via `n2n/inventory` 
   `{ "mode", "state", "controls" }` (e.g., mode `production`, state `enforced`, and
   the set of active controls);
 * `llm`: the advertiser's reasoning-model capability, as
-  `{ "primary_model", "guarded" }` — the model family/tier and whether its
+  `{ "primary_model", "guarded" }` -- the model family/tier and whether its
   input/output is routed through a guardrail.
 
 A card MUST NOT contain secrets, credentials, or per-member topology of a risk. A
@@ -536,7 +536,7 @@ tiered models, without revealing individual members.
 Even so, because a card enumerates skills, MCP servers, security posture, and
 reasoning-model family, it discloses metadata about the advertiser's attack surface.
 An endpoint MUST advertise only the subset a given peer is authorized to see, and
-operators SHOULD treat card contents as sensitive — particularly while transport is
+operators SHOULD treat card contents as sensitive -- particularly while transport is
 cleartext ({{seccons-conf}}). A future revision may define a minimized or
 integrity-protected card ({{seccons-priv}}).
 
@@ -550,8 +550,8 @@ example, by the operators exchanging it directly) before consent is granted. Con
 is durable and survives restarts and endpoint (e.g., tunnel address) changes; it is
 keyed by the peer identity, not by a network address.
 
-A peer's federation state is derived from two independent consent bits — the local
-operator's grant and the remote peer's grant — as shown in {{fig-consent}}.
+A peer's federation state is derived from two independent consent bits -- the local
+operator's grant and the remote peer's grant -- as shown in {{fig-consent}}.
 Federation requires both. Which "pending" state a peer occupies depends only on which
 grant has been recorded so far, not on a fixed order.
 
@@ -610,8 +610,8 @@ Member --> Border:  JSON-RPC  in2n/hello | in2n/enroll
 {: #fig-in2n-preamble title="iN2N transport preamble"}
 
 The trailing "1" in the "IN2N1" magic is a preamble version digit. The exact JSON
-parameters and their encodings — PEM certificate, hexadecimal DER-encoded ECDSA
-signature, and hexadecimal key fingerprint — are specified in {{method-ref}}.
+parameters and their encodings -- PEM certificate, hexadecimal DER-encoded ECDSA
+signature, and hexadecimal key fingerprint -- are specified in {{method-ref}}.
 
 Enrollment and pinning:
 
@@ -637,7 +637,7 @@ deterministically (most-specific specialist first, then lexicographically by mem
 identity); if no active member covers the capability it returns NO_CAPABLE_MEMBER,
 and a member asked to act beyond its advertised scope returns OUT_OF_SCOPE. Operator
 removal of a member unpins its key; a member that fails pinned-key authentication more
-than a configurable number of times is automatically quarantined — its key unpinned —
+than a configurable number of times is automatically quarantined -- its key unpinned --
 and must be re-enrolled by the operator to return. The security implications of this
 automatic quarantine are discussed in {{seccons-tofu}}.
 
@@ -650,7 +650,7 @@ the iN2N socket for members reached across an untrusted network; it uses the mem
 self-signed certificate {{RFC5280}} with certificate verification disabled, so it
 supplies confidentiality only and establishes no channel binding. Consequently the
 current design does not exclude an active on-path attacker between a member and its
-Border; the intended hardening — mutual key pinning and channel binding — is described
+Border; the intended hardening -- mutual key pinning and channel binding -- is described
 in {{seccons-peer-auth}}.
 
 # Operational Considerations {#operational}
@@ -676,7 +676,7 @@ in {{seccons-peer-auth}}.
 Because NCFED, BGP-4, and NCTUN share a TCP listening port ({{discrimination}}), the
 NCFED discrimination and handshake parsers are reachable by any host that can reach
 the BGP port. Operators SHOULD protect the shared port with the same controls they
-apply to BGP peers — for example, access-control lists restricting the permitted
+apply to BGP peers -- for example, access-control lists restricting the permitted
 source addresses and, where the deployment allows, the Generalized TTL Security
 Mechanism {{RFC5082}}. Implementations MUST enforce the discrimination read timeouts
 ({{discrimination}}: 30 s for the first octet, 10 s for the magic) and close on any
@@ -736,7 +736,7 @@ The automatic quarantine that unpins a member after repeated failed authenticati
 ({{trust-in2n}}) is itself an availability hazard: an attacker who learns a member
 identifier and can reach the Border's iN2N listener can submit repeated failing
 authentications to drive that member over the quarantine threshold, unpinning it and
-removing it from routing — a denial of service against a legitimate member. Operators
+removing it from routing -- a denial of service against a legitimate member. Operators
 SHOULD restrict reachability of the iN2N listener to member hosts, and a future
 revision SHOULD source-bind or rate-limit failed-authentication accounting rather than
 counting unauthenticated attempts globally (see {{impl-status}}).
@@ -747,7 +747,7 @@ NCFED runs in cleartext by default; it provides neither confidentiality nor
 transport-layer integrity on its own. In the reference deployment it runs over
 private, overlay, or tunneled transports between mutually known peers. For any path
 that crosses an untrusted network, deployments SHOULD carry NCFED over an encrypted
-underlay or tunnel — for example an encrypted data-plane tunnel, a VPN such as
+underlay or tunnel -- for example an encrypted data-plane tunnel, a VPN such as
 WireGuard {{WIREGUARD}}, or a TLS {{RFC8446}} tunnel that terminates below NCFED.
 NCFED does not itself perform a TLS handshake on the shared discrimination port: a
 direct TLS ClientHello is not a recognized discriminator value and is closed
@@ -846,7 +846,7 @@ AS/router-id and mutual consent) and coordinates one operator's agents in a
 hub-and-spoke risk (iN2N, enrollment-token + TOFU), and it **carries** MCP and A2A
 payloads rather than defining new agent-card or task semantics of its own. A
 one-sentence differentiation: *NCFED is a cross-operator federation, identity, and
-transport layer — multiplexed with BGP — that transports A2A/MCP between
+transport layer -- multiplexed with BGP -- that transports A2A/MCP between
 independently operated network agents.*
 
 Hub-and-spoke (rather than a full mesh) was chosen for iN2N so that a single Border
@@ -876,19 +876,19 @@ application-level round-trips were exercised:
 * One long-lived TCP conversation, `192.168.2.61:45722` <-> `13.58.157.220:10416`
   (the initiator to the peer's tunnel edge); 24 packets, 3141 octets, near-symmetric
   (13 in / 1567 octets, 11 out / 1574 octets).
-* TCP health: only ACK and PSH-ACK segments in-window (no SYN/FIN/RST — a persistent,
+* TCP health: only ACK and PSH-ACK segments in-window (no SYN/FIN/RST -- a persistent,
   already-established control channel), with zero retransmissions and zero duplicate
   ACKs.
 * Payload segmentation: 12 zero-length (pure-ACK) segments plus data segments of 5,
-  75, 110, 127, 153, 274, and 352 octets — small, bursty, and request/response-shaped,
+  75, 110, 127, 153, 274, and 352 octets -- small, bursty, and request/response-shaped,
   consistent with a control/chat protocol rather than bulk transfer.
 
 **Capture methodology and limitations (important, honest scope):** this capture was
 taken on the wire *inside the peer's TLS-terminated tunnel transport* (the deployment
 reaches the remote AS over a tunnel provider). The captured payload octets are
 therefore **ciphertext**: the capture is accurate, first-hand evidence of the NCFED
-**channel** — real endpoints, a persistent established session, healthy TCP, and a
-request/response traffic shape between two independently operated ASes — but it does
+**channel** -- real endpoints, a persistent established session, healthy TCP, and a
+request/response traffic shape between two independently operated ASes -- but it does
 **not** expose decrypted NCFED frames, so the segment sizes above are TLS-record
 sizes carrying NCFED, not raw NCFED frame boundaries. A plaintext capture of the NCFED
 frames themselves requires capturing at the application layer (e.g., on loopback,
@@ -931,11 +931,11 @@ SubjectPublicKeyInfo {{RFC5480}}. Examples are illustrative.
 
 ## eN2N methods
 
-`n2n/hello` — request `params` and `result` share the descriptor shape:
+`n2n/hello` -- request `params` and `result` share the descriptor shape:
 
 ~~~
 params: {
-  "identity": "as65001-4.4.4.4",
+  "identity": "as65001-192.0.2.1",
   "display_name": "johns-risk",
   "versions": ["1.0"],
   "capabilities": {
@@ -951,7 +951,7 @@ result: {
 }
 ~~~
 
-`n2n/tools/call` — the `tool` member MUST have the form `server_id/tool_name`;
+`n2n/tools/call` -- the `tool` member MUST have the form `server_id/tool_name`;
 otherwise the callee returns JSON-RPC error -32602 (invalid params). The `result` is
 the MCP {{MCP}} tool-result object from the named server. Authorization failures use
 the codes of {{errors}}.
@@ -959,19 +959,19 @@ the codes of {{errors}}.
 ~~~
 params: { "tool":       "<server_id>/<tool_name>",
           "arguments":  { ...tool-specific JSON... },
-          "request_id": "as65001-4.4.4.4:42" }
+          "request_id": "as65001-192.0.2.1:42" }
 ~~~
 
-`n2n/tasks/submit` — A2A-style {{A2A}} delegation:
+`n2n/tasks/submit` -- A2A-style {{A2A}} delegation:
 
 ~~~
 params: { "skill":      "<skill-name>",
           "input_text": "<free text passed to the skill>",
-          "request_id": "as65001-4.4.4.4:43" }
+          "request_id": "as65001-192.0.2.1:43" }
 result: { "task_id": "<opaque string>", "state": "submitted" }
 ~~~
 
-`n2n/tasks/status`, `n2n/tasks/result`, `n2n/tasks/cancel` — each takes
+`n2n/tasks/status`, `n2n/tasks/result`, `n2n/tasks/cancel` -- each takes
 `params: { "task_id": "<opaque string>" }` and returns:
 
 ~~~
@@ -988,7 +988,7 @@ result: {
 cancel: { "task_id": "...", "cancelled": <boolean> }
 ~~~
 
-`n2n/inventory`, `n2n/inventory_get` — push and pull of the capability card
+`n2n/inventory`, `n2n/inventory_get` -- push and pull of the capability card
 ({{cards}}).
 
 ## iN2N methods
@@ -997,7 +997,7 @@ Each iN2N method is sent by the member after receiving the Border's "IN2N1" prea
 and 32-octet nonce ({{trust-in2n}}); the `signature` proves possession of the
 member's pinned key over that nonce.
 
-`in2n/enroll` — first contact. On success the Border spends the token and pins the
+`in2n/enroll` -- first contact. On success the Border spends the token and pins the
 certificate's SubjectPublicKeyInfo. Errors: NOT_A_BORDER (-32024); MEMBER_NOT_TRUSTED
 (-32023) on possession failure; ENROLL_TOKEN_INVALID (-32021) for a spent or expired
 token, or a member identifier already pinned to another key ({{errors}}).
@@ -1013,7 +1013,7 @@ params: { "token":             "in2n_<url-safe random>",
           "transport_binding": "distributed" }
 ~~~
 
-`in2n/hello` — reconnect. A mismatched fingerprint or signature returns
+`in2n/hello` -- reconnect. A mismatched fingerprint or signature returns
 MEMBER_NOT_TRUSTED (-32023) and counts toward auto-quarantine ({{seccons-tofu}}).
 
 ~~~
@@ -1027,6 +1027,6 @@ result: { "risk": "<risk name>", "trusted": true,
 # Acknowledgments
 {:numbered="false"}
 
-Thanks to the operators of the first three-node NCFED mesh — Nicholas (AS 65007) and
-Byrn (AS 65099) — for interoperation testing, and to the reviewers of the NetClaw
+Thanks to the operators of the first three-node NCFED mesh -- Nicholas (AS 65007) and
+Byrn (AS 65099) -- for interoperation testing, and to the reviewers of the NetClaw
 project.
