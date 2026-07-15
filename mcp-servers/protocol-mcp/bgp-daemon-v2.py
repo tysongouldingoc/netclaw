@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import sys
+import urllib.parse
 from ipaddress import IPv4Network
 import struct
 
@@ -708,6 +709,12 @@ async def handle_http(reader, writer):
             return
 
         method, path, *_ = lines[0].split(" ")
+        # Route on the bare path — clients (n2n-mcp) pass GET parameters as a
+        # query string, which must not defeat the exact-match routing below.
+        # Query params are merged into `body` (JSON body wins) since handlers
+        # read GET options from there.
+        path, _, _query = path.partition("?")
+        _query_params = {k: v[-1] for k, v in urllib.parse.parse_qs(_query).items()}
 
         # Determine Content-Length and read the remainder of the body
         content_length = 0
@@ -733,6 +740,8 @@ async def handle_http(reader, writer):
                 body = json.loads(raw_body)
             except Exception as e:
                 logger.warning("Bad JSON body on %s %s: %s", method, path, e)
+        for k, v in _query_params.items():
+            body.setdefault(k, v)
 
         resp_code = 200
         resp_body = {}
