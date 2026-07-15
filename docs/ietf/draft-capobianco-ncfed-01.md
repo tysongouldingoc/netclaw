@@ -413,11 +413,15 @@ presents, over the acceptor's per-connection nonce:
    signature over that nonce. The acceptor verifies the signature against the public
    key in the presented certificate; a certificate the caller cannot sign for is an
    active forgery and MUST be rejected with the channel closed.
-3. Because the nonce is fresh, single-use, and -- on an encrypted channel -- delivered
-   confidentially under a server certificate the initiator has verified, a proof
-   cannot be replayed or relayed to a different session. An implementation MAY further
-   bind the proof to the transport by including the tls-server-end-point channel
-   binding {{RFC5929}} (the hash of the acceptor's certificate) in the signed value.
+3. On an encrypted channel the signed value is `nonce || B`, where `B` is the
+   tls-server-end-point channel binding {{RFC5929}}: the SHA-256 of the acceptor's
+   certificate. The initiator computes `B` from the certificate it verified during
+   the TLS handshake, and the acceptor from its own certificate; the two agree only
+   for the same session, so a proof captured on one channel does not verify on
+   another even if the nonce were reused. On a cleartext channel `B` is empty and the
+   proof is over the nonce alone. Because the nonce is fresh, single-use, and -- on an
+   encrypted channel -- delivered confidentially under a verified server certificate
+   and bound to it, a proof cannot be replayed or relayed to a different session.
 
 The acceptor authenticates the initiator by this proof; the initiator authenticates the
 acceptor by verifying the acceptor's certificate during the TLS handshake
@@ -847,11 +851,12 @@ mechanism:
   considers card contents sensitive SHOULD operate in enforcing mode, which admits only
   the possession tier.
 
+On an encrypted channel the possession proof is bound to the session by the
+tls-server-end-point channel binding ({{channel-sec-pop}}), so it cannot be relayed.
 Deployments SHOULD still apply defence in depth: the shared-port source controls of
-{{seccons-port}}, the default-deny per-peer authorization of {{seccons-deleg}}, and, for
-the strongest binding, the tls-server-end-point channel binding of {{channel-sec-pop}}.
-An emerging agent-identity and naming layer such as the Agent Name Service {{ANS}} could
-in future supply discovery and naming above this authentication layer.
+{{seccons-port}} and the default-deny per-peer authorization of {{seccons-deleg}}. An
+emerging agent-identity and naming layer such as the Agent Name Service {{ANS}} could in
+future supply discovery and naming above this authentication layer.
 
 ## Trust on first use {#seccons-tofu}
 
@@ -1061,10 +1066,6 @@ current implementation and are targeted for a future NCFED revision:
   reported as ENROLL_TOKEN_INVALID (-32021). See {{errors}}.
 * In-band "version negotiation" is feature advertisement with graceful degradation,
   not selection of a common protocol version. See {{negotiation}}.
-* The proof of possession signs the acceptor's nonce over an authenticated, encrypted
-  channel; incorporating the tls-server-end-point channel binding {{RFC5929}} into the
-  signed value directly is available but not yet enabled on the primary channel path.
-  See {{channel-sec-pop}}.
 
 This evidence is provided to document running code and operational reality; it is not
 a normative part of the protocol.

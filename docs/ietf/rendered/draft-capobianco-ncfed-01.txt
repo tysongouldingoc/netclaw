@@ -105,7 +105,7 @@ Table of Contents
      6.4.  Admission tiers . . . . . . . . . . . . . . . . . . . . .  11
    7.  Message Framing . . . . . . . . . . . . . . . . . . . . . . .  12
    8.  Heartbeat and Liveness  . . . . . . . . . . . . . . . . . . .  13
-   9.  Semantic Payload  . . . . . . . . . . . . . . . . . . . . . .  13
+   9.  Semantic Payload  . . . . . . . . . . . . . . . . . . . . . .  14
 
 
 
@@ -138,10 +138,10 @@ Internet-Draft                    NCFED                        July 2026
    Appendix A.  Prior Art and Design Rationale . . . . . . . . . . .  28
    Appendix B.  Implementation Status  . . . . . . . . . . . . . . .  28
    Appendix C.  JSON-RPC Method Reference  . . . . . . . . . . . . .  30
-     C.1.  eN2N methods  . . . . . . . . . . . . . . . . . . . . . .  31
+     C.1.  eN2N methods  . . . . . . . . . . . . . . . . . . . . . .  30
      C.2.  iN2N methods  . . . . . . . . . . . . . . . . . . . . . .  32
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  33
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  33
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  32
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  32
 
 1.  Introduction
 
@@ -578,13 +578,18 @@ Internet-Draft                    NCFED                        July 2026
        certificate; a certificate the caller cannot sign for is an
        active forgery and MUST be rejected with the channel closed.
 
-   3.  Because the nonce is fresh, single-use, and -- on an encrypted
-       channel -- delivered confidentially under a server certificate
-       the initiator has verified, a proof cannot be replayed or relayed
-       to a different session.  An implementation MAY further bind the
-       proof to the transport by including the tls-server-end-point
-       channel binding [RFC5929] (the hash of the acceptor's
-       certificate) in the signed value.
+   3.  On an encrypted channel the signed value is nonce || B, where B
+       is the tls-server-end-point channel binding [RFC5929]: the
+       SHA-256 of the acceptor's certificate.  The initiator computes B
+       from the certificate it verified during the TLS handshake, and
+       the acceptor from its own certificate; the two agree only for the
+       same session, so a proof captured on one channel does not verify
+       on another even if the nonce were reused.  On a cleartext channel
+       B is empty and the proof is over the nonce alone.  Because the
+       nonce is fresh, single-use, and -- on an encrypted channel --
+       delivered confidentially under a verified server certificate and
+       bound to it, a proof cannot be replayed or relayed to a different
+       session.
 
    The acceptor authenticates the initiator by this proof; the initiator
    authenticates the acceptor by verifying the acceptor's certificate
@@ -601,6 +606,18 @@ Internet-Draft                    NCFED                        July 2026
       pinned, matched its pin).  It receives the full method surface
       subject to the per-peer authorization of Section 12.1.
 
+
+
+
+
+
+
+
+Capobianco               Expires 16 January 2027               [Page 11]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    *  *self-asserted* (restricted): the peer is consented but presented
       no certificate.  It is admitted for presence and capability-card
       exchange (Section 11) only.  Tool invocation, task delegation
@@ -610,13 +627,6 @@ Internet-Draft                    NCFED                        July 2026
    *  A peer for which no local consent exists is closed before a nonce
       is issued (Section 5); it obtains no channel, not even the
       restricted tier.
-
-
-
-Capobianco               Expires 16 January 2027               [Page 11]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    An acceptor operating in *enforcing* mode admits only the possession
    tier and refuses a self-asserted peer, making a certificate a hard
@@ -655,6 +665,15 @@ Internet-Draft                    NCFED                        July 2026
       than 65536 MUST close the connection.
 
    Flags:  One octet.  Bit 0 (0x01), CONTINUATION: when set, the payload
+
+
+
+
+Capobianco               Expires 16 January 2027               [Page 12]
+
+Internet-Draft                    NCFED                        July 2026
+
+
       is a fragment of a larger message and MUST be concatenated with
       the payloads of subsequent frames until a frame is received with
       CONTINUATION clear.  Bits 1 through 7 are RESERVED; a sender MUST
@@ -666,14 +685,6 @@ Internet-Draft                    NCFED                        July 2026
    channel MUST be a fragment of the same message until a frame with
    CONTINUATION clear terminates the message.  Fragments MUST be
    transmitted contiguously.  A frame with Length 0 and CONTINUATION set
-
-
-
-Capobianco               Expires 16 January 2027               [Page 12]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    is a legal empty fragment that contributes no octets to reassembly.
    Because a heartbeat (Section 8) is a Length-0, CONTINUATION-clear
    frame, and because reassembly is never in progress between messages,
@@ -708,6 +719,17 @@ Internet-Draft                    NCFED                        July 2026
    close, an endpoint that initiated the session SHOULD attempt to re-
    establish it with bounded backoff.
 
+
+
+
+
+
+
+Capobianco               Expires 16 January 2027               [Page 13]
+
+Internet-Draft                    NCFED                        July 2026
+
+
 9.  Semantic Payload
 
    Reassembled payloads are UTF-8 JSON-RPC 2.0 [JSONRPC] messages
@@ -721,14 +743,6 @@ Internet-Draft                    NCFED                        July 2026
    logged; its receipt does not by itself require closing the channel.
    The concrete parameter and result objects for each method are
    specified in Appendix C.
-
-
-
-
-Capobianco               Expires 16 January 2027               [Page 13]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    Before federation (eN2N) or trust establishment (iN2N) completes, an
    endpoint MUST reject any method other than the handshake method (n2n/
@@ -763,6 +777,15 @@ Internet-Draft                    NCFED                        July 2026
                         \--> failed
                         \--> cancelled
 
+
+
+
+
+Capobianco               Expires 16 January 2027               [Page 14]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    The callee returns an opaque task identifier from n2n/tasks/submit;
    the caller retrieves progress and the terminal result via n2n/tasks/
    status and n2n/tasks/result, and MAY request cancellation via
@@ -774,17 +797,6 @@ Internet-Draft                    NCFED                        July 2026
    treated as a secret (see Section 14.5).  This document does not
    define a retention or garbage-collection policy for terminal task
    state, nor idempotency or retry semantics for resubmission.
-
-
-
-
-
-
-
-Capobianco               Expires 16 January 2027               [Page 14]
-
-Internet-Draft                    NCFED                        July 2026
-
 
 9.3.  Error codes
 
@@ -822,18 +834,6 @@ Internet-Draft                    NCFED                        July 2026
 
    The following application error codes are defined for iN2N
    (Section 12.2):
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1191,13 +1191,13 @@ Internet-Draft                    NCFED                        July 2026
       sensitive SHOULD operate in enforcing mode, which admits only the
       possession tier.
 
-   Deployments SHOULD still apply defence in depth: the shared-port
-   source controls of Section 14.1, the default-deny per-peer
-   authorization of Section 14.5, and, for the strongest binding, the
-   tls-server-end-point channel binding of Section 6.3.  An emerging
-   agent-identity and naming layer such as the Agent Name Service [ANS]
-   could in future supply discovery and naming above this authentication
-   layer.
+   On an encrypted channel the possession proof is bound to the session
+   by the tls-server-end-point channel binding (Section 6.3), so it
+   cannot be relayed.  Deployments SHOULD still apply defence in depth:
+   the shared-port source controls of Section 14.1 and the default-deny
+   per-peer authorization of Section 14.5.  An emerging agent-identity
+   and naming layer such as the Agent Name Service [ANS] could in future
+   supply discovery and naming above this authentication layer.
 
 14.3.  Trust on first use
 
@@ -1650,12 +1650,6 @@ Internet-Draft                    NCFED                        July 2026
       graceful degradation, not selection of a common protocol version.
       See Section 10.
 
-   *  The proof of possession signs the acceptor's nonce over an
-      authenticated, encrypted channel; incorporating the tls-server-
-      end-point channel binding [RFC5929] into the signed value directly
-      is available but not yet enabled on the primary channel path.  See
-      Section 6.3.
-
    This evidence is provided to document running code and operational
    reality; it is not a normative part of the protocol.
 
@@ -1671,6 +1665,12 @@ Appendix C.  JSON-RPC Method Reference
    SHA-256 [RFC6234] of the certificate's SubjectPublicKeyInfo
    [RFC5480].  Examples are illustrative.
 
+C.1.  eN2N methods
+
+   n2n/hello -- request params and result share the descriptor shape:
+
+
+
 
 
 
@@ -1681,10 +1681,6 @@ Capobianco               Expires 16 January 2027               [Page 30]
 
 Internet-Draft                    NCFED                        July 2026
 
-
-C.1.  eN2N methods
-
-   n2n/hello -- request params and result share the descriptor shape:
 
    params: {
      "identity": "as65001-192.0.2.1",
@@ -1722,22 +1718,6 @@ C.1.  eN2N methods
    n2n/tasks/status, n2n/tasks/result, n2n/tasks/cancel -- each takes
    params: { "task_id": "<opaque string>" } and returns:
 
-
-
-
-
-
-
-
-
-
-
-
-Capobianco               Expires 16 January 2027               [Page 31]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    status: {
      "task_id": "...", "target": "<skill-name>",
      "state": "submitted|working|completed|failed|cancelled|unknown",
@@ -1749,6 +1729,14 @@ Internet-Draft                    NCFED                        July 2026
      "error": "<present when failed>"
    }
    cancel: { "task_id": "...", "cancelled": <boolean> }
+
+
+
+
+Capobianco               Expires 16 January 2027               [Page 31]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    n2n/inventory, n2n/inventory_get -- push and pull of the capability
    card (Section 11).
@@ -1784,16 +1772,6 @@ C.2.  iN2N methods
    result: { "risk": "<risk name>", "trusted": true,
              "member_state": "active" }
 
-
-
-
-
-
-Capobianco               Expires 16 January 2027               [Page 32]
-
-Internet-Draft                    NCFED                        July 2026
-
-
 Acknowledgments
 
    Thanks to the operators of the first three-node NCFED mesh --
@@ -1811,38 +1789,4 @@ Author's Address
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Capobianco               Expires 16 January 2027               [Page 33]
+Capobianco               Expires 16 January 2027               [Page 32]
