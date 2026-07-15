@@ -103,6 +103,15 @@ class Invoker:
         tool = params.get("tool", "")
         arguments = params.get("arguments") or {}
         req_id = params.get("request_id", "")
+        # Tier-0 default-deny: a self-asserted (keyless) peer is federated for
+        # presence+inventory but may not invoke tools — possession proof required.
+        from .negotiate import allows
+        if not allows(getattr(channel, "attestation", "self-asserted"), "tools/call"):
+            self.audit.record(direction="inbound", peer_identity=peer, target_type="tool",
+                              target_name=tool, request_id=req_id, decision="not_allowlisted",
+                              outcome="denied")
+            raise RpcError(ERR_NOT_ALLOWLISTED,
+                           "possession proof required for tools/call (tier-0 self-asserted peer)")
         decision = self.authz.authorize(peer, "tool", tool)
 
         if not decision.allowed and decision.code != "approval_required":
@@ -145,6 +154,17 @@ class Invoker:
         skill = params.get("skill", "")
         input_text = params.get("input_text", "")
         req_id = params.get("request_id", "")
+        # Tier-0 default-deny: tasks/submit is the async twin of tools/call — it
+        # authorizes and executes a granted skill via the local gateway. A keyless
+        # (self-asserted) peer may not, or it would bypass the tools/call gate via
+        # the async path. Possession proof required.
+        from .negotiate import allows
+        if not allows(getattr(channel, "attestation", "self-asserted"), "tasks/submit"):
+            self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
+                              target_name=skill, request_id=req_id, decision="not_allowlisted",
+                              outcome="denied")
+            raise RpcError(ERR_NOT_ALLOWLISTED,
+                           "possession proof required for tasks/submit (tier-0 self-asserted peer)")
         decision = self.authz.authorize(peer, "skill", skill)
 
         if not decision.allowed and decision.code != "approval_required":

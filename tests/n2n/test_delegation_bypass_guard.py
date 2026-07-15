@@ -41,6 +41,7 @@ PEER = "as65001-4.4.4.4"
 
 class _Chan:
     peer_identity = PEER
+    attestation = "possession"   # post-possession session (reconciled eN2N auth)
 
 
 # ---- fail-closed: untrusted eN2N input may not run embedded ----------------
