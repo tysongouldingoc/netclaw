@@ -458,6 +458,58 @@ async def handle_n2n(method, path, body):
             from bgp.federation import posture as _posture
             return 200, await _posture.compute_posture(fed)
 
+        # ── claw certification: credential panel + rotation (feature 060) ──
+        if path == "/n2n/certs" and method == "GET":
+            from bgp.federation import certs as _certs
+            import datetime as _dt
+            def _days(na):
+                if not na:
+                    return None
+                try:
+                    return (_dt.datetime.fromisoformat(na) -
+                            _dt.datetime.now(_dt.timezone.utc)).days
+                except Exception:
+                    return None
+            creds = []
+            for c in fed.manager.list_credentials():
+                d = _days(c.get("not_after"))
+                creds.append({"kind": c["kind"], "subject": c["subject_identity"],
+                              "fingerprint": c["fingerprint"], "issuer": c.get("issuer"),
+                              "not_after": c.get("not_after"), "days_remaining": d,
+                              "state": c["state"],
+                              "aging": ("red" if d is not None and d < 14 else
+                                        "amber" if d is not None and d < 30 else "ok")})
+            peers = [{"identity": p["identity"], "trust_model": p.get("trust_model"),
+                      "claw_domain": p.get("claw_domain"), "verify_state": p.get("verify_state"),
+                      "peer_cred_fp": p.get("peer_cred_fp"),
+                      "peer_cred_not_after": p.get("peer_cred_not_after")}
+                     for p in fed.manager.list_peers()]
+            members = [{"member_id": m["member_id"], "credential_state": m.get("credential_state"),
+                        "cred_fp": m.get("cred_fp"), "cred_not_after": m.get("cred_not_after")}
+                       for m in fed.risk.list_members()]
+            return 200, {"credentials": creds, "peers": peers, "members": members,
+                         "cert_mode": "enforce" if fed.cert_enforce else
+                                      ("on" if fed.cert_mode else "off")}
+
+        if path == "/n2n/certs/rotate" and method == "POST":
+            from bgp.federation.rotation import RotationManager
+            target = body.get("target")
+            rot = RotationManager(fed)
+            matched = [c for c in fed.manager.list_credentials()
+                       if target in (c["subject_identity"], c["kind"])]
+            if not matched:
+                return 404, {"error": f"no credential matches {target!r}"}
+            renewed = 0
+            for c in matched:
+                if await rot.renew_one(c):
+                    renewed += 1
+            return 200, {"target": target, "rotated": renewed}
+
+        if path == "/n2n/certs/renew" and method == "POST":
+            from bgp.federation.rotation import RotationManager
+            n = await RotationManager(fed).run_once()
+            return 200, {"renewed": n}
+
         # ── iN2N GAIT immutable audit trail (feature 057, US4) ───────
         if path == "/n2n/gait" and method == "GET":
             from bgp.federation import gait as _gait
@@ -641,6 +693,37 @@ async def _start_in2n(fed):
                         risk["border_endpoint"], risk.get("self_member_id"))
     except Exception as e:
         logger.error("iN2N start error: %s", e)
+
+
+async def _start_cert_lifecycle(fed):
+    """Feature 060: at startup obtain the domain-verified credential if the claw
+    is configured for one, register long-lived local credentials for rotation,
+    then renew everything due on an hourly cadence (FR-012). No-ops cheaply when
+    cert_mode is off."""
+    if not getattr(fed, "cert_mode", False):
+        return
+    from bgp.federation import acme, certs
+    from bgp.federation.rotation import RotationManager
+    rot = RotationManager(fed)
+    try:
+        # Register this claw's presented credential (ACME if configured, else the
+        # self-signed host credential) so the scheduler and HUD track its expiry.
+        await acme.ensure_domain_credential(fed)
+        cert_pem, _ = fed.host_credential()
+        kind = "acme" if acme.configured() else "host-pinned"
+        subject = os.environ.get("N2N_CLAW_DOMAIN") or fed.local_identity
+        rot.register(kind, subject, cert_pem, issuer=("ACME" if kind == "acme" else "self"))
+    except Exception as e:
+        logger.warning("cert lifecycle init: %s", e)
+    interval = int(os.environ.get("N2N_CERT_RENEW_CHECK_S", "3600"))
+    while True:
+        try:
+            n = await rot.run_once()
+            if n:
+                logger.info("cert rotation: renewed %d credential(s)", n)
+        except Exception as e:
+            logger.warning("cert rotation cycle error: %s", e)
+        await asyncio.sleep(interval)
 
 
 async def _in2n_posture_poller(fed, interval_s: int = 10):
@@ -1094,6 +1177,9 @@ async def main():
         # iN2N (feature 056): start the internal-federation listener (Border) or
         # dialer (Member) per this claw's role. Members dial outbound only.
         asyncio.create_task(_start_in2n(_federation))
+        # Claw certification (feature 060): obtain/refresh the domain-verified
+        # credential (if configured) and run the automatic renewal scheduler.
+        asyncio.create_task(_start_cert_lifecycle(_federation))
 
     # Auto-advertise identity route (router-id as /32)
     _speaker.agent.originate_route(f"{ROUTER_ID}/32")

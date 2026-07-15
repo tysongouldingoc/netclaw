@@ -268,11 +268,20 @@ class FederationService:
                 "renew_state": "ok"}
 
     def host_credential(self) -> tuple:
-        """This claw's pinned-model credential (self-signed cert + key), created
-        once under keys/host/. The domain-verified credential (ACME) is layered
-        on separately; this is always present as the pinned fallback."""
+        """The credential this claw presents on secured channels. If a domain is
+        configured and an ACME certificate exists, present that (domain-verified
+        peers validate its WebPKI chain; pinned peers pin its key). Otherwise the
+        pinned-model self-signed credential under keys/host/, created once."""
+        from . import certs
+        # Prefer the domain-verified (ACME) credential when present.
+        domain = os.environ.get("N2N_CLAW_DOMAIN")
+        if domain:
+            kd = certs.keys_dir(str(self.manager.base_dir))
+            acme_crt = kd / "acme" / "certificates" / f"{domain}.crt"
+            acme_key = kd / "acme" / "certificates" / f"{domain}.key"
+            if acme_crt.exists() and acme_key.exists():
+                return acme_crt.read_text(), acme_key.read_text()
         if self._host_cred is None:
-            from . import certs
             kd = certs.keys_dir(str(self.manager.base_dir))
             crt, key = kd / "host" / "host.crt", kd / "host" / "host.key"
             if crt.exists() and key.exists():
