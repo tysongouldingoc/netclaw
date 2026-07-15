@@ -15,8 +15,8 @@
 
 **Purpose**: Constants, key-material layout, dependency fetch, config surface
 
-- [ ] T001 Add 060 constants to `mcp-servers/protocol-mcp/bgp/constants.py`: `TLS_FIRST_BYTE = 0x16`, `NCFED_ALPN = "ncfed/1"`, `TLS_EXPORTER_LABEL = "EXPORTER-ncfed-claw-auth"`, default lifetimes/threshold env parsing (`N2N_CERT_RENEW_FRACTION=0.667`, `N2N_CERT_MEMBER_DAYS=90`, `N2N_CERT_CA_DAYS=730`), JSON-RPC error codes `-32060 LEGACY_REFUSED` / `-32061 CERT_VERIFY_FAILED` (contracts/wire-protocol.md §1–3)
-- [ ] T002 [P] Create keys-directory helper in `mcp-servers/protocol-mcp/bgp/federation/certs.py` (module skeleton): `keys_dir()` returning `~/.openclaw/n2n/keys/` with `host/`, `acme/`, `risk-ca/`, `members/` subdirs created `0700`, files written `0600` (data-model.md §6)
+- [x] T001 Add 060 constants to `mcp-servers/protocol-mcp/bgp/constants.py`: `TLS_FIRST_BYTE = 0x16`, `NCFED_ALPN = "ncfed/1"`, `TLS_EXPORTER_LABEL = "EXPORTER-ncfed-claw-auth"`, default lifetimes/threshold env parsing (`N2N_CERT_RENEW_FRACTION=0.667`, `N2N_CERT_MEMBER_DAYS=90`, `N2N_CERT_CA_DAYS=730`), JSON-RPC error codes `-32060 LEGACY_REFUSED` / `-32061 CERT_VERIFY_FAILED` (contracts/wire-protocol.md §1–3)
+- [x] T002 [P] Create keys-directory helper in `mcp-servers/protocol-mcp/bgp/federation/certs.py` (module skeleton): `keys_dir()` returning `~/.openclaw/n2n/keys/` with `host/`, `acme/`, `risk-ca/`, `members/` subdirs created `0700`, files written `0600` (data-model.md §6)
 - [ ] T003 [P] Add lego fetch helper `scripts/lib/fetch-lego.sh`: download the pinned lego release for the host arch into `~/.openclaw/n2n/bin/lego`, verify SHA-256 checksum, idempotent (research.md R2)
 - [ ] T004 [P] Document all new environment variables in `.env.example`: `N2N_CLAW_DOMAIN`, `N2N_ACME_DNS_PROVIDER`, `N2N_ACME_EMAIL`, `GODADDY_API_KEY`/`GODADDY_API_SECRET`, `CLOUDFLARE_DNS_API_TOKEN`, `ACME_DNS_API_BASE`/`ACME_DNS_STORAGE_PATH`, `N2N_CERT_RENEW_FRACTION`, `N2N_CERT_MEMBER_DAYS`, `N2N_CERT_CA_DAYS` — names + descriptions only (data-model.md §7; Constitution XIII)
 
@@ -26,10 +26,10 @@
 
 **Purpose**: X.509 primitives, schema migration, audit event kinds — every story builds on these
 
-- [ ] T005 Implement X.509 primitives in `mcp-servers/protocol-mcp/bgp/federation/certs.py`: `generate_keypair()` (ECDSA P-256), `create_self_signed(cn, days)` (host-pinned model), `create_risk_ca(risk_name, days)` (CA basicConstraints pathlen=0), `issue_cert(ca_key, ca_cert, subject_cn, san, days)` (member/hub issuance), `fingerprint(cert)` (SHA-256 over DER hex), `verify_chain(leaf_pem, anchor_pem, expected_san)`, `load_or_create_host_credential()` — using the existing `cryptography` dependency (research.md R5)
-- [ ] T006 Schema migration v3 in `mcp-servers/protocol-mcp/bgp/federation/manager.py`: additive, transactional — new tables `credential`, `rotation_event`, `auth_failure_bucket`; new `federation_peer` columns `trust_model`/`claw_domain`/`pinned_fp`/`pinned_fp_next`/`peer_cred_fp`/`peer_cred_not_after`/`peer_renew_state`/`verify_state`; new `member` columns `credential_state`/`cred_fp`/`cred_not_after`/`renew_state`/`enroll_fingerprint_logged`; backfill `trust_model='legacy'` for existing peers and `credential_state='legacy'` for existing members (data-model.md §1–5, FR-020)
-- [ ] T007 [P] Add rotation/refusal event kinds to `mcp-servers/protocol-mcp/bgp/federation/audit.py` (`renewed`, `rotated`, `overlap-opened`, `overlap-closed`, `renewal-failed`, `emergency-rekey`, `verify-refused`) writing both `rotation_event` rows and the existing audit+GAIT trail (FR-016; Constitution IV)
-- [ ] T008 [P] Unit tests for certs.py primitives in `tests/protocol/test_certs.py`: self-signed round-trip, CA issue + chain verify, SAN mismatch fails, fingerprint stability, expiry math for `renew_after` at 2/3 lifetime
+- [x] T005 Implement X.509 primitives in `mcp-servers/protocol-mcp/bgp/federation/certs.py`: `generate_keypair()` (ECDSA P-256), `create_self_signed(cn, days)` (host-pinned model), `create_risk_ca(risk_name, days)` (CA basicConstraints pathlen=0), `issue_cert(ca_key, ca_cert, subject_cn, san, days)` (member/hub issuance), `fingerprint(cert)` (SHA-256 over DER hex), `verify_chain(leaf_pem, anchor_pem, expected_san)`, `load_or_create_host_credential()` — using the existing `cryptography` dependency (research.md R5)
+- [x] T006 Schema migration v3 in `mcp-servers/protocol-mcp/bgp/federation/manager.py`: additive, transactional — new tables `credential`, `rotation_event`, `auth_failure_bucket`; new `federation_peer` columns `trust_model`/`claw_domain`/`pinned_fp`/`pinned_fp_next`/`peer_cred_fp`/`peer_cred_not_after`/`peer_renew_state`/`verify_state`; new `member` columns `credential_state`/`cred_fp`/`cred_not_after`/`renew_state`/`enroll_fingerprint_logged`; backfill `trust_model='legacy'` for existing peers and `credential_state='legacy'` for existing members (data-model.md §1–5, FR-020)
+- [x] T007 [P] Add rotation/refusal event kinds to `mcp-servers/protocol-mcp/bgp/federation/audit.py` (`renewed`, `rotated`, `overlap-opened`, `overlap-closed`, `renewal-failed`, `emergency-rekey`, `verify-refused`) writing both `rotation_event` rows and the existing audit+GAIT trail (FR-016; Constitution IV)
+- [x] T008 [P] Unit tests for certs.py primitives in `tests/protocol/test_certs.py`: self-signed round-trip, CA issue + chain verify, SAN mismatch fails, fingerprint stability, expiry math for `renew_after` at 2/3 lifetime
 
 **Checkpoint**: `pytest tests/protocol/test_certs.py` green; migration applies cleanly to a copy of a live `federation.db` with row counts unchanged.
 
@@ -74,9 +74,9 @@
 
 **Independent Test**: Foreign-source failing auth spam leaves member standing untouched (SC-010); enrollment logs matching fingerprints both ends, mismatch hard-aborts.
 
-- [ ] T020 [US5] Per-source failed-auth accounting in `mcp-servers/protocol-mcp/bgp/federation/service.py` + `risk.py`: token-bucket per source via `auth_failure_bucket` (default 5/min then drop+audit); member quarantine counters increment only from the member's own authenticated origin (data-model.md §5, FR-022)
-- [ ] T021 [US5] Enrollment fingerprint logging in `mcp-servers/protocol-mcp/bgp/federation/risk.py` + `scripts/in2n-member.py`: Border records + audits `enroll_fingerprint`; member recomputes over received cert DER, prints it, confirms in enrollment ack; mismatch → hard abort with full state rollback, `enroll_fingerprint_logged=1` on success; no interactive pause (FR-023, Clarification Q5)
-- [ ] T022 [P] [US5] Integration test in `tests/protocol/test_trust_hardening.py`: 50 failing auths from a foreign source → member state unchanged + bucket audit rows (SC-010); tampered enrollment reply → abort with no member row remaining
+- [x] T020 [US5] Per-source failed-auth accounting in `mcp-servers/protocol-mcp/bgp/federation/service.py` + `risk.py`: token-bucket per source via `auth_failure_bucket` (default 5/min then drop+audit); member quarantine counters increment only from the member's own authenticated origin (data-model.md §5, FR-022)
+- [x] T021 [US5] Enrollment fingerprint logging in `mcp-servers/protocol-mcp/bgp/federation/risk.py` + `scripts/in2n-member.py`: Border records + audits `enroll_fingerprint`; member recomputes over received cert DER, prints it, confirms in enrollment ack; mismatch → hard abort with full state rollback, `enroll_fingerprint_logged=1` on success; no interactive pause (FR-023, Clarification Q5)
+- [x] T022 [P] [US5] Integration test in `tests/protocol/test_trust_hardening.py`: 50 failing auths from a foreign source → member state unchanged + bucket audit rows (SC-010); tampered enrollment reply → abort with no member row remaining
 
 **Checkpoint**: 059 §seccons-tofu hazards closed.
 
