@@ -136,6 +136,84 @@ class RiskManager:
         key = serialization.load_pem_private_key(key_pem.encode(), password=None)
         return key.sign(nonce, ec.ECDSA(hashes.SHA256()))
 
+    # ── feature 060: risk certificate authority + hub attestation (US2) ──
+    # The Border is its risk's CA. It presents a CA-signed hub credential to
+    # members so they can verify (at dial time) that the hub they reached is the
+    # legitimate one — closing the 059 "does not authenticate the Border to the
+    # member" gap. The CA anchor is delivered to a member at enrollment.
+    def ensure_risk_ca(self):
+        """Create (once) this risk's CA under keys/risk-ca/. Returns (ca_cert_pem,
+        ca_key_pem). Only meaningful on a Border."""
+        from . import certs
+        cad = self.keys_dir / "risk-ca"
+        cad.mkdir(exist_ok=True)
+        crt, key = cad / "ca.crt", cad / "ca.key"
+        if crt.exists() and key.exists():
+            return crt.read_text(), key.read_text()
+        risk_name = (self.get_risk() or {}).get("risk_name") or "risk"
+        ca_cert, ca_key = certs.create_risk_ca(risk_name)
+        crt.write_text(ca_cert)
+        certs._write_secret(key, ca_key)
+        logger.info("Created risk CA for %s (fingerprint %s)", risk_name,
+                    certs.fingerprint(ca_cert)[:16])
+        return ca_cert, ca_key
+
+    def risk_ca_pem(self) -> Optional[str]:
+        crt = self.keys_dir / "risk-ca" / "ca.crt"
+        return crt.read_text() if crt.exists() else None
+
+    def store_risk_anchor(self, anchor_pem: str):
+        """Member side: persist the risk CA anchor received at enrollment so the
+        member can verify the hub on every future dial (FR-010)."""
+        (self.keys_dir / "risk-ca-anchor.pem").write_text(anchor_pem)
+
+    def risk_anchor(self) -> Optional[str]:
+        p = self.keys_dir / "risk-ca-anchor.pem"
+        return p.read_text() if p.exists() else None
+
+    def hub_credential(self):
+        """The Border's CA-signed hub credential (cert + key), created once.
+        Returns (hub_cert_pem, hub_key_pem)."""
+        from . import certs
+        cad = self.keys_dir / "risk-ca"
+        hcrt, hkey = cad / "hub.crt", cad / "hub.key"
+        if hcrt.exists() and hkey.exists():
+            return hcrt.read_text(), hkey.read_text()
+        ca_cert, ca_key = self.ensure_risk_ca()
+        risk_name = (self.get_risk() or {}).get("risk_name") or "risk"
+        hub_cert, hub_key = certs.issue_cert(ca_cert, ca_key, f"{risk_name}/border",
+                                             san=f"{risk_name}/border")
+        hcrt.write_text(hub_cert)
+        certs._write_secret(hkey, hub_key)
+        return hub_cert, hub_key
+
+    def attest_hub(self, member_nonce: bytes) -> Optional[dict]:
+        """Produce hub attestation for a member's challenge: the CA-signed hub
+        cert + a signature over the member's nonce. Member verifies chain-to-anchor
+        + signature. Returns None if this claw has no CA (not a Border)."""
+        if not self.is_border():
+            return None
+        hub_cert, hub_key = self.hub_credential()
+        sig = self.sign_challenge(hub_key, member_nonce)
+        return {"hub_cert": hub_cert, "hub_sig": sig.hex(),
+                "risk_ca": self.risk_ca_pem()}
+
+    @staticmethod
+    def verify_hub_attestation(attest: dict, anchor_pem: str,
+                               member_nonce: bytes, risk_name: str) -> bool:
+        """Member side: verify the hub cert chains to the enrolled risk CA, names
+        the risk's border, and signed our nonce (proof the hub holds the key)."""
+        from . import certs
+        hub_cert = attest.get("hub_cert")
+        sig = bytes.fromhex(attest.get("hub_sig", "") or "")
+        if not hub_cert or not sig:
+            return False
+        ok, _ = certs.verify_chain(hub_cert, anchor_pem,
+                                   expected_san=f"{risk_name}/border")
+        if not ok:
+            return False
+        return RiskManager.verify_possession(hub_cert, member_nonce, sig)
+
     @staticmethod
     def verify_possession(cert_pem: str, nonce: bytes, signature: bytes) -> bool:
         """Verify a signature over `nonce` was made by the private key matching

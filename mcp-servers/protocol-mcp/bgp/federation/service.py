@@ -642,6 +642,16 @@ class FederationService:
                           target_type="enroll", target_name=member_id,
                           decision="enrolled", outcome="success", channel_kind="in2n")
         logger.info("iN2N member %s enrolled + active", member_id)
+        # US2: bootstrap the risk CA trust anchor to the member at enrollment, and
+        # (if it challenged us) attest we are the legitimate hub.
+        anchor = self.risk.risk_ca_pem() or (self.risk.ensure_risk_ca()[0])
+        res = dict(res)
+        res["risk_ca"] = anchor
+        mnonce = params.get("member_nonce")
+        if mnonce:
+            attest = self.risk.attest_hub(bytes.fromhex(mnonce))
+            if attest:
+                res["hub_attestation"] = attest
         return res
 
     async def _in2n_on_hello(self, channel, params):
@@ -658,7 +668,13 @@ class FederationService:
               and self.risk.verify_possession(mem["pinned_key"], channel.nonce, signature)
               and self.risk.verify_member(member_id, fingerprint))
         if not ok:
-            quarantined = self.risk.record_auth_failure(member_id)
+            # FR-022: attribute the failure to its source so a foreign host cannot
+            # unpin a healthy member by spraying failing auths.
+            src = self._channel_source(channel)
+            est = (self.member_channels.get(member_id) and
+                   self._channel_source(self.member_channels[member_id]))
+            quarantined = self.risk.record_auth_failure(
+                member_id, source=src, established_source=est)
             if quarantined:
                 self.notify_member_quarantine(member_id)
             raise RpcError(_ERR_NOT_TRUSTED, "pinned-key auth failed")
@@ -666,8 +682,26 @@ class FederationService:
         channel.peer_identity = member_id
         channel.trusted = True
         self._register_member_channel(member_id, channel)
-        return {"risk": self.risk.get_risk().get("risk_name"), "trusted": True,
-                "member_state": "active"}
+        result = {"risk": self.risk.get_risk().get("risk_name"), "trusted": True,
+                  "member_state": "active"}
+        # US2 hub attestation: if the member challenged us with a nonce, prove we
+        # are the legitimate hub (CA-signed hub cert + signature over the nonce).
+        mnonce = params.get("member_nonce")
+        if mnonce:
+            attest = self.risk.attest_hub(bytes.fromhex(mnonce))
+            if attest:
+                result["hub_attestation"] = attest
+        return result
+
+    @staticmethod
+    def _channel_source(channel) -> Optional[str]:
+        """Best-effort remote address of an internal channel, for per-source
+        auth-failure accounting (FR-022)."""
+        try:
+            peer = channel.writer.get_extra_info("peername")
+            return f"{peer[0]}:{peer[1]}" if peer else None
+        except Exception:
+            return None
 
     async def _in2n_on_member_inventory(self, channel, params):
         """A member advertises its (scoped) capabilities. We already know its
@@ -936,21 +970,41 @@ class FederationService:
         cert_pem = self.risk.self_cert_pem()
         signature = self.risk.self_sign(nonce).hex()
         member_id = self.risk.self_member_id()
+        # US2: challenge the Border to attest it is our legitimate hub.
+        member_nonce = os.urandom(32)
         if enrollment_token:
             resp = await ch.call("in2n/enroll", {
                 "token": enrollment_token, "member_id": member_id,
                 "cert_pem": cert_pem, "signature": signature,
+                "member_nonce": member_nonce.hex(),
                 "scope": list(self.member_scope) or None,
                 "runtime_kind": os.environ.get("N2N_MEMBER_RUNTIME", "process"),
                 "transport_binding": "distributed"}, timeout=30.0)
+            # Persist the CA anchor delivered at enrollment.
+            if resp.get("risk_ca"):
+                self.risk.store_risk_anchor(resp["risk_ca"])
         else:
             resp = await ch.call("in2n/hello", {
                 "member_id": member_id,
                 "key_fingerprint": self.risk.fingerprint_of(cert_pem),
+                "member_nonce": member_nonce.hex(),
                 "signature": signature}, timeout=30.0)
+        # US2 hub attestation: if we hold an anchor, the Border MUST prove it is
+        # the legitimate hub for our risk; a missing/invalid attestation aborts.
+        anchor = self.risk.risk_anchor()
+        if anchor:
+            risk_name = (member_id.split("/", 1)[0] if member_id else
+                         (self.risk.get_risk() or {}).get("risk_name") or "risk")
+            attest = resp.get("hub_attestation")
+            if not attest or not self.risk.verify_hub_attestation(
+                    attest, anchor, member_nonce, risk_name):
+                writer.close()
+                raise RuntimeError("iN2N hub attestation failed — refusing to trust Border")
+            logger.info("iN2N: verified hub attestation for %s", risk_name)
         ch.trusted = True   # we pinned the Border endpoint at provisioning
         self.border_channel = ch
-        logger.info("iN2N: dialed Border %s:%s as %s (%s)", host, port, member_id, resp)
+        logger.info("iN2N: dialed Border %s:%s as %s (%s)", host, port, member_id,
+                    {k: v for k, v in resp.items() if k not in ("risk_ca", "hub_attestation")})
         return resp
 
     async def _in2n_member_submit(self, channel, params):
