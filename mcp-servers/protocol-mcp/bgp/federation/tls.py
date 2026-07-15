@@ -122,16 +122,20 @@ def peer_leaf_pem(sslobj) -> Optional[str]:
     return cert.public_bytes(serialization.Encoding.PEM).decode()
 
 
-def leaf_fingerprint(sslobj) -> Optional[str]:
-    """SHA-256 fingerprint (hex) of the peer leaf — the value we pin/compare."""
-    der = None
+def leaf_key_fingerprint(sslobj) -> Optional[str]:
+    """SPKI (public-key) SHA-256 of the peer leaf — the value we pin/compare.
+    Keyed on the public key, not the cert, so a pinned peer survives certificate
+    rotation with the same key (matches certs.key_fingerprint / risk.fingerprint_of)."""
     try:
         der = sslobj.getpeercert(binary_form=True)
     except Exception:
         return None
     if not der:
         return None
-    return x509.load_der_x509_certificate(der).fingerprint(hashes.SHA256()).hex()
+    pub_der = x509.load_der_x509_certificate(der).public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo)
+    return hashlib.sha256(pub_der).hexdigest()
 
 
 # ---- channel binding + proof-of-possession --------------------------------

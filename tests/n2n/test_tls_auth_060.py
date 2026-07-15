@@ -57,14 +57,14 @@ def _tls_pair(server_ctx, client_ctx, server_hostname=None):
 def test_pinned_model_handshake_and_fingerprint_pin():
     # Listener presents a self-signed (pinned-model) credential.
     cert_pem, key_pem = certs.create_self_signed("as65001-4.4.4.4")
-    expected_fp = certs.fingerprint(cert_pem)
+    expected_fp = certs.key_fingerprint(cert_pem)
     sctx = tls.server_context(cert_pem, key_pem)
     cctx, sni = tls.client_context("pinned")
 
     s, c = _tls_pair(sctx, cctx, server_hostname=sni)
     try:
         # Dialer (client) sees the listener leaf and can pin it — the TOFU value.
-        assert tls.leaf_fingerprint(c) == expected_fp
+        assert tls.leaf_key_fingerprint(c) == expected_fp
         # Both ends derive the same tls-server-end-point binding: the dialer from
         # the peer (listener) cert, the listener from its own cert.
         assert tls.binding_from_peer(c) == tls.binding_from_own_cert(cert_pem)

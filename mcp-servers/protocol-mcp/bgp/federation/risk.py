@@ -305,9 +305,19 @@ class RiskManager:
         self._conn.execute(
             "UPDATE enrollment_token SET spent_at=?, spent_by_member_id=? WHERE token_hash=?",
             (now, member_id, row["token_hash"]))
+        # FR-023: record that the credential fingerprint was surfaced at
+        # enrollment so an intercepted enrollment is detectable — the member
+        # recomputes this over the cert it holds and compares (a mismatch, i.e.
+        # the Border pinned a different key than the member generated, means an
+        # active attacker sat in the middle). Advisory (logged both sides), not a
+        # blocking prompt — scripted/bulk provisioning keeps working.
+        self._conn.execute(
+            "UPDATE member SET enroll_fingerprint_logged=1 WHERE member_id=?",
+            (member_id,))
         self._conn.commit()
-        logger.info("Enrolled member %s (fingerprint %s…)", member_id, fp[:12])
-        return {"member_id": member_id, "pinned": True, "state": STATE_ENROLLED}
+        logger.info("Enrolled member %s — confirm fingerprint out of band: %s", member_id, fp)
+        return {"member_id": member_id, "pinned": True, "state": STATE_ENROLLED,
+                "enroll_fingerprint": fp}
 
     # ---- member registry (FR-008/029) ---------------------------------
 
@@ -483,9 +493,53 @@ class RiskManager:
         logger.info("Removed member %s (unpinned; must re-enroll to return)", member_id)
         return True
 
-    def record_auth_failure(self, member_id: str) -> bool:
+    # ── feature 060 (FR-022): per-source failed-auth rate limiting so an
+    # attacker who can reach the listener cannot unpin a legitimate member by
+    # spraying failing authentications. The token bucket lives in the
+    # auth_failure_bucket table; only failures whose source matches the member's
+    # own established origin are allowed to count toward quarantine.
+    def note_source_failure(self, source: str, limit: int = 5,
+                            window_s: int = 60) -> bool:
+        """Record an unauthenticated failure from `source`; return True while the
+        source is within its rate budget, False once it should be dropped+audited."""
+        now = time.time()
+        row = self._conn.execute(
+            "SELECT count, window_start FROM auth_failure_bucket WHERE source=?",
+            (source,)).fetchone()
+        if row is None:
+            self._conn.execute(
+                "INSERT INTO auth_failure_bucket (source, count, window_start) VALUES (?,1,?)",
+                (source, str(now)))
+            self._conn.commit()
+            return True
+        start = float(row["window_start"] or now)
+        if now - start > window_s:
+            count = 1
+            start = now
+        else:
+            count = (row["count"] or 0) + 1
+        self._conn.execute(
+            "UPDATE auth_failure_bucket SET count=?, window_start=? WHERE source=?",
+            (count, str(start), source))
+        self._conn.commit()
+        return count <= limit
+
+    def record_auth_failure(self, member_id: str, source: Optional[str] = None,
+                            established_source: Optional[str] = None) -> bool:
         """Increment failure count; auto-quarantine at threshold (FR-013d).
-        Returns True if this failure triggered quarantine."""
+        Returns True if this failure triggered quarantine.
+
+        FR-022: when `source` is given and does NOT match the member's
+        established origin, the failure is rate-limited per source and MUST NOT
+        count toward quarantine — otherwise any host reaching the listener could
+        unpin a healthy member. Callers with no source (loopback/tests) keep the
+        original behavior."""
+        if source is not None and established_source is not None and source != established_source:
+            allowed = self.note_source_failure(source)
+            logger.info("iN2N auth failure for %s from foreign source %s — "
+                        "rate-limited, not counted toward quarantine%s",
+                        member_id, source, "" if allowed else " (over budget, dropped)")
+            return False
         mem = self.get_member(member_id)
         if not mem or mem["state"] in (STATE_REMOVED, STATE_QUARANTINED):
             return False

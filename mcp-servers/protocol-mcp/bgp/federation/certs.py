@@ -23,6 +23,7 @@ Design (specs/060 research R1/R5/R6):
 from __future__ import annotations
 
 import datetime
+import hashlib
 import ipaddress  # noqa: F401  (kept for parity with callers building IP SANs)
 import os
 from pathlib import Path
@@ -180,10 +181,24 @@ def issue_cert(ca_cert_pem: str, ca_key_pem: str, subject_cn: str,
 # ---- fingerprints + verification ------------------------------------------
 
 def fingerprint(cert_pem: str) -> str:
-    """SHA-256 over the certificate DER, lowercase hex — the value peers pin and
-    heartbeats carry (data-model.md). Accepts a full-chain PEM (uses the leaf)."""
+    """SHA-256 over the certificate DER, lowercase hex. This identifies a
+    SPECIFIC certificate (it changes on every re-issue) and is what the RFC 5929
+    tls-server-end-point channel binding uses. For the value peers PIN, use
+    key_fingerprint() instead — it survives rotation."""
     cert = x509.load_pem_x509_certificate(cert_pem.encode())
     return cert.fingerprint(hashes.SHA256()).hex()
+
+
+def key_fingerprint(cert_pem: str) -> str:
+    """SHA-256 over the SubjectPublicKeyInfo (public key) DER — the stable PIN
+    value used across eN2N and iN2N. Identical to risk.py's fingerprint_of(), and
+    unchanged when a certificate is renewed with the same key, so a pinned peer
+    stays pinned through rotation. This is what peers pin and heartbeats carry."""
+    cert = x509.load_pem_x509_certificate(cert_pem.encode())
+    pub_der = cert.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo)
+    return hashlib.sha256(pub_der).hexdigest()
 
 
 def san_names(cert_pem: str) -> list:
