@@ -107,6 +107,7 @@ async def _link(initiator, acceptor):
     acc = FederationChannel(r_ia, w_ai, local_identity=acceptor.local_identity,
                             peer_as=initiator.local_as, peer_router_id=initiator.router_id,
                             manager=acceptor.manager, is_initiator=False, handlers=acceptor.handlers)
+    acc.authenticated = True; acc.attestation = "possession"   # post-possession session (reconciled auth)
     initiator._register_channel(peer_identity(acceptor.local_as, acceptor.router_id), ini)
     acceptor._register_channel(peer_identity(initiator.local_as, initiator.router_id), acc)
     await ini.start(); await acc.start()

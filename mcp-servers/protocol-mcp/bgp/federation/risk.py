@@ -248,6 +248,34 @@ class RiskManager:
         safe = member_id.replace("/", "__")
         (self.pinned_dir / f"{safe}.crt").unlink(missing_ok=True)
 
+    # ---- eN2N peer pinning (TOFU) — reconciled from Josh/TunnelMind ----
+    # External claws are NOT risk members (no enrollment token, no scope), so they
+    # pin to a cert file under pinned/ keyed by eN2N identity — reusing the same
+    # store + fingerprint primitive, namespaced ("en2n__") so an external peer can
+    # never overwrite an internal member's pin.
+    def _peer_pin_path(self, ident: str):
+        return self.pinned_dir / f"en2n__{ident.replace('/', '__')}.crt"
+
+    def check_peer_pin(self, ident: str, cert_pem: str) -> str:
+        """Trust-on-first-use for a federated peer's self-signed cert.
+          'new'      first contact — cert is now pinned to this identity.
+          'match'    presented cert matches the pinned key.
+          'mismatch' key changed for a known identity — caller MUST reject and
+                     alert the operator; this NEVER silently re-pins.
+        Uses the SPKI (key) fingerprint so a peer survives cert rotation with the
+        same key (consistent with certs.key_fingerprint / feature 060)."""
+        path = self._peer_pin_path(ident)
+        if not path.exists():
+            path.write_text(cert_pem)
+            return "new"
+        if self.fingerprint_of(path.read_text()) == self.fingerprint_of(cert_pem):
+            return "match"
+        return "mismatch"
+
+    def repin_peer(self, ident: str, cert_pem: str):
+        """Deliberate operator re-pin after a verified key rotation (never automatic)."""
+        self._peer_pin_path(ident).write_text(cert_pem)
+
     # ---- role model (FR-002/003/004/015) ------------------------------
 
     def get_risk(self) -> dict:
