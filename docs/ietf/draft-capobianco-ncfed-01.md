@@ -147,7 +147,7 @@ to them. (The Border is one member of the risk, not the risk itself.)
 NCFED assumes **long-lived sessions between a small number of mutually known
 peers**, established deliberately by their operators. It is **not** designed for
 anonymous, open, or large-scale federation, and it does not attempt spam
-resistance, discovery of unknown peers, or public-key infrastructure. These
+resistance, discovery of unknown peers, or public key infrastructure. These
 assumptions shape the trust models ({{trust}}) and the Security Considerations
 ({{seccons}}), and are the reason the current design accepts an underlay-dependent
 trust model rather than defining its own cryptographic peer authentication (see
@@ -210,7 +210,7 @@ The NCFED stack is layered as shown in {{fig-stack}}.
 +---------------------------------------------------------------+
 | Encoding: UTF-8 JSON-RPC 2.0                                  |
 +---------------------------------------------------------------+
-| Framing:  [4-octet BE length][1-octet flags][payload]        |
+| Framing:  <4-octet BE length><1-octet flags><payload>        |
 |           flags bit0 = CONTINUATION; length 0 = heartbeat     |
 +---------------------------------------------------------------+
 | Federation handshake (13 octets):                            |

@@ -1554,7 +1554,7 @@ to them. (The Border is one member of the risk, not the risk itself.)<a href="#s
 <p id="section-1.1-2">NCFED assumes <strong>long-lived sessions between a small number of mutually known
 peers</strong>, established deliberately by their operators. It is <strong>not</strong> designed for
 anonymous, open, or large-scale federation, and it does not attempt spam
-resistance, discovery of unknown peers, or public-key infrastructure. These
+resistance, discovery of unknown peers, or public key infrastructure. These
 assumptions shape the trust models (<a href="#trust" class="auto internal xref">Section 12</a>) and the Security Considerations
 (<a href="#seccons" class="auto internal xref">Section 14</a>), and are the reason the current design accepts an underlay-dependent
 trust model rather than defining its own cryptographic peer authentication (see
@@ -1651,7 +1651,7 @@ to; they are assigned by operator convention.<a href="#section-2-3.14.1" class="
 +---------------------------------------------------------------+
 | Encoding: UTF-8 JSON-RPC 2.0                                  |
 +---------------------------------------------------------------+
-| Framing:  [4-octet BE length][1-octet flags][payload]        |
+| Framing:  &lt;4-octet BE length&gt;&lt;1-octet flags&gt;&lt;payload&gt;        |
 |           flags bit0 = CONTINUATION; length 0 = heartbeat     |
 +---------------------------------------------------------------+
 | Federation handshake (13 octets):                            |
