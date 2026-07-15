@@ -60,9 +60,21 @@ external federation, we built the migration first: one command, preserves all yo
 state, and an unpatched peer gets a clear "run the patch" message instead of a
 silent failure.
 
+## We cut over for real
+
+This isn't a design doc — the first claw is live on it. `netclaw.automateyournetwork.ca`
+now holds a genuine Let's Encrypt certificate (issued through GoDaddy's DNS API
+via a small hook we had to write, because GoDaddy's new tokens don't speak the
+shape the standard ACME client expects), federation runs certificate-authenticated,
+and the credential auto-renews. The migration even caught its own bug: the patch
+installer wrote config to the wrong env file and the daemon didn't pick it up —
+found it, fixed it, shipped the fix. That's the system working as intended:
+change, verify, correct, in the open.
+
 ## Try it
 
 Existing operators: `scripts/patch-claw-certs.sh`. New to peering: see the
 federation guide. Certificates in, cleartext out.
 
-*Written collaboratively by John Capobianco and Claude.*
+*Written collaboratively by John Capobianco and Claude, with a security fix
+contributed by Josh (TunnelMind).*
