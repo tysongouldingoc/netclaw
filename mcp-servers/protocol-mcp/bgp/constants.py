@@ -241,11 +241,13 @@ N2N_QUARANTINE_THRESHOLD_DEFAULT = 5     # consecutive auth/health failures → 
 # single-byte discriminator gains one TLS branch (research.md R4).
 TLS_FIRST_BYTE = 0x16                     # TLS 1.x handshake record content type
 NCFED_ALPN = "ncfed/1"                    # ALPN offered/accepted on secured channels
-# Channel binding: both sides derive keying material with this label and the
-# dialer signs (nonce || exporter) so the proof-of-possession is bound to the
-# specific TLS session (RFC 9266 pattern; closes the 059 "no channel binding" note).
-TLS_EXPORTER_LABEL = b"EXPORTER-ncfed-claw-auth"
-TLS_EXPORTER_LEN = 32
+# Channel binding: the dialer signs (nonce || binding) where binding is the
+# tls-server-end-point value — SHA-256 of the listener's certificate (RFC 5929).
+# Both ends know it on every Python/TLS version (the RFC 5705 tls-exporter is
+# only exposed in Python's ssl from 3.13), and it closes the 059 "no channel
+# binding" note: a MITM's own cert yields a different binding, so a relayed
+# dialer signature fails to verify at the true listener.
+TLS_BINDING_TYPE = "tls-server-end-point"
 
 # Trust models recorded per external peer (spec FR-002). 'legacy' = a pre-060
 # cleartext peer, refused in production until it patches (FR-021).
