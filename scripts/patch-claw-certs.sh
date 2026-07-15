@@ -87,13 +87,21 @@ print("migration + credentials done")
 PY
 
 # --- 4. env: turn on secured channels ---
-ENVF="$HOME/.openclaw/.env"
+# IMPORTANT: the systemd --user mesh daemon reads its own EnvironmentFile (feature
+# 057, ~/.openclaw/mesh.systemd.env), NOT ~/.openclaw/.env — so cert config MUST
+# go there or the running daemon never sees N2N_CERT_MODE. Detect the unit's
+# EnvironmentFile; fall back to mesh.systemd.env, then to ~/.openclaw/.env for a
+# non-systemd (dev) claw.
+ENVF="$(systemctl --user cat netclaw-mesh.service 2>/dev/null \
+        | sed -n 's/^EnvironmentFile=-\{0,1\}//p' | head -1)"
+[ -z "$ENVF" ] && ENVF="$HOME/.openclaw/mesh.systemd.env"
+[ -f "$ENVF" ] || ENVF="$HOME/.openclaw/.env"
 touch "$ENVF"
 set_env() { grep -q "^$1=" "$ENVF" && sed -i "s|^$1=.*|$1=$2|" "$ENVF" || echo "$1=$2" >> "$ENVF"; }
 set_env N2N_CERT_MODE "$ENFORCE"
 [ -n "$DOMAIN" ] && set_env N2N_CLAW_DOMAIN "$DOMAIN"
 [ -n "$PROVIDER" ] && set_env N2N_ACME_DNS_PROVIDER "$PROVIDER"
-say "set N2N_CERT_MODE=$ENFORCE${DOMAIN:+, N2N_CLAW_DOMAIN=$DOMAIN}"
+say "set N2N_CERT_MODE=$ENFORCE${DOMAIN:+, N2N_CLAW_DOMAIN=$DOMAIN} in $ENVF"
 
 # --- 5. restart services in dependency order (feature 057) ---
 if command -v systemctl >/dev/null && systemctl --user list-units >/dev/null 2>&1; then
