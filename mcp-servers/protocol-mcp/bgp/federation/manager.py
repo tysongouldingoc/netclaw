@@ -305,6 +305,41 @@ class FederationManager:
     def list_peers(self) -> list:
         return [dict(r) for r in self._conn.execute("SELECT * FROM federation_peer ORDER BY identity")]
 
+    # ---- feature 060: per-peer channel trust ---------------------------
+
+    def set_peer_pin(self, ident: str, pin_fp: str, *, is_next: bool = False):
+        """Record a peer's pinned key fingerprint (pinned trust model). `is_next`
+        stores the rotation-overlap successor pin (FR-013) instead of the active."""
+        col = "pinned_fp_next" if is_next else "pinned_fp"
+        self._conn.execute(
+            f"UPDATE federation_peer SET {col}=?, updated_at=? WHERE identity=?",
+            (pin_fp, _now(), ident))
+        self._conn.commit()
+
+    def set_peer_trust(self, ident: str, trust_model: str,
+                       claw_domain: Optional[str] = None, verify_state: Optional[str] = None):
+        """Set/upgrade a peer's trust model (local operator action only — FR-007).
+        Records the claw_domain as a verified attribute of the unchanged identity."""
+        sets, vals = ["trust_model=?"], [trust_model]
+        if claw_domain is not None:
+            sets.append("claw_domain=?"); vals.append(claw_domain)
+        if verify_state is not None:
+            sets.append("verify_state=?"); vals.append(verify_state)
+        sets.append("updated_at=?"); vals.append(_now())
+        vals.append(ident)
+        self._conn.execute(
+            f"UPDATE federation_peer SET {', '.join(sets)} WHERE identity=?", vals)
+        self._conn.commit()
+
+    def set_peer_cred_health(self, ident: str, fp: str, not_after: Optional[str],
+                             renew_state: Optional[str]):
+        """Store a peer's credential health as last reported via heartbeat (FR-024)."""
+        self._conn.execute(
+            "UPDATE federation_peer SET peer_cred_fp=?, peer_cred_not_after=?, "
+            "peer_renew_state=?, updated_at=? WHERE identity=?",
+            (fp, not_after, renew_state, _now(), ident))
+        self._conn.commit()
+
     def _set_state(self, ident: str, state: PeerState):
         self._conn.execute("UPDATE federation_peer SET state=?, updated_at=? WHERE identity=?",
                            (state.value, _now(), ident))

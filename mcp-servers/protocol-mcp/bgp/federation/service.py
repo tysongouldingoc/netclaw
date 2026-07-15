@@ -36,6 +36,14 @@ class FederationService:
         self.channels: Dict[str, FederationChannel] = {}
         os.environ["N2N_LOCAL_IDENTITY"] = self.local_identity
 
+        # ── feature 060: secured channels. Default OFF so this code changes
+        # nothing until an operator opts in; 'on' upgrades every eN2N channel to
+        # TLS + channel-bound auth; 'enforce' additionally refuses cleartext.
+        _mode = os.environ.get("N2N_CERT_MODE", "off").strip().lower()
+        self.cert_mode = _mode in ("on", "enforce", "true", "1", "yes")
+        self.cert_enforce = _mode == "enforce"
+        self._host_cred: Optional[tuple] = None   # (cert_pem, key_pem), lazily created
+
         # US2/US3 engines
         from .authorization import Authorizer
         from .invocation import Invoker
@@ -233,6 +241,97 @@ class FederationService:
                     return
                 await asyncio.sleep(0.2)
 
+    # ---- feature 060: secured-channel credential + upgrade ------------
+
+    def host_credential(self) -> tuple:
+        """This claw's pinned-model credential (self-signed cert + key), created
+        once under keys/host/. The domain-verified credential (ACME) is layered
+        on separately; this is always present as the pinned fallback."""
+        if self._host_cred is None:
+            from . import certs
+            kd = certs.keys_dir(str(self.manager.base_dir))
+            crt, key = kd / "host" / "host.crt", kd / "host" / "host.key"
+            if crt.exists() and key.exists():
+                self._host_cred = (crt.read_text(), key.read_text())
+            else:
+                cert_pem, key_pem = certs.create_self_signed(self.local_identity)
+                crt.write_text(cert_pem)
+                certs._write_secret(key, key_pem)
+                self._host_cred = (cert_pem, key_pem)
+        return self._host_cred
+
+    async def _secure_dial(self, reader, writer, ident: str):
+        """Dialer side (FR-002): upgrade the connection to TLS, verify the
+        listener (domain-verified chain+SAN or pinned fingerprint/TOFU), and
+        prove our own key possession bound to the session. Returns the upgraded
+        (reader, writer) or None on refusal."""
+        from . import tls, certs
+        peer = self.manager.get_peer(ident) or {}
+        trust = peer.get("trust_model") or "pinned"
+        if trust == "legacy":
+            trust = "pinned"  # first secured contact with a known peer → pin it
+        claw_domain = peer.get("claw_domain")
+        cctx, server_hostname = tls.client_context(trust, claw_domain=claw_domain)
+        reader, writer = await tls.upgrade_to_tls(
+            reader, writer, cctx, server_side=False, server_hostname=server_hostname)
+        sslobj = writer.get_extra_info("ssl_object")
+        if trust == "domain-verified":
+            names = certs.san_names(tls.peer_leaf_pem(sslobj) or "")
+            if claw_domain and claw_domain not in names:
+                logger.warning("Refusing %s: cert SAN %s != claw_domain %s",
+                               ident, names, claw_domain)
+                self._cert_refuse(ident, f"SAN {names} != {claw_domain}")
+                return None
+        else:  # pinned — TOFU on first contact, else fingerprint must match
+            pin = tls.leaf_key_fingerprint(sslobj)
+            stored = peer.get("pinned_fp")
+            if stored and pin not in (stored, peer.get("pinned_fp_next")):
+                logger.warning("Refusing %s: pinned key changed", ident)
+                self._cert_refuse(ident, "pinned key changed — re-verify out of band")
+                return None
+            if not stored:
+                self.manager.set_peer_pin(ident, pin)  # TOFU
+        cert_pem, key_pem = self.host_credential()
+        ok = await tls.dialer_authenticate(reader, writer, sslobj,
+                                           host_cert_pem=cert_pem, host_key_pem=key_pem)
+        if not ok:
+            self._cert_refuse(ident, "listener rejected our proof")
+            return None
+        self.manager.set_peer_trust(ident, trust, verify_state="verified")
+        return reader, writer
+
+    async def _secure_accept(self, reader, writer, ident: str):
+        """Listener side: upgrade to TLS, prove our key to the dialer via the
+        nonce it will verify, and authenticate the dialer (pin/TOFU its key).
+        Returns upgraded (reader, writer) or None on refusal."""
+        from . import tls, certs
+        cert_pem, key_pem = self.host_credential()
+        reader, writer = await tls.upgrade_to_tls(
+            reader, writer, tls.server_context(cert_pem, key_pem), server_side=True)
+        dialer_cert, ok = await tls.listener_authenticate(reader, writer,
+                                                          host_cert_pem=cert_pem)
+        if not ok:
+            self._cert_refuse(ident, "dialer proof invalid")
+            return None
+        peer = self.manager.get_peer(ident) or {}
+        pin = certs.key_fingerprint(dialer_cert)
+        stored = peer.get("pinned_fp")
+        if stored and pin not in (stored, peer.get("pinned_fp_next")):
+            self._cert_refuse(ident, "dialer pinned key changed")
+            return None
+        if not stored:
+            self.manager.set_peer_pin(ident, pin)  # TOFU (both sides pin)
+        return reader, writer
+
+    def _cert_refuse(self, ident: str, reason: str):
+        self.manager.set_peer_trust(ident, (self.manager.get_peer(ident) or {}).get(
+            "trust_model") or "pinned", verify_state="refused-pending-patch")
+        try:
+            self.audit.record_cert_event(kind="verify-refused", subject_identity=ident,
+                                          detail=reason)
+        except Exception:
+            pass
+
     # ---- inbound channel (called from agent discrimination) -----------
 
     def _en2n_allowed(self) -> bool:
@@ -263,6 +362,20 @@ class FederationService:
         # Send our handshake reply
         writer.write(build_handshake(self.local_as, self.router_id))
         await writer.drain()
+        # feature 060: upgrade to a secured channel before any federation traffic.
+        if self.cert_mode:
+            try:
+                upgraded = await self._secure_accept(reader, writer, ident)
+            except Exception as e:
+                logger.warning("Secure accept from %s failed: %s", ident, e)
+                upgraded = None
+            if upgraded is None:
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+                return
+            reader, writer = upgraded
         ch = FederationChannel(reader, writer, local_identity=self.local_identity,
                                peer_as=peer_as, peer_router_id=router_id,
                                manager=self.manager, is_initiator=False, handlers=self.handlers)
@@ -309,6 +422,13 @@ class FederationService:
                 logger.warning("Handshake mismatch opening channel to %s", ident)
                 writer.close()
                 return
+            # feature 060: upgrade to a secured channel before any federation traffic.
+            if self.cert_mode:
+                upgraded = await self._secure_dial(reader, writer, ident)
+                if upgraded is None:
+                    writer.close()
+                    return
+                reader, writer = upgraded
             ch = FederationChannel(reader, writer, local_identity=self.local_identity,
                                    peer_as=peer_as, peer_router_id=router_id,
                                    manager=self.manager, is_initiator=True, handlers=self.handlers)

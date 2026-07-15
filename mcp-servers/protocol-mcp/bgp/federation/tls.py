@@ -29,6 +29,7 @@ binding than the real listener expects, so the dialer's signature won't verify.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import ssl
 from typing import Optional, Tuple
@@ -161,11 +162,85 @@ def binding_from_own_cert(cert_pem: str) -> bytes:
     return _der_sha256(leaf.public_bytes(serialization.Encoding.DER))
 
 
+async def upgrade_to_tls(reader, writer, ctx: ssl.SSLContext, *, server_side: bool,
+                         server_hostname: Optional[str] = None):
+    """STARTTLS-style upgrade of an existing NCFED stream to TLS in place.
+
+    Secured NCFED keeps the cleartext 'N'+magic+handshake discrimination (so the
+    existing shared-port peek is untouched — research R4 revised), then upgrades
+    the SAME connection to TLS before any sensitive payload. This sidesteps the
+    asyncio peek-vs-start_tls conflict: nothing after the handshake has been read,
+    so start_tls sees a clean TLS ClientHello.
+
+    Returns the SAME (reader, writer) with their transport swapped to the TLS
+    transport. Raises ssl.SSLError / OSError on handshake failure."""
+    loop = asyncio.get_event_loop()
+    transport = writer.transport
+    protocol = transport.get_protocol()
+    new_tr = await loop.start_tls(
+        transport, protocol, ctx,
+        server_side=server_side, server_hostname=server_hostname)
+    # Redirect the stream objects at the new TLS transport. The StreamReader keeps
+    # being fed by the same protocol (now decrypted data); the writer must send
+    # through the TLS transport.
+    reader._transport = new_tr
+    writer._transport = new_tr
+    if getattr(protocol, "_stream_writer", None) is not None:
+        protocol._stream_writer._transport = new_tr
+    return reader, writer
+
+
 def sign_auth(key_pem: str, nonce: bytes, exporter: bytes) -> bytes:
     """Dialer signs (nonce || exporter) with its private key — proves possession
     of the key behind the certificate it presented, bound to this TLS session."""
     key = serialization.load_pem_private_key(key_pem.encode(), password=None)
     return key.sign(nonce + exporter, ec.ECDSA(hashes.SHA256()))
+
+
+# ---- framed exchange used for the post-upgrade auth handshake -------------
+
+import os as _os  # noqa: E402
+
+
+def _frame(data: bytes) -> bytes:
+    return len(data).to_bytes(4, "big") + data
+
+
+async def _read_frame(reader, timeout: float = 10.0) -> bytes:
+    n = int.from_bytes(await asyncio.wait_for(reader.readexactly(4), timeout), "big")
+    if n > 1 << 20:  # 1 MB guard — auth frames are tiny
+        raise ValueError("oversized auth frame")
+    return await asyncio.wait_for(reader.readexactly(n), timeout)
+
+
+async def listener_authenticate(reader, writer, *, host_cert_pem: str):
+    """Listener side of the post-TLS auth: issue a nonce, receive the dialer's
+    certificate + signature, verify the signature is bound to THIS session (our
+    cert's end-point binding). Returns (dialer_cert_pem, ok: bool)."""
+    nonce = _os.urandom(32)
+    writer.write(_frame(nonce))
+    await writer.drain()
+    dialer_cert = (await _read_frame(reader)).decode()
+    sig = await _read_frame(reader)
+    ok = verify_auth(dialer_cert, sig, nonce, binding_from_own_cert(host_cert_pem))
+    writer.write(_frame(b"ok" if ok else b"no"))
+    await writer.drain()
+    return dialer_cert, ok
+
+
+async def dialer_authenticate(reader, writer, sslobj, *, host_cert_pem: str,
+                              host_key_pem: str) -> bool:
+    """Dialer side: read the listener's nonce, sign (nonce || server-end-point
+    binding) with our key, send our cert + signature, await the verdict."""
+    nonce = await _read_frame(reader)
+    binding = binding_from_peer(sslobj)
+    if binding is None:
+        return False
+    sig = sign_auth(host_key_pem, nonce, binding)
+    writer.write(_frame(host_cert_pem.encode()))
+    writer.write(_frame(sig))
+    await writer.drain()
+    return (await _read_frame(reader)) == b"ok"
 
 
 def verify_auth(cert_pem: str, sig: bytes, nonce: bytes, exporter: bytes) -> bool:
