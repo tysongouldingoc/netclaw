@@ -174,6 +174,41 @@ CREATE TABLE IF NOT EXISTS enrollment_token (
 """
 
 
+# feature 060: claw-certification tables. Kept separate from SCHEMA so the
+# migration path (executescript after column ALTERs) is explicit and idempotent.
+SCHEMA_060 = """
+CREATE TABLE IF NOT EXISTS credential (
+    credential_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind             TEXT NOT NULL,       -- acme | host-pinned | risk-ca | hub | member
+    subject_identity TEXT NOT NULL,       -- claw domain, as<ASN>-<router-id>, risk name, member_id
+    fingerprint      TEXT NOT NULL UNIQUE,-- SHA-256 over DER, hex
+    issuer           TEXT,
+    not_before       TEXT,
+    not_after        TEXT,
+    renew_after      TEXT,                -- issued + 2/3 lifetime (NULL for observed-only)
+    state            TEXT NOT NULL DEFAULT 'active',  -- active | overlap | retired | failed
+    cert_pem         TEXT,                -- PUBLIC cert only; private keys live under keys/
+    key_path         TEXT,               -- path for locally-held keys, else NULL
+    created_at       TEXT,
+    updated_at       TEXT
+);
+CREATE TABLE IF NOT EXISTS rotation_event (
+    event_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_identity TEXT,
+    credential_id    INTEGER,
+    kind             TEXT NOT NULL,       -- renewed|rotated|overlap-opened|overlap-closed|renewal-failed|emergency-rekey|verify-refused
+    detail           TEXT,
+    at               TEXT
+);
+CREATE TABLE IF NOT EXISTS auth_failure_bucket (
+    source           TEXT PRIMARY KEY,    -- remote addr / channel origin of unauth failures
+    member_id        TEXT,                -- asserted identity (informational)
+    count            INTEGER NOT NULL DEFAULT 0,
+    window_start     TEXT
+);
+"""
+
+
 class FederationManager:
     def __init__(self, db_path: Optional[str] = None, base_dir: Optional[str] = None):
         base = Path(base_dir or os.path.expanduser("~/.openclaw/n2n"))
@@ -205,11 +240,35 @@ class FederationManager:
             ("member", "managed_by", "TEXT NOT NULL DEFAULT 'cold'"),
             ("member", "service_unit", "TEXT"),
             ("member", "component_scan", "TEXT"),
+            # feature 060: claw certification — channel trust state.
+            #   trust_model     — 'domain-verified' | 'pinned' | 'legacy' (pre-060)
+            #   claw_domain     — verified attribute of the unchanged identity key (FR-003a)
+            #   pinned_fp       — SHA-256 pin (pinned model); pinned_fp_next during overlap
+            #   peer_cred_*     — peer credential health last seen via heartbeat (FR-024)
+            #   verify_state    — 'verified' | 'mismatch' | 'refused-pending-patch'
+            ("federation_peer", "trust_model", "TEXT NOT NULL DEFAULT 'legacy'"),
+            ("federation_peer", "claw_domain", "TEXT"),
+            ("federation_peer", "pinned_fp", "TEXT"),
+            ("federation_peer", "pinned_fp_next", "TEXT"),
+            ("federation_peer", "peer_cred_fp", "TEXT"),
+            ("federation_peer", "peer_cred_not_after", "TEXT"),
+            ("federation_peer", "peer_renew_state", "TEXT"),
+            ("federation_peer", "verify_state", "TEXT"),
+            # feature 060: member credential provenance + health.
+            #   credential_state — 'authority' (risk-CA-issued) | 'legacy' (pre-060 pin)
+            ("member", "credential_state", "TEXT NOT NULL DEFAULT 'legacy'"),
+            ("member", "cred_fp", "TEXT"),
+            ("member", "cred_not_after", "TEXT"),
+            ("member", "renew_state", "TEXT"),
+            ("member", "enroll_fingerprint_logged", "INTEGER NOT NULL DEFAULT 0"),
         ]:
             try:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
                 pass  # column already exists
+        # feature 060: new tables (credential registry, rotation audit, per-source
+        # failed-auth rate limiting). additive + idempotent (data-model.md §1/4/5).
+        self._conn.executescript(SCHEMA_060)
         self._conn.commit()
         logger.info("FederationManager ready (db=%s)", self.db_path)
 
