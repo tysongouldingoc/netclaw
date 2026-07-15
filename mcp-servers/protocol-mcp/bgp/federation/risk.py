@@ -122,12 +122,16 @@ class RiskManager:
         cert_pem, _ = self.ensure_self_identity(self.self_member_id() or self.role())
         return cert_pem
 
-    def self_sign(self, nonce: bytes) -> bytes:
-        """Sign a Border-issued nonce with this claw's own private key — proves
-        possession of the self-signed key whose cert the Border pinned (R3)."""
+    def self_sign(self, nonce: bytes, binding: bytes = b"") -> bytes:
+        """Sign a peer/Border-issued nonce with this claw's own private key —
+        proves possession of the self-signed key whose cert was pinned. `binding`
+        is the optional tls-server-end-point channel binding (feature 060): when
+        the channel is TLS, the caller passes the SHA-256 of the peer's server
+        certificate so the proof is bound to this session (RFC 5929). Empty on a
+        cleartext channel (and for iN2N, which is unchanged)."""
         self.ensure_self_identity(self.self_member_id() or self.role())
         key_pem = (self.keys_dir / "self.key").read_text()
-        return self.sign_challenge(key_pem, nonce)
+        return self.sign_challenge(key_pem, nonce + binding)
 
     @staticmethod
     def sign_challenge(key_pem: str, nonce: bytes) -> bytes:
@@ -215,16 +219,20 @@ class RiskManager:
         return RiskManager.verify_possession(hub_cert, member_nonce, sig)
 
     @staticmethod
-    def verify_possession(cert_pem: str, nonce: bytes, signature: bytes) -> bool:
-        """Verify a signature over `nonce` was made by the private key matching
-        `cert_pem` — impersonation resistance for the internal channel (FR-013)."""
+    def verify_possession(cert_pem: str, nonce: bytes, signature: bytes,
+                          binding: bytes = b"") -> bool:
+        """Verify a signature over `nonce || binding` was made by the private key
+        matching `cert_pem` — impersonation resistance. `binding` is the optional
+        tls-server-end-point channel binding (feature 060); it MUST match the
+        value the signer used, so a proof made for one TLS session cannot be
+        relayed to another. Empty for cleartext / iN2N (unchanged)."""
         from cryptography import x509
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import ec
         from cryptography.exceptions import InvalidSignature
         try:
             cert = x509.load_pem_x509_certificate(cert_pem.encode())
-            cert.public_key().verify(signature, nonce, ec.ECDSA(hashes.SHA256()))
+            cert.public_key().verify(signature, nonce + binding, ec.ECDSA(hashes.SHA256()))
             return True
         except (InvalidSignature, ValueError, TypeError):
             return False

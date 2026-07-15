@@ -155,7 +155,11 @@ class FederationService:
             cert_pem = params.get("cert_pem", "")
             signature = bytes.fromhex(params.get("signature", "") or "")
             if cert_pem:
-                if not self.risk.verify_possession(cert_pem, channel.nonce, signature):
+                # On a TLS channel, bind the proof to this session via the
+                # tls-server-end-point value (hash of OUR certificate, which the
+                # dialer also signed over); empty on cleartext (RFC 5929).
+                binding = self._channel_binding_own()
+                if not self.risk.verify_possession(cert_pem, channel.nonce, signature, binding):
                     logger.warning("n2n.auth.failed: possession proof failed for claimed %s",
                                    channel.peer_identity)
                     channel._auth_failed = True
@@ -330,6 +334,28 @@ class FederationService:
             self.manager.set_peer_cred_health(
                 channel.peer_identity, fp, cred.get("not_after"), cred.get("renew_state"))
         return None  # notification — no reply
+
+    def _channel_binding(self, writer) -> bytes:
+        """Dialer side: the tls-server-end-point binding (SHA-256 of the peer's
+        server certificate) for the current channel, or b"" on cleartext. The
+        dialer includes this in its possession signature (RFC 5929)."""
+        if not self.cert_mode:
+            return b""
+        from . import tls
+        sslobj = writer.get_extra_info("ssl_object")
+        return (tls.binding_from_peer(sslobj) or b"") if sslobj else b""
+
+    def _channel_binding_own(self) -> bytes:
+        """Acceptor side: the same binding computed from OUR presented certificate
+        (equals the dialer's _channel_binding for the same session), or b"" on
+        cleartext."""
+        if not self.cert_mode:
+            return b""
+        from . import tls
+        try:
+            return tls.binding_from_own_cert(self.host_credential()[0])
+        except Exception:
+            return b""
 
     def _cred_status(self) -> Optional[dict]:
         """This claw's credential health to advertise on heartbeats (FR-024)."""
@@ -544,12 +570,16 @@ class FederationService:
             self._register_channel(ident, ch)
             await ch.start()
             from .negotiate import local_descriptor, normalize
-            # Prove possession of our key over the acceptor's nonce (reuses risk.py).
+            # Prove possession of our key over the acceptor's nonce (reuses risk.py),
+            # bound to this TLS session by the tls-server-end-point value (the hash
+            # of the listener's certificate we just verified) when encrypted — so
+            # the proof cannot be relayed to a different session (RFC 5929).
+            binding = self._channel_binding(writer)
             resp = await ch.call("n2n/hello", {"identity": self.local_identity,
                                                "display_name": self.display_name,
                                                "versions": ["1.0"],
                                                "cert_pem": self.risk.self_cert_pem(),
-                                               "signature": self.risk.self_sign(nonce).hex(),
+                                               "signature": self.risk.self_sign(nonce, binding).hex(),
                                                "capabilities": local_descriptor()})
             ch.display_name = resp.get("display_name")
             self.peer_caps[ident] = normalize(resp.get("capabilities"))  # US4

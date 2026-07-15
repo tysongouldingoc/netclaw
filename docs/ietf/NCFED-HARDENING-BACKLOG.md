@@ -90,7 +90,7 @@ Source of truth verified 2026-07-14 against `mcp-servers/protocol-mcp/bgp/` and
   path named.
 
 ### H8. iN2N Border-to-member authentication + channel binding
-- **STATUS: RESOLVED** — feature 060 / draft -01 §iN2N. Border-as-CA hub attestation: member verifies the Border's CA-signed hub cert chains to its enrolled anchor + signed the member's nonce. Mutual auth. (tls-server-end-point channel binding primitive available; not yet on the primary path — see draft §6.3.)
+- **STATUS: RESOLVED** — feature 060 / draft -01 §iN2N. Border-as-CA hub attestation: member verifies the Border's CA-signed hub cert chains to its enrolled anchor + signed the member's nonce. Mutual auth. (tls-server-end-point channel binding now wired into the primary channel path — draft §6.3.)
 - **Gap:** member authenticates to Border, but Border is **not** authenticated to the
   member; optional TLS uses `CERT_NONE` (no channel binding). MITM can relay the
   nonce / interpose post-auth.

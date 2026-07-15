@@ -1894,11 +1894,15 @@ key in the presented certificate; a certificate the caller cannot sign for is an
 active forgery and <span class="bcp14">MUST</span> be rejected with the channel closed.<a href="#section-6.3-2.2.1" class="pilcrow">¶</a></p>
 </li>
           <li id="section-6.3-2.3">
-            <p id="section-6.3-2.3.1">Because the nonce is fresh, single-use, and -- on an encrypted channel -- delivered
-confidentially under a server certificate the initiator has verified, a proof
-cannot be replayed or relayed to a different session. An implementation <span class="bcp14">MAY</span> further
-bind the proof to the transport by including the tls-server-end-point channel
-binding <span>[<a href="#RFC5929" class="cite xref">RFC5929</a>]</span> (the hash of the acceptor's certificate) in the signed value.<a href="#section-6.3-2.3.1" class="pilcrow">¶</a></p>
+            <p id="section-6.3-2.3.1">On an encrypted channel the signed value is <code>nonce || B</code>, where <code>B</code> is the
+tls-server-end-point channel binding <span>[<a href="#RFC5929" class="cite xref">RFC5929</a>]</span>: the SHA-256 of the acceptor's
+certificate. The initiator computes <code>B</code> from the certificate it verified during
+the TLS handshake, and the acceptor from its own certificate; the two agree only
+for the same session, so a proof captured on one channel does not verify on
+another even if the nonce were reused. On a cleartext channel <code>B</code> is empty and the
+proof is over the nonce alone. Because the nonce is fresh, single-use, and -- on an
+encrypted channel -- delivered confidentially under a verified server certificate
+and bound to it, a proof cannot be replayed or relayed to a different session.<a href="#section-6.3-2.3.1" class="pilcrow">¶</a></p>
 </li>
         </ol>
 <p id="section-6.3-3">The acceptor authenticates the initiator by this proof; the initiator authenticates the
@@ -2509,11 +2513,12 @@ considers card contents sensitive <span class="bcp14">SHOULD</span> operate in e
 the possession tier.<a href="#section-14.2-3.2.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
-<p id="section-14.2-4">Deployments <span class="bcp14">SHOULD</span> still apply defence in depth: the shared-port source controls of
-<a href="#seccons-port" class="auto internal xref">Section 14.1</a>, the default-deny per-peer authorization of <a href="#seccons-deleg" class="auto internal xref">Section 14.5</a>, and, for
-the strongest binding, the tls-server-end-point channel binding of <a href="#channel-sec-pop" class="auto internal xref">Section 6.3</a>.
-An emerging agent-identity and naming layer such as the Agent Name Service <span>[<a href="#ANS" class="cite xref">ANS</a>]</span> could
-in future supply discovery and naming above this authentication layer.<a href="#section-14.2-4" class="pilcrow">¶</a></p>
+<p id="section-14.2-4">On an encrypted channel the possession proof is bound to the session by the
+tls-server-end-point channel binding (<a href="#channel-sec-pop" class="auto internal xref">Section 6.3</a>), so it cannot be relayed.
+Deployments <span class="bcp14">SHOULD</span> still apply defence in depth: the shared-port source controls of
+<a href="#seccons-port" class="auto internal xref">Section 14.1</a> and the default-deny per-peer authorization of <a href="#seccons-deleg" class="auto internal xref">Section 14.5</a>. An
+emerging agent-identity and naming layer such as the Agent Name Service <span>[<a href="#ANS" class="cite xref">ANS</a>]</span> could in
+future supply discovery and naming above this authentication layer.<a href="#section-14.2-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="seccons-tofu">
@@ -2909,12 +2914,6 @@ reported as ENROLL_TOKEN_INVALID (-32021). See <a href="#errors" class="auto int
         <li class="normal" id="appendix-B-9.4">
           <p id="appendix-B-9.4.1">In-band "version negotiation" is feature advertisement with graceful degradation,
 not selection of a common protocol version. See <a href="#negotiation" class="auto internal xref">Section 10</a>.<a href="#appendix-B-9.4.1" class="pilcrow">¶</a></p>
-</li>
-        <li class="normal" id="appendix-B-9.5">
-          <p id="appendix-B-9.5.1">The proof of possession signs the acceptor's nonce over an authenticated, encrypted
-channel; incorporating the tls-server-end-point channel binding <span>[<a href="#RFC5929" class="cite xref">RFC5929</a>]</span> into the
-signed value directly is available but not yet enabled on the primary channel path.
-See <a href="#channel-sec-pop" class="auto internal xref">Section 6.3</a>.<a href="#appendix-B-9.5.1" class="pilcrow">¶</a></p>
 </li>
       </ul>
 <p id="appendix-B-10">This evidence is provided to document running code and operational reality; it is not

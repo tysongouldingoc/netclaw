@@ -100,3 +100,26 @@ def test_heartbeat_carries_and_records_credential_health(tmp_path):
         svc.manager.close()
     finally:
         os.environ.pop("N2N_CERT_MODE", None)
+
+
+def test_possession_proof_is_channel_bound(tmp_path):
+    """RFC 5929 binding: a possession proof is over nonce||binding, so a proof
+    made for one channel binding does not verify under another (nor with none) —
+    preventing relay of the proof to a different TLS session."""
+    import os as _os
+    from bgp.federation.risk import RiskManager
+    from bgp.federation.manager import FederationManager
+    mgr = FederationManager(base_dir=str(tmp_path / "n2n"))
+    rm = RiskManager(mgr)
+    cert = rm.self_cert_pem()
+    nonce = _os.urandom(32)
+    b1 = _os.urandom(32)   # this session's tls-server-end-point value
+    b2 = _os.urandom(32)   # a different session
+    sig = rm.self_sign(nonce, b1)
+    assert rm.verify_possession(cert, nonce, sig, b1) is True     # right session
+    assert rm.verify_possession(cert, nonce, sig, b2) is False    # relayed → fails
+    assert rm.verify_possession(cert, nonce, sig, b"") is False   # stripped binding → fails
+    # Backward compat: with no binding on either side (cleartext / iN2N), raw nonce holds.
+    sig0 = rm.self_sign(nonce)
+    assert rm.verify_possession(cert, nonce, sig0) is True
+    mgr.close()
