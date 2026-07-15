@@ -83,6 +83,10 @@ class FederationChannel:
         self._read_task: Optional[asyncio.Task] = None
         self._hb_task: Optional[asyncio.Task] = None
         self.display_name: Optional[str] = None
+        # feature 060 (FR-024): when set by the service, the heartbeat carries this
+        # claw's credential health so the peer always knows our fingerprint /
+        # days-to-expiry between reconnects. None → legacy empty-frame heartbeat.
+        self.cred_status: Optional[dict] = None
         # Per-channel handler map (owned by the FederationService that created
         # this channel) — NOT class-level, so multiple services in one process
         # (e.g. tests) don't clobber each other's handlers.
@@ -165,8 +169,14 @@ class FederationChannel:
                                         self.peer_identity, self._misses)
                     break
                 try:
-                    self.writer.write(struct.pack("!IB", 0, 0))
-                    await self.writer.drain()
+                    if self.cred_status is not None:
+                        # Carry credential health (FR-024). Still counts as a frame
+                        # for liveness; the handler updates the peer's cred columns.
+                        await self._send_frames({"jsonrpc": "2.0", "method": "n2n/heartbeat",
+                                                 "params": {"cred": self.cred_status}})
+                    else:
+                        self.writer.write(struct.pack("!IB", 0, 0))
+                        await self.writer.drain()
                 except (ConnectionError, OSError) as e:
                     self.logger.warning("Channel to %s: heartbeat send failed (%s) — closing",
                                         self.peer_identity, e)

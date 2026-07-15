@@ -82,6 +82,7 @@ class FederationService:
             "n2n/tasks/cancel": self.invoker.handle_task_cancel,
             "n2n/chat/open": self.chat.handle_chat_open,
             "n2n/chat/message": self.chat.handle_chat_message,
+            "n2n/heartbeat": self._on_heartbeat,
         }
 
         # ── iN2N (feature 056): internal federation within one risk ──────
@@ -243,6 +244,29 @@ class FederationService:
 
     # ---- feature 060: secured-channel credential + upgrade ------------
 
+    async def _on_heartbeat(self, channel, params):
+        """FR-024: record the peer's reported credential health so the HUD/posture
+        never show it staler than one heartbeat interval (SC-011)."""
+        cred = params.get("cred") or {}
+        fp = cred.get("fp")
+        if fp:
+            self.manager.set_peer_cred_health(
+                channel.peer_identity, fp, cred.get("not_after"), cred.get("renew_state"))
+        return None  # notification — no reply
+
+    def _cred_status(self) -> Optional[dict]:
+        """This claw's credential health to advertise on heartbeats (FR-024)."""
+        if not self.cert_mode:
+            return None
+        from . import certs
+        cert_pem, _ = self.host_credential()
+        try:
+            na = certs.cert_not_after(cert_pem).isoformat()
+        except Exception:
+            na = None
+        return {"fp": certs.key_fingerprint(cert_pem), "not_after": na,
+                "renew_state": "ok"}
+
     def host_credential(self) -> tuple:
         """This claw's pinned-model credential (self-signed cert + key), created
         once under keys/host/. The domain-verified credential (ACME) is layered
@@ -379,6 +403,7 @@ class FederationService:
         ch = FederationChannel(reader, writer, local_identity=self.local_identity,
                                peer_as=peer_as, peer_router_id=router_id,
                                manager=self.manager, is_initiator=False, handlers=self.handlers)
+        ch.cred_status = self._cred_status()
         self._register_channel(ident, ch)
         await ch.start()
         # The initiator sends n2n/hello; our _on_hello handler replies and, if
@@ -432,6 +457,7 @@ class FederationService:
             ch = FederationChannel(reader, writer, local_identity=self.local_identity,
                                    peer_as=peer_as, peer_router_id=router_id,
                                    manager=self.manager, is_initiator=True, handlers=self.handlers)
+            ch.cred_status = self._cred_status()
             self._register_channel(ident, ch)
             await ch.start()
             from .negotiate import local_descriptor, normalize

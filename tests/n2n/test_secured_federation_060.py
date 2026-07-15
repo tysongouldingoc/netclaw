@@ -69,3 +69,34 @@ async def _run(tmp_path):
 
 def test_secured_federation_end_to_end(tmp_path):
     asyncio.run(_run(tmp_path))
+
+
+def test_heartbeat_carries_and_records_credential_health(tmp_path):
+    """FR-024/SC-011: the heartbeat handler records a peer's reported credential
+    health, and _cred_status advertises this claw's real fingerprint."""
+    import asyncio as _a
+    os.environ["N2N_CERT_MODE"] = "on"
+    try:
+        svc = _svc(tmp_path / "c", 65001, "4.4.4.4", "John")
+        # This claw's advertised credential health matches its host credential.
+        from bgp.federation import certs
+        cert_pem, _ = svc.host_credential()
+        status = svc._cred_status()
+        assert status["fp"] == certs.key_fingerprint(cert_pem)
+        assert status["not_after"]
+
+        # A peer's heartbeat updates its stored credential health.
+        svc.manager.upsert_peer(65007, "7.7.7.7", display_name="Nicholas")
+        ident = peer_identity(65007, "7.7.7.7")
+
+        class _Ch:
+            peer_identity = ident
+
+        _a.run(svc._on_heartbeat(_Ch(), {"cred": {"fp": "abc123", "not_after":
+               "2026-10-01T00:00:00+00:00", "renew_state": "ok"}}))
+        peer = svc.manager.get_peer(ident)
+        assert peer["peer_cred_fp"] == "abc123"
+        assert peer["peer_renew_state"] == "ok"
+        svc.manager.close()
+    finally:
+        os.environ.pop("N2N_CERT_MODE", None)

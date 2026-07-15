@@ -340,6 +340,51 @@ class FederationManager:
             (fp, not_after, renew_state, _now(), ident))
         self._conn.commit()
 
+    # ---- feature 060: credential registry (rotation, HUD) --------------
+
+    def upsert_credential(self, *, kind: str, subject_identity: str, fingerprint: str,
+                          issuer: Optional[str], not_before: Optional[str],
+                          not_after: Optional[str], renew_after: Optional[str],
+                          state: str = "active", cert_pem: Optional[str] = None,
+                          key_path: Optional[str] = None) -> int:
+        """Register/refresh a managed credential (keyed by fingerprint)."""
+        now = _now()
+        existing = self._conn.execute(
+            "SELECT credential_id FROM credential WHERE fingerprint=?", (fingerprint,)).fetchone()
+        if existing:
+            self._conn.execute(
+                "UPDATE credential SET kind=?, subject_identity=?, issuer=?, not_before=?, "
+                "not_after=?, renew_after=?, state=?, cert_pem=COALESCE(?,cert_pem), "
+                "key_path=COALESCE(?,key_path), updated_at=? WHERE fingerprint=?",
+                (kind, subject_identity, issuer, not_before, not_after, renew_after, state,
+                 cert_pem, key_path, now, fingerprint))
+            self._conn.commit()
+            return existing["credential_id"]
+        cur = self._conn.execute(
+            "INSERT INTO credential (kind, subject_identity, fingerprint, issuer, not_before, "
+            "not_after, renew_after, state, cert_pem, key_path, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (kind, subject_identity, fingerprint, issuer, not_before, not_after, renew_after,
+             state, cert_pem, key_path, now, now))
+        self._conn.commit()
+        return cur.lastrowid
+
+    def list_credentials(self) -> list:
+        return [dict(r) for r in self._conn.execute(
+            "SELECT * FROM credential WHERE state != 'retired' ORDER BY not_after")]
+
+    def credentials_due(self, now_iso: str) -> list:
+        """Active credentials whose renew_after has passed (FR-012)."""
+        return [dict(r) for r in self._conn.execute(
+            "SELECT * FROM credential WHERE state='active' AND renew_after IS NOT NULL "
+            "AND renew_after <= ? ORDER BY renew_after", (now_iso,))]
+
+    def set_credential_state(self, fingerprint: str, state: str):
+        self._conn.execute(
+            "UPDATE credential SET state=?, updated_at=? WHERE fingerprint=?",
+            (state, _now(), fingerprint))
+        self._conn.commit()
+
     def _set_state(self, ident: str, state: PeerState):
         self._conn.execute("UPDATE federation_peer SET state=?, updated_at=? WHERE identity=?",
                            (state.value, _now(), ident))
