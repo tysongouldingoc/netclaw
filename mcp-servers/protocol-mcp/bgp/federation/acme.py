@@ -52,9 +52,17 @@ def _argv(base_dir, domain: str, action: str) -> list:
     provider = os.environ["N2N_ACME_DNS_PROVIDER"]
     email = os.environ.get("N2N_ACME_EMAIL", "")
     server = _LE_STAGING if os.environ.get("N2N_ACME_STAGING") in ("1", "true", "yes") else _LE_PROD
-    return [lego_bin(), "--accept-tos", "--server", server,
+    argv = [lego_bin(), "--accept-tos", "--server", server,
             "--email", email, "--dns", provider, "--domains", domain,
-            "--path", str(_lego_dir(base_dir)), action]
+            "--path", str(_lego_dir(base_dir))]
+    # Point the propagation check at the zone's authoritative nameservers so lego
+    # waits for the record to be live where the CA will look (GoDaddy takes ~30s;
+    # the local resolver otherwise passes too early → CA gets NXDOMAIN). Set
+    # N2N_ACME_RESOLVERS to a comma-separated list (e.g. ns51.domaincontrol.com:53).
+    for r in filter(None, os.environ.get("N2N_ACME_RESOLVERS", "").split(",")):
+        argv += ["--dns.resolvers", r.strip()]
+    argv.append(action)
+    return argv
 
 
 async def _run(argv: list, timeout_s: float = 180.0):

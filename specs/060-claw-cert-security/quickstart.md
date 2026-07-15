@@ -15,22 +15,40 @@ After the patch: channels to **patched** peers resume automatically (pinned/TOFU
 
 ## B. Upgrade to domain-verified identity (`netclaw.automateyournetwork.ca`)
 
-### B.1 If your GoDaddy account has DNS API access
+### B.1 GoDaddy — VALIDATED path (new-style Personal Access Token)
 
-1. GoDaddy → Developer Portal → create a **production** API key/secret for the account holding `automateyournetwork.ca`.
+GoDaddy's current tokens are `gd_pat_…` Personal Access Tokens that authenticate
+with `Authorization: Bearer`. lego's built-in `godaddy` provider expects the
+**legacy** `sso-key KEY:SECRET` header, so a PAT does **not** work with
+`--dns godaddy`. NetClaw ships a small exec-provider hook that drives GoDaddy
+with the PAT. This is the exact path validated end-to-end against
+`netclaw.automateyournetwork.ca` (real Let's Encrypt cert issued 2026-07-15).
+
+1. GoDaddy → **Developer Portal → Personal Access Tokens** → create one with
+   **Domains: read/write** for the account holding your domain.
 2. Add to `~/.openclaw/.env`:
 
    ```bash
    N2N_CLAW_DOMAIN=netclaw.automateyournetwork.ca
-   N2N_ACME_DNS_PROVIDER=godaddy
-   N2N_ACME_EMAIL=john.capobianco@example.com   # your real contact address
-   GODADDY_API_KEY=<key>
-   GODADDY_API_SECRET=<secret>
+   N2N_ACME_DNS_PROVIDER=exec
+   N2N_ACME_EMAIL=you@example.com
+   EXEC_PATH=/home/<you>/netclaw/scripts/lib/godaddy-acme-hook.sh
+   EXEC_PROPAGATION_TIMEOUT=300
+   EXEC_POLLING_INTERVAL=15
+   # GoDaddy propagates to its authoritative NS in ~30s; make lego wait for THEM,
+   # not the local resolver, or the CA gets NXDOMAIN. Use your zone's NS:
+   N2N_ACME_RESOLVERS=ns51.domaincontrol.com:53,ns52.domaincontrol.com:53
+   GODADDY_PAT=gd_pat_xxxxxxxx           # your PAT (find your NS: dig +short NS <domain>)
    ```
 
-3. Run `scripts/patch-claw-certs.sh --domain netclaw.automateyournetwork.ca --dns-provider godaddy` (or answer the wizard). The claw obtains the Let's Encrypt certificate via DNS-01 (a temporary TXT record at `_acme-challenge.netclaw.automateyournetwork.ca`, written and removed automatically) and schedules renewal at ~60 days.
+3. `scripts/patch-claw-certs.sh --domain netclaw.automateyournetwork.ca --dns-provider exec`
+   The claw obtains the cert via DNS-01 (temporary TXT at
+   `_acme-challenge.netclaw.automateyournetwork.ca`, written + removed by the hook)
+   and the daemon auto-renews at ~2/3 lifetime with the same settings.
 
-> GoDaddy restricts its DNS API on small accounts (as of 2024, roughly 10+ domains or premium tiers). If your key gets `403 ACCESS_DENIED`, use B.2 — it's one manual record and then fully automatic forever.
+> If your account **can** mint a legacy API key+secret instead, you may use the
+> native provider (`N2N_ACME_DNS_PROVIDER=godaddy`, `GODADDY_API_KEY`/`_SECRET`)
+> and drop the EXEC_* lines. The PAT + exec hook is the path that works today.
 
 ### B.2 Universal fallback: challenge delegation (works on ANY provider)
 

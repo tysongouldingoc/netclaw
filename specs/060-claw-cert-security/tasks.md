@@ -132,9 +132,9 @@
 - [x] T035 [P] Update `docs/N2N-RISK-MIGRATION-FOR-PEERS.md`: patch instructions for existing peers (quickstart.md §A/B lifted), refusal-message explanation, GoDaddy + delegation + Cloudflare paths (FR-030)
 - [x] T036 [P] Update `README.md` federation sections + `TOOLS.md` + `SOUL.md` capability summary; update `scripts/peering-setup.sh` for the certified flow (FR-030; Constitution XI/XII)
 - [x] T037 [P] Add "superseded by 060 for channel trust" header notes to `specs/052-n2n-federation/spec.md`, `specs/053-n2n-ergonomics/spec.md`, `specs/056-in2n-internal-federation/spec.md`, `specs/057-in2n-production-enforcement/spec.md` (FR-031)
-- [ ] T038 Walk quickstart.md against the live reference deployment (`netclaw.automateyournetwork.ca`, GoDaddy — direct API or delegation per account access) and correct any step that fails first-attempt (SC-003/008)
-- [ ] T039 Run the Artifact Coherence Checklist (constitution §Checklist) — catalog coverage script green, HUD updated, .env.example complete, existing skills verified unbroken (Constitution XI/XV)
-- [ ] T040 Draft WordPress milestone blog post (Constitution XVII) — present to John for review before publishing
+- [x] T038 Walk quickstart.md against the live reference deployment (`netclaw.automateyournetwork.ca`, GoDaddy — direct API or delegation per account access) and correct any step that fails first-attempt (SC-003/008)
+- [x] T039 Run the Artifact Coherence Checklist (constitution §Checklist) — catalog coverage script green, HUD updated, .env.example complete, existing skills verified unbroken (Constitution XI/XV)
+- [x] T040 Draft WordPress milestone blog post (Constitution XVII) — present to John for review before publishing
 
 ---
 
@@ -163,3 +163,22 @@ Phase 9: after all stories (T038 needs US1+US6 complete)
 **MVP = Phase 1 + Phase 2 + US1**: pinned-model TLS federation claw-to-claw — the crypto gap closed with zero external dependencies (no domain, no ACME). Ship, patch two claws (John + Nick), verify SC-001/002 live. Then US2+US5 (risk trust), US6 (mesh-wide adoption), US3 (rotation), US4 (visibility), polish.
 
 **Total**: 40 tasks — Setup 4, Foundational 4, US1 7, US2 4, US5 3, US6 4, US3 4, US4 3, Polish 7.
+
+
+## Completion notes (2026-07-15)
+
+- **T038 validated on the real domain:** a production Let's Encrypt certificate for
+  `netclaw.automateyournetwork.ca` was issued end-to-end via GoDaddy DNS-01 and
+  installed under `~/.openclaw/n2n/keys/acme/` (valid to 2026-10-13). Discovered
+  and handled GoDaddy's Bearer-PAT vs legacy-sso-key mismatch with an exec hook
+  (`scripts/lib/godaddy-acme-hook.sh`) + authoritative-NS propagation resolvers;
+  quickstart §B.1 updated to the validated path. Auto-renew via the daemon path
+  verified against the live cert.
+- **T039 artifact coherence:** README federation section updated; catalog.sh +
+  install-steps.sh `claw-certs` component (verify-catalog-coverage.py PASS);
+  .env.example variables; HUD channel-security panel; docs (peer guide + new
+  N2N-FEDERATION-GUIDE.md); SOUL.md already covers n2n-federation. No new MCP
+  server (extends the existing protocol-mcp daemon), so no config/openclaw.json
+  change.
+- **T040 blog:** milestone post drafted at `docs/blog/2026-07-15-claw-certification.md`
+  — awaiting John's review before publishing to WordPress (Constitution XVII).
