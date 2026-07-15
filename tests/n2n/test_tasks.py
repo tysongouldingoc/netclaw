@@ -129,7 +129,7 @@ async def _async_delegation(tmp_path):
     nick.authz.grant(john.local_identity, "skill", "cml-clone")
 
     # Stub Nick's executor to take a few seconds (proves submit is async)
-    async def slow_exec(skill, input_text):
+    async def slow_exec(skill, input_text, progress=None, peer=None):
         await asyncio.sleep(3)
         return f"built {skill}: 10 nodes, 12 links", 100
     nick.invoker._exec_skill_gateway = slow_exec

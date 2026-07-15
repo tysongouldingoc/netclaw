@@ -169,7 +169,25 @@ class Invoker:
                 if not await self._await_approval(appr["approval_id"]):
                     raise RpcError(ERR_APPROVAL_EXPIRED, "approval not granted")
             progress("running skill")
-            output, tokens = await self._exec_skill_gateway(skill, input_text)
+            try:
+                output, tokens = await self._exec_skill_gateway(
+                    skill, input_text, progress=progress, peer=peer)
+            except asyncio.TimeoutError:
+                self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
+                                  target_name=skill, request_id=task_id, decision="allowlisted",
+                                  outcome="timeout")
+                raise RpcError(ERR_EXECUTION_TIMEOUT,
+                               f"skill {skill} timed out — a gateway scope approval may "
+                               f"still be pending; approve it and resubmit")
+            except RpcError:
+                raise
+            except Exception:
+                # EnforcementRefused and execution errors must still land in the
+                # audit table + GAIT trail (the pre-fix path recorded nothing).
+                self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
+                                  target_name=skill, request_id=task_id, decision="allowlisted",
+                                  outcome="error")
+                raise
             self.authz.debit(peer, requests=1, tokens=tokens)
             self.audit.record(direction="inbound", peer_identity=peer, target_type="skill",
                               target_name=skill, request_id=task_id, decision="allowlisted",
@@ -256,16 +274,34 @@ class Invoker:
 
         return await asyncio.wait_for(run(), timeout=self.tool_timeout)
 
-    async def _exec_skill_gateway(self, skill: str, input_text: str):
+    async def _exec_skill_gateway(self, skill: str, input_text: str,
+                                  progress=None, peer: str = None):
         """Delegate a skill to the local gateway agent (its model/policies/budget).
 
         Uses the `openclaw agent` CLI — the gateway is WebSocket-only and has no
-        REST completions route (see gateway.py)."""
+        REST completions route (see gateway.py). The peer's input is marked
+        `untrusted` so embedded (--local) execution stays refused unless
+        production containment verifies (2026-07-14 delegation-bypass review).
+
+        If the gateway holds the session at its scope-upgrade approval gate the
+        CLI goes silent; `on_stall` bridges that hold into the operator's n2n
+        approval notifications and the task's progress state, and extends the
+        wait by the approval window so a human can approve instead of the task
+        dying on a blind hard timeout."""
         from .gateway import run_agent_turn
+
+        def on_stall(waited_s):
+            if progress:
+                progress("awaiting gateway approval")
+            self.service.notify_approval(
+                None, peer or "unknown-peer", "gateway-scope", f"n2n-skill-{skill}")
+            return self.authz.approval_window_s
+
         prompt = (f"A federated NetClaw peer has requested you run the '{skill}' skill. "
                   f"Execute it for the following request and return only the result:\n\n{input_text}")
         return await run_agent_turn(prompt, session_key=f"n2n-skill-{skill}",
-                                    timeout_s=self.skill_timeout)
+                                    timeout_s=self.skill_timeout,
+                                    untrusted=True, on_stall=on_stall)
 
     # ---- outbound: WE ask a peer to run something ----------------------
 

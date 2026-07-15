@@ -73,7 +73,8 @@ class ChatManager:
         from .gateway import run_agent_turn
         idle = int(os.environ.get("N2N_CHAT_IDLE_TIMEOUT_S", "300"))
         prompt = f"[A federated NetClaw peer is asking you this]\n{text}"
-        return await run_agent_turn(prompt, session_key=session_key, timeout_s=idle)
+        return await run_agent_turn(prompt, session_key=session_key, timeout_s=idle,
+                                    untrusted=True)
 
     # ---- outbound: OUR operator chats with the PEER's agent -----------
 
