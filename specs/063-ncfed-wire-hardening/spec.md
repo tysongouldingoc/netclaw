@@ -14,6 +14,15 @@ Spec 060 put the eN2N NCFED channel under TLS. A live packet capture between two
 3. **Metadata exposure.** Even with the payload encrypted, a passive observer can still read each peer's numeric identity (from the cleartext discrimination preamble) and each peer's claw domain (from the TLS server-name indication), letting them map who federates with whom.
 4. **Post-quantum posture is undefined.** One side offered a hybrid post-quantum key exchange; the peer's stack declined it and classical key exchange was used. There is no stated posture for whether PQ is expected, and operators cannot see which key exchange a given channel actually negotiated.
 
+## Clarifications
+
+### Session 2026-07-17
+
+- Q: Mesh-layer confidentiality — encrypt the routing/keepalive session in-protocol, or document a required encrypted underlay? → A: **Encrypt in-protocol** — bring the BGP mesh/keepalive session under NetClaw's own TLS + authentication (as 060 did for the NCFED channel), rather than relying on a documented underlay.
+- Q: P3 metadata scope — also change the cleartext discrimination preamble, or SNI/ECH + documentation only? → A: **SNI/ECH + document only** — conceal the claw domain where supported (ECH); leave the 13-byte preamble unchanged (no second wire-format/flag-day change); record the AS/router-id exposure as accepted residual.
+- Q: PQ posture — default stance and what "require" does? → A: **Opportunistic by default** (offer hybrid PQ, accept classical fallback) plus an optional **`require` mode that hard-refuses** a non-PQ peer (logged + operator-visible). Not warn-and-allow.
+- Q: Endpoint persistence — write the new address on connect-attempt or only on success? → A: **Persist on success only** — the supplied address is used for the immediate dial, but written to the durable peer record only after the channel establishes + authenticates, so a bad/stale dial can't clobber a known-good address.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Peers reconnect to the current address automatically (Priority: P1)
@@ -93,26 +102,26 @@ As a claw operator, I want a defined stance on post-quantum key exchange — whe
 
 **Endpoint persistence (P1)**
 
-- **FR-001**: An operator-initiated connect to a peer MUST persist that peer's supplied reachable address to the peer's durable record, so a later automatic reconnect targets it.
+- **FR-001**: An operator-initiated connect uses the supplied reachable address for the immediate dial, and MUST persist it to the peer's durable record **only once the channel successfully establishes and authenticates** — so a mistaken or stale dial cannot overwrite a known-good stored address.
 - **FR-002**: A reachable-address announcement received from a peer over its authenticated channel MUST persist to that peer's record, bound to the authenticated peer identity (a peer cannot change another peer's address).
 - **FR-003**: The automatic reconnect supervisor MUST use the most recently persisted address for a peer, and MUST NOT fall back to a stale address once a newer one is known.
 - **FR-004**: These changes MUST NOT alter behavior when a peer's address is unchanged (no address churn, no re-consent, no regression to existing federation).
 
 **Mesh-layer confidentiality (P2)**
 
-- **FR-005**: The peer-discovery/routing layer that accompanies the federation channel MUST NOT be trivially readable by a passive observer on an untrusted path; the protocol MUST either protect it directly or REQUIRE (and document) a named encrypted underlay for untrusted paths.
-- **FR-006**: The trust boundary for the mesh layer (what is protected, by which mechanism, on which network leg) MUST be documented so an operator can verify it, rather than depending implicitly on an incidental transport.
+- **FR-005**: The peer-discovery/routing (BGP mesh / keepalive) session MUST be encrypted and authenticated **by the protocol itself**, reusing the same in-protocol TLS + peer-authentication approach 060 established for the NCFED channel — not left to rely on an incidental transport. A passive observer on an untrusted path MUST NOT be able to read mesh routing/keepalive content.
+- **FR-006**: The mesh-session security MUST interoperate through the staged model 060 uses (a peer that has not upgraded is handled explicitly, not silently downgraded), and the resulting trust boundary MUST be documented so an operator can verify what protects the mesh layer on each leg.
 
 **Metadata minimization (P3)**
 
 - **FR-007**: Where the environment supports it, the peer's claw domain MUST NOT be exposed in the clear during connection establishment; when it cannot be concealed, the claw MUST proceed and the exposure MUST be documented as a known residual.
-- **FR-008**: The pre-encryption discrimination step MUST expose no more identity metadata than is strictly required to route the shared listening port; any identity that must remain in the clear MUST be documented as accepted exposure with rationale.
+- **FR-008**: The pre-encryption discrimination preamble is NOT changed by this feature (avoiding a second wire-format/flag-day change); the AS/router-id it exposes is documented as accepted residual metadata, with rationale (the shared port must discriminate before TLS). Preamble minimization, if ever pursued, is a separate future effort.
 - **FR-009**: Metadata-minimization changes MUST NOT break shared-port discrimination or federation with peers that do not implement the minimization.
 
 **Post-quantum posture (P4)**
 
 - **FR-010**: The claw MUST offer a hybrid post-quantum key exchange by default and interoperate with peers that accept it or fall back to classical.
-- **FR-011**: The operator MUST be able to configure the PQ posture (at minimum: offered/opportunistic vs. required), and each posture MUST have a defined, non-silent outcome when a peer cannot meet it.
+- **FR-011**: PQ posture defaults to **opportunistic** (offer the hybrid, accept classical fallback so mixed-stack peers still federate). An operator MAY set **`require`**, which MUST **hard-refuse** a peer that cannot negotiate the hybrid (the refusal logged and operator-visible) — not warn-and-allow.
 - **FR-012**: The negotiated key-exchange group for each channel MUST be visible to the operator (in the same posture/credential view that already surfaces channel trust), distinguishing a post-quantum-protected channel from a classical one.
 
 **Cross-cutting**
@@ -143,4 +152,4 @@ As a claw operator, I want a defined stance on post-quantum key exchange — whe
 - **Post-quantum availability depends on both peers' underlying crypto stacks and their versions**; the claw controls only what it offers/prefers/requires, not what a peer supports.
 - **No new third-party runtime dependencies are preferred**; mechanisms should reuse what the platform and 060 already provide.
 - **The NCFED Internet-Draft revision** reflecting whatever this feature lands is expected later and is explicitly out of scope here.
-- **The specific design decisions** — whether the mesh layer is encrypted by the protocol vs. documented-underlay (FR-005/006), how far preamble minimization can go (FR-008), and whether "require PQ" refuses or warns (FR-011) — are deliberately left open for the clarify/plan phase; the spec fixes the required outcomes and visibility, not the mechanism.
+- **The major design decisions are now resolved** (see Clarifications, 2026-07-17): mesh layer is **encrypted in-protocol** (FR-005/006); the discrimination preamble is **not changed** and metadata work is SNI/ECH + documentation only (FR-007/008); PQ is **opportunistic by default with an optional hard-refuse `require`** (FR-010/011); and endpoint persistence is **on-success only** (FR-001). Remaining choices (specific ECH deployment path, exact mesh-session handshake reuse) are plan-phase detail, not open scope questions.
