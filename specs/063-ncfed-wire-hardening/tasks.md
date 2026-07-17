@@ -56,7 +56,7 @@
 **Independent Test**: `/n2n/certs` + `/n2n/posture` show `pq_available`, per-channel cipher/tls_version (and group where readable); `N2N_PQ_MODE=require` on a non-PQ stack fails fast at startup.
 
 - [x] T009 [US4] In `mcp-servers/protocol-mcp/bgp/federation/tls.py`, add readout helpers: `channel_kex(sslobj)` returning `{tls_version, cipher, kex_group|None}` using `SSLObject.version()/cipher()` and `group` when present (None on 3.10) (R4)
-- [x] T010 [US4] In `mcp-servers/protocol-mcp/bgp/federation/service.py`, read `N2N_PQ_MODE` (default opportunistic); when `require` AND `tls.pq_available()` is False, fail fast at startup with a clear "PQ unavailable on this crypto stack (needs OpenSSL ≥ 3.5 / Python ≥ 3.13)" error (FR-011, R4)
+- [x] T010 [US4] In `mcp-servers/protocol-mcp/bgp/federation/service.py`, read `N2N_PQ_MODE` (default opportunistic); when `require` AND `tls.pq_available()` is False, fail fast at startup with a clear "PQ unavailable on this crypto stack (needs OpenSSL ≥ 3.5 / Python ≥ 3.15 — corrected per research R0-addendum)" error (FR-011, R4)
 - [x] T011 [US4] In `mcp-servers/protocol-mcp/bgp/federation/service.py`, when `require` and the stack CAN offer PQ, hard-refuse a channel that negotiated a classical (non-PQ) group, logged + audited (FR-011)
 - [x] T012 [US4] Surface `pq_mode`, `pq_available`, and per-channel `kex_group`/`cipher`/`tls_version` in `bgp/federation/posture.py` `channel_security` and in the `GET /n2n/certs` route (`bgp-daemon-v2.py`) (FR-012, contracts)
 - [x] T013 [P] [US4] Unit test `tests/n2n/test_pq_posture_063.py`: opportunistic default unchanged; `require` on a non-PQ stack raises the startup error; kex readout returns cipher/tls_version and `kex_group=None` on this stack without crashing

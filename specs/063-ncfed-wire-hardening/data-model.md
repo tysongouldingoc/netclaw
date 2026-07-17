@@ -20,12 +20,12 @@ Write rules (FR-001/002/003/004):
 
 Extends the in-memory/posture view 060 already exposes per channel; not persisted (live negotiation facts):
 
-| Field | Source | On current stack (OpenSSL 3.0.2) |
+| Field | Source | On current stack (Python ≤ 3.14; see research R0-addendum) |
 |---|---|---|
 | `tls_version` | `SSLObject.version()` | populated (e.g. TLSv1.3) |
 | `cipher` | `SSLObject.cipher()[0]` | populated (e.g. TLS_AES_256_GCM_SHA384) |
-| `kex_group` | `SSLObject.group` (Python 3.13+) | `null` / "unknown" here — not readable |
-| `pq` | derived: `available` if the stack can offer the hybrid, else `unavailable` | `unavailable` here |
+| `kex_group` | `SSLObject.group` (Python 3.15+) | `null` / "unknown" here — not readable (even on OpenSSL 3.5, which may negotiate X25519MLKEM768 by default) |
+| `pq` | derived: `available` if the stack can offer **and verify** the hybrid, else `unavailable` | `unavailable` here — means "cannot attest", not "classical" |
 
 ## 3. Posture config (env) — PQ posture knob (P4)
 

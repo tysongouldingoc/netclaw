@@ -22,7 +22,7 @@ Verification split (mirrors how channel.py / internal_channel.py already work):
 
 Channel binding uses tls-server-end-point (RFC 5929): the SHA-256 of the
 listener's certificate. Both ends know it on every Python/TLS version (the RFC
-5705 tls-exporter is only exposed in Python's ssl module from 3.13), and it
+5705 tls-exporter is still not exposed by Python's ssl module as of 3.14), and it
 defeats relay: a MITM presenting its own cert to the dialer produces a different
 binding than the real listener expects, so the dialer's signature won't verify.
 """
@@ -113,10 +113,18 @@ def _set_alpn(ctx: ssl.SSLContext) -> None:
 
 # ---- Feature 063 (P4/P3): PQ + KEX visibility, ECH seam -------------------
 #
-# The reference host is Python 3.10 / OpenSSL 3.0.2, which cannot offer the
-# X25519MLKEM768 hybrid, cannot control TLS groups, cannot read the negotiated
-# group, and has no ECH. These helpers degrade honestly there and activate the
-# real behaviour automatically on OpenSSL >= 3.5 / Python >= 3.13 (research R0/R4).
+# The original 063 reference host was Python 3.10 / OpenSSL 3.0.2, which could
+# not offer the X25519MLKEM768 hybrid, control TLS groups, read the negotiated
+# group, or do ECH. These helpers degrade honestly there and activate the real
+# behaviour automatically once the ssl module exposes group control/readout
+# (`SSLContext.set_groups` + `SSLObject.group`, Python >= 3.15 — verified absent
+# on 3.14) on OpenSSL >= 3.5 (research R0/R4).
+#
+# Verified 2026-07-17 on Ubuntu 26.04 (Python 3.14.4 / OpenSSL 3.5.5): OpenSSL
+# 3.5 includes X25519MLKEM768 in its DEFAULT group list, so channels between two
+# OpenSSL>=3.5 hosts negotiate the PQ hybrid on the wire even though Python 3.14
+# can neither request nor observe it. pq_available() therefore means "can offer
+# AND verify", never "the wire is classical".
 
 # The hybrid PQ group name, offered ahead of classical curves where supported.
 _PQ_GROUPS = "X25519MLKEM768:x25519:secp256r1:x448:secp521r1:secp384r1"
@@ -132,9 +140,10 @@ def _openssl_at_least(major: int, minor: int) -> bool:
 
 def pq_available() -> bool:
     """True only if this stack can BOTH offer the X25519MLKEM768 hybrid AND report
-    the negotiated group — i.e. `SSLContext.set_groups` (Python 3.13+), readable
-    `SSLObject.group`, and OpenSSL >= 3.5 (MLKEM). False on the reference host, so
-    P4 degrades honestly and never labels a classical channel as PQ."""
+    the negotiated group — i.e. `SSLContext.set_groups` (Python 3.15+), readable
+    `SSLObject.group` (3.15+), and OpenSSL >= 3.5 (MLKEM). False on Python <= 3.14
+    even over OpenSSL 3.5 (which may still negotiate the hybrid by default), so
+    P4 degrades honestly and never labels an unverifiable channel as PQ."""
     return (hasattr(ssl.SSLContext, "set_groups")
             and hasattr(ssl.SSLObject, "group")
             and _openssl_at_least(3, 5))
@@ -184,7 +193,7 @@ def channel_kex(sslobj) -> dict:
     except Exception:
         pass
     try:
-        g = getattr(sslobj, "group", None)  # SSLObject.group is 3.13+
+        g = getattr(sslobj, "group", None)  # SSLObject.group is 3.15+
         if g:
             out["kex_group"] = g
     except Exception:

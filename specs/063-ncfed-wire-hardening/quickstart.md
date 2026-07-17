@@ -1,6 +1,6 @@
 # Quickstart: Verify NCFED Wire Hardening (063)
 
-Verifies each story, including honest stack-gated behavior on Python 3.10 / OpenSSL 3.0.2.
+Verifies each story, including honest stack-gated behavior. Originally written for Python 3.10 / OpenSSL 3.0.2; the host is now Python 3.14 / OpenSSL 3.5 (research R0-addendum), where OpenSSL negotiates X25519MLKEM768 by default but the Python group APIs (`set_groups`/`SSLObject.group`) remain absent until Python 3.15 — so `pq_available` is still honestly `false` here.
 
 ## P1 — Endpoint persistence (the confirmed bug)
 
@@ -32,7 +32,7 @@ sudo tcpdump -i any -s0 -U -w /tmp/mesh.pcap 'tcp port <mesh-port>'
 ## P3 — Metadata (stack-gated: document on this host)
 
 ```bash
-# On THIS stack (OpenSSL 3.0.2, no ECH): the claw-domain SNI is still visible — expected + documented.
+# On THIS stack (Python <= 3.14: no ssl ECH API even on OpenSSL 3.5): the claw-domain SNI is still visible — expected + documented.
 tshark -r capture.pcap -Y "tls.handshake.type==1" -T fields -e tls.handshake.extensions_server_name
 # PASS-here: SNI present AND the daemon/docs report it as an accepted residual (no ECH on this stack).
 # PASS-on-ECH-stack: SNI concealed once the ECH seam activates (OpenSSL/Python that support ECH).
@@ -48,7 +48,10 @@ curl -s http://127.0.0.1:8179/n2n/posture | python3 -m json.tool | grep -E 'pq_m
 # require mode on a non-PQ stack must FAIL FAST at startup:
 N2N_PQ_MODE=require systemctl --user restart netclaw-mesh.service
 journalctl --user -u netclaw-mesh.service -n5   # expect: clear "PQ not available on this crypto stack" error
-# On an OpenSSL>=3.5 / Python>=3.13 stack: a PQ-capable peer shows kex_group=X25519MLKEM768, pq=available.
+# On an OpenSSL>=3.5 / Python>=3.15 stack: a PQ-capable peer shows kex_group=X25519MLKEM768, pq=available.
+# NOTE (R0-addendum): on OpenSSL>=3.5 with Python<=3.14 the wire may already be
+# X25519MLKEM768 (OpenSSL default groups) — verify with tcpdump/tshark, not posture;
+# posture honestly reports unavailable because Python cannot read the group until 3.15.
 ```
 
 ## Regression

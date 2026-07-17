@@ -176,7 +176,14 @@ rendered artifacts stay FROZEN and coherent; fold the text below when cutting `-
   on a capable stack and **fails fast at startup** on a stack that cannot do PQ at all
   (never silently refusing every peer); per-channel `tls_version`/`cipher`/`kex_group`
   + `pq: available|unavailable` are surfaced honestly (`kex_group` is unreadable, hence
-  `null`, on OpenSSL < 3.5 / Python < 3.13).
+  `null`, until Python exposes `SSLObject.group` — Python 3.15+, verified absent on 3.14).
+- **Verified 2026-07-17 (Ubuntu 26.04, Python 3.14.4, OpenSSL 3.5.5):** OpenSSL 3.5
+  ships X25519MLKEM768 in its *default* group list, so two OpenSSL>=3.5 peers negotiate
+  the PQ hybrid on the wire with no code change — while Python <= 3.14 can neither
+  request nor read the group. `pq: unavailable` therefore means "cannot offer-and-verify",
+  not "the wire is classical"; the `-02` prose below should keep that distinction
+  (posture reports what the implementation can attest, and unknown is reported as
+  unknown, never as classical or as PQ).
 - **Ready-to-fold `-02` prose (add to §seccons-conf):**
   > NCFED inherits its key exchange from TLS 1.3 {{RFC8446}}. Implementations SHOULD
   > offer a post-quantum hybrid group (e.g. X25519MLKEM768) ahead of classical curves;
@@ -203,9 +210,34 @@ rendered artifacts stay FROZEN and coherent; fold the text below when cutting `-
   "relies on the transport's encryption on untrusted legs; bringing the mesh session
   under NCFED's own TLS is defined but optional/staged" — do NOT claim it as done.
 
+### H13. Async task completion is lost across a channel bounce — *LIVE BUG (found 2026-07-17)*
+- **Reality:** during the 2026-07-17 heartbeat cycles, the pyats member *completed*
+  three delegated `pyats-health-check` tasks (member-side audit shows
+  `in_scope/success` at 16:46/17:52/18:56 UTC) but the Border's `delegated_task`
+  rows stayed `submitted` forever — the iN2N channel had bounced ("Channel closed
+  by peer" → redial) between submit and completion, and the completion notification
+  died with the old channel. The Border then reported "no live picture" even though
+  every check had succeeded. A fourth task's completion was recovered only because
+  the member re-delivered after its post-reboot reconnect.
+- **Gap:** task completion delivery is at-most-once; there is no redelivery of
+  terminal states after reconnect and no Border-side reconciliation (poll of
+  in-flight tasks) when a member/peer channel is re-established.
+- **Plan:** on channel re-establish, (a) the submitter SHOULD reconcile its
+  non-terminal outbound tasks via `n2n/tasks/status`, and/or (b) the executor
+  SHOULD re-announce unacknowledged terminal states (at-least-once with
+  idempotent apply). Applies to both iN2N member channels and eN2N peer channels.
+- **Draft:** `-02` async-tasks section should state that completion notifications
+  are advisory and pollable state is authoritative: a submitter MUST NOT treat a
+  missing completion as failure, and SHOULD reconcile in-flight tasks after a
+  channel re-establish.
+
 ### Cutting `-02` (supervised)
-Recommended to cut the formal `-02` **once H12/mesh-TLS lands**, so the revision tells a
-complete wire-hardening story rather than documenting a half-shipped feature. Steps
-mirror `-01`: bump `docname` to `draft-capobianco-ncfed-02`, fold in the H10/H11 prose
-(and H12 once shipped), re-render via `kdrfc`, re-run `idnits`, and update `rendered/`.
-H9 is operational-only (no draft change).
+**CUT 2026-07-17 at John's direction** (ahead of H12/mesh-TLS, which `-02` documents
+honestly as staged/optional rather than claiming done): `draft-capobianco-ncfed-02.md`
+folds in H10 (new §"Observable metadata"), H11 (PQ prose with the corrected
+attest-or-report-unknown nuance), H13 (poll-authoritative task-state reconciliation),
+the H12 honest mesh-trust-boundary statement (§seccons-port), and an H9 operational
+note (endpoint persistence) plus a "Changes from -01" appendix. Rendered via `kdrfc
+--v3` (0 over-length lines; idnits authoritative server-side at Datatracker, per the
+`-01` checklist precedent) into `rendered/draft-capobianco-ncfed-02.{txt,xml}`.
+A future `-03` (or pre-submission refresh of `-02`) picks up H12 once mesh-TLS ships.
