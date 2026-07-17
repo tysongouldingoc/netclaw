@@ -67,6 +67,7 @@
 - [ ] T014 [US3] Add an ECH-ready seam in `mcp-servers/protocol-mcp/bgp/federation/tls.py` `client_context`: a single guarded point that would set an ECH config if `ssl` exposes it, a documented no-op on the current stack (R3, FR-007)
 - [ ] T015 [US3] Add an `ech_available()` / SNI-exposure indicator to posture so `/n2n/posture` reports the claw-domain SNI as an accepted residual when ECH is unavailable (FR-007)
 - [ ] T016 [P] [US3] Document in `docs/N2N-RISK.md` (or a security note) the two accepted residuals — cleartext preamble AS/router-id (structural, FR-008) and SNI claw domain until an ECH-capable stack — with rationale; confirm the preamble is unchanged (Clarify Q2)
+- [ ] T016a [US3] Add an assertion (in `tests/n2n/test_en2n_auth_baseline_060.py` or the US3 test) that shared-port discrimination is unchanged and a peer that does not implement the metadata seam still federates — closing FR-009's verification gap (analyze C1)
 
 **Checkpoint**: metadata exposure is minimized-where-possible and honestly documented.
 
@@ -92,7 +93,7 @@
 
 - [ ] T022 [P] Update `docs/N2N-RISK.md` + README federation section: endpoint auto-persist behavior, PQ posture (`N2N_PQ_MODE`) + stack requirement for real PQ/ECH, mesh-TLS enablement + trust boundary (FR-006, Constitution XI/XII)
 - [ ] T023 [P] Update `docs/N2N-FEDERATION-GUIDE.md` / peer guide: peers no longer need repeated re-dials once an endpoint is known; note the mesh-TLS flag day for mesh peers
-- [ ] T024 Run the Artifact Coherence Checklist (constitution §Checklist): `.env.example`, catalog coverage unaffected, HUD posture shows kex/pq, existing skills verified unbroken; full `tests/n2n/` suite green
+- [ ] T024 Run the Artifact Coherence Checklist (constitution §Checklist): `.env.example`, catalog coverage unaffected, HUD posture shows kex/pq, existing skills verified unbroken; full `tests/n2n/` suite green. Assert FR-013: no new SQLite tables and no new third-party Python dependency were introduced (analyze C2)
 - [ ] T025 Record a NCFED-draft `-02` follow-up note in the hardening backlog (mesh TLS + P3/P4 stack notes) — the actual draft revision is out of scope here (spec assumption)
 - [ ] T026 Draft the WordPress milestone post (Constitution XVII) — present to John before publishing
 
