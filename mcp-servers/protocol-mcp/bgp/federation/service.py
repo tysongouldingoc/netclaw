@@ -581,6 +581,13 @@ class FederationService:
                                                "cert_pem": self.risk.self_cert_pem(),
                                                "signature": self.risk.self_sign(nonce, binding).hex(),
                                                "capabilities": local_descriptor()})
+            # A well-behaved peer returns a dict; guard against a peer that returns
+            # a bare string or other shape so one odd hello reply can't abort the
+            # whole dial (normalize() already tolerates a non-dict descriptor).
+            if not isinstance(resp, dict):
+                logger.warning("Peer %s returned non-dict n2n/hello result (%s) — "
+                               "treating as empty", ident, type(resp).__name__)
+                resp = {}
             ch.display_name = resp.get("display_name")
             self.peer_caps[ident] = normalize(resp.get("capabilities"))  # US4
             self.manager.remote_consent(peer_as, router_id)
