@@ -9,13 +9,20 @@ Probed on the reference host: **Python 3.10.12, OpenSSL 3.0.2 (Mar 2022)**.
 | Capability | Available here? | Consequence |
 |---|---|---|
 | TLS 1.3 | ✅ | P1/P2 secured channels fine |
-| `SSLContext.set_groups()` (choose KEX groups) | ❌ (Python 3.13+) | cannot programmatically require/prefer a group |
-| Negotiated-group readout (`SSLObject.group`) | ❌ (Python 3.13+) | cannot show PQ-vs-classical directly from Python |
+| `SSLContext.set_groups()` (choose KEX groups) | ❌ (Python 3.15+ — see R0-addendum) | cannot programmatically require/prefer a group |
+| Negotiated-group readout (`SSLObject.group`) | ❌ (Python 3.15+ — see R0-addendum) | cannot show PQ-vs-classical directly from Python |
 | `X25519MLKEM768` PQ hybrid | ❌ (OpenSSL 3.5+, 2025) | this host cannot even *offer* PQ |
 | ECH (Encrypted Client Hello) | ❌ (no `ssl` ECH; not in OpenSSL 3.0.2) | SNI cannot be concealed on this stack |
 
-**Decision**: P1 and P2 are fully buildable on the current stack. **P3 (ECH) and P4 (PQ) are stack-gated** — the *mechanisms* require OpenSSL ≥ 3.5 and Python ≥ 3.13, which the reference host does not have. Per the spec's Q2/Q3 ("where supported" / opportunistic), on this stack P3 reduces to **documenting the SNI residual** and P4 to **the posture/visibility scaffolding that activates when the stack supports it**, degrading cleanly (never breaking connectivity) today.
+**Decision**: P1 and P2 are fully buildable on the current stack. **P3 (ECH) and P4 (PQ) are stack-gated** — the *mechanisms* require OpenSSL ≥ 3.5 and Python ≥ 3.15 (group control/readout; see R0-addendum), which the reference host does not have. Per the spec's Q2/Q3 ("where supported" / opportunistic), on this stack P3 reduces to **documenting the SNI residual** and P4 to **the posture/visibility scaffolding that activates when the stack supports it**, degrading cleanly (never breaking connectivity) today.
 **Rationale**: honest to observed capability; the capture's PQ offer came from *Nick's* host (a newer stack), not this one. **Alternatives considered**: vendoring a newer OpenSSL/Python for the daemon — rejected (heavy, out of the "no new deps" constraint, and a separate infra decision).
+
+### R0-addendum — re-probed 2026-07-17 after the host upgrade (Ubuntu 26.04)
+
+The reference host is now **Python 3.14.4 / OpenSSL 3.5.5**. Two corrections to R0's version claims, both empirically verified on this stack:
+
+1. **`SSLContext.set_groups` and `SSLObject.group` are Python 3.15+ features, not 3.13+.** Both are absent on 3.14.4 (`hasattr` → False), so `pq_available()` correctly still returns False here. The `-01`-era "3.13+" claims in code comments and docs were wrong and have been corrected. (The RFC 5705 tls-exporter is likewise still absent on 3.14.)
+2. **OpenSSL 3.5 negotiates X25519MLKEM768 *by default*.** Verified on loopback: both `openssl s_server`↔`s_client` and a plain Python 3.14 `ssl` server↔OpenSSL client negotiate `X25519MLKEM768` with zero configuration. So two upgraded NCFED hosts get PQ hybrid key exchange on the wire today — but Python ≤ 3.14 can neither request nor observe it. Posture semantics stay honest: `pq_available=false` means "cannot offer-and-verify", never "the wire is classical". ECH remains unavailable (no `ssl` ECH API on 3.14).
 
 ## R1 — Endpoint persistence (P1) — buildable now, low risk
 
@@ -37,7 +44,7 @@ Probed on the reference host: **Python 3.10.12, OpenSSL 3.0.2 (Mar 2022)**.
 
 ## R4 — PQ posture + visibility (P4) — scaffolding now, real PQ gated
 
-**Decision**: Add the operator posture knob `N2N_PQ_MODE` = `opportunistic` (default) | `require` (Clarify Q3). On a stack that can offer the hybrid, the default already offers it (OpenSSL picks groups); `require` hard-refuses a peer that negotiates classical. **On the current stack (R0) the hybrid cannot be offered**, so: (a) default `opportunistic` behaves exactly as today (classical), and (b) `require` MUST fail fast at startup with a clear "PQ not available on this crypto stack (needs OpenSSL ≥ 3.5 / Python ≥ 3.13)" error rather than silently refusing every peer. Visibility: surface the negotiated **cipher + TLS version** now (readable on 3.10 via `SSLObject.cipher()`), and the **negotiated group** when the stack exposes it (`SSLObject.group`, Python 3.13+); the `/n2n/certs` + posture views show `pq: available|unavailable` and the group when known.
+**Decision**: Add the operator posture knob `N2N_PQ_MODE` = `opportunistic` (default) | `require` (Clarify Q3). On a stack that can offer the hybrid, the default already offers it (OpenSSL picks groups); `require` hard-refuses a peer that negotiates classical. **On the current stack (R0) the hybrid cannot be offered**, so: (a) default `opportunistic` behaves exactly as today (classical), and (b) `require` MUST fail fast at startup with a clear "PQ not available on this crypto stack (needs OpenSSL ≥ 3.5 / Python ≥ 3.15)" error rather than silently refusing every peer. Visibility: surface the negotiated **cipher + TLS version** now (readable on 3.10 via `SSLObject.cipher()`), and the **negotiated group** when the stack exposes it (`SSLObject.group`, Python 3.15+; see R0-addendum); the `/n2n/certs` + posture views show `pq: available|unavailable` and the group when known.
 **Rationale**: gives operators the posture + honest visibility today, and activates real PQ automatically on a newer stack, without faking a capability the host lacks.
 **Alternatives considered**: claiming PQ support/readout on 3.10 (rejected — dishonest, would mislabel channels).
 

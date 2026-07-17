@@ -56,7 +56,7 @@ class FederationService:
         if self.pq_mode == "require" and not self.pq_available:
             raise RuntimeError(
                 "N2N_PQ_MODE=require but post-quantum key exchange is unavailable on "
-                "this crypto stack (needs OpenSSL >= 3.5 / Python >= 3.13 for "
+                "this crypto stack (needs OpenSSL >= 3.5 / Python >= 3.15 for "
                 "X25519MLKEM768 + negotiated-group readout). Use 'opportunistic' or "
                 "upgrade the stack.")
 
