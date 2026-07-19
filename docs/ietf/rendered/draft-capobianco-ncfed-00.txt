@@ -97,14 +97,14 @@ Table of Contents
    2.  Conventions and Definitions . . . . . . . . . . . . . . . . .   5
    3.  Protocol Stack Overview . . . . . . . . . . . . . . . . . . .   6
    4.  Protocol Discrimination . . . . . . . . . . . . . . . . . . .   6
-   5.  Federation Handshake  . . . . . . . . . . . . . . . . . . . .   7
-   6.  Channel Security  . . . . . . . . . . . . . . . . . . . . . .   9
+   5.  Federation Handshake  . . . . . . . . . . . . . . . . . . . .   8
+   6.  Channel Security  . . . . . . . . . . . . . . . . . . . . . .  10
      6.1.  Transport encryption  . . . . . . . . . . . . . . . . . .  10
-     6.2.  Trust models  . . . . . . . . . . . . . . . . . . . . . .  10
+     6.2.  Trust models  . . . . . . . . . . . . . . . . . . . . . .  11
      6.3.  Proof of possession . . . . . . . . . . . . . . . . . . .  11
-     6.4.  Admission tiers . . . . . . . . . . . . . . . . . . . . .  11
-   7.  Message Framing . . . . . . . . . . . . . . . . . . . . . . .  12
-   8.  Heartbeat and Liveness  . . . . . . . . . . . . . . . . . . .  13
+     6.4.  Admission tiers . . . . . . . . . . . . . . . . . . . . .  12
+   7.  Message Framing . . . . . . . . . . . . . . . . . . . . . . .  13
+   8.  Heartbeat and Liveness  . . . . . . . . . . . . . . . . . . .  14
    9.  Semantic Payload  . . . . . . . . . . . . . . . . . . . . . .  14
 
 
@@ -114,36 +114,36 @@ Capobianco, et al.       Expires 20 January 2027                [Page 2]
 Internet-Draft                    NCFED                        July 2026
 
 
-     9.1.  Method families . . . . . . . . . . . . . . . . . . . . .  14
-     9.2.  Asynchronous task delegation  . . . . . . . . . . . . . .  14
-     9.3.  Error codes . . . . . . . . . . . . . . . . . . . . . . .  15
+     9.1.  Method families . . . . . . . . . . . . . . . . . . . . .  15
+     9.2.  Asynchronous task delegation  . . . . . . . . . . . . . .  15
+     9.3.  Error codes . . . . . . . . . . . . . . . . . . . . . . .  16
    10. Version Signaling and Capability Advertisement  . . . . . . .  17
-   11. Capability Cards  . . . . . . . . . . . . . . . . . . . . . .  17
-   12. Trust Establishment . . . . . . . . . . . . . . . . . . . . .  18
-     12.1.  External federation: eN2N  . . . . . . . . . . . . . . .  18
+   11. Capability Cards  . . . . . . . . . . . . . . . . . . . . . .  18
+   12. Trust Establishment . . . . . . . . . . . . . . . . . . . . .  19
+     12.1.  External federation: eN2N  . . . . . . . . . . . . . . .  19
      12.2.  Internal federation: iN2N  . . . . . . . . . . . . . . .  20
-   13. Operational Considerations  . . . . . . . . . . . . . . . . .  21
+   13. Operational Considerations  . . . . . . . . . . . . . . . . .  22
    14. Security Considerations . . . . . . . . . . . . . . . . . . .  22
      14.1.  Sharing a listening port with BGP  . . . . . . . . . . .  22
-     14.2.  Peer authentication  . . . . . . . . . . . . . . . . . .  22
-     14.3.  Trust on first use . . . . . . . . . . . . . . . . . . .  23
-     14.4.  Confidentiality and integrity  . . . . . . . . . . . . .  24
-     14.5.  Observable metadata  . . . . . . . . . . . . . . . . . .  25
-     14.6.  Agent-delegation hazards . . . . . . . . . . . . . . . .  25
-     14.7.  Denial of service  . . . . . . . . . . . . . . . . . . .  26
-     14.8.  Capability-card privacy  . . . . . . . . . . . . . . . .  26
-   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  26
-   16. References  . . . . . . . . . . . . . . . . . . . . . . . . .  27
-     16.1.  Normative References . . . . . . . . . . . . . . . . . .  27
+     14.2.  Peer authentication  . . . . . . . . . . . . . . . . . .  23
+     14.3.  Trust on first use . . . . . . . . . . . . . . . . . . .  24
+     14.4.  Confidentiality and integrity  . . . . . . . . . . . . .  25
+     14.5.  Observable metadata  . . . . . . . . . . . . . . . . . .  26
+     14.6.  Agent-delegation hazards . . . . . . . . . . . . . . . .  26
+     14.7.  Denial of service  . . . . . . . . . . . . . . . . . . .  27
+     14.8.  Capability-card privacy  . . . . . . . . . . . . . . . .  27
+   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  27
+   16. References  . . . . . . . . . . . . . . . . . . . . . . . . .  28
+     16.1.  Normative References . . . . . . . . . . . . . . . . . .  28
      16.2.  Informative References . . . . . . . . . . . . . . . . .  29
-   Appendix A.  Prior Art and Design Rationale . . . . . . . . . . .  30
-   Appendix B.  Implementation Status  . . . . . . . . . . . . . . .  30
-   Appendix C.  JSON-RPC Method Reference  . . . . . . . . . . . . .  34
-     C.1.  eN2N methods  . . . . . . . . . . . . . . . . . . . . . .  34
-     C.2.  iN2N methods  . . . . . . . . . . . . . . . . . . . . . .  36
-   Change History (Pre-Submission Iterations)  . . . . . . . . . . .  37
-   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  38
-   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  38
+   Appendix A.  Prior Art and Design Rationale . . . . . . . . . . .  31
+   Appendix B.  Implementation Status  . . . . . . . . . . . . . . .  32
+   Appendix C.  JSON-RPC Method Reference  . . . . . . . . . . . . .  36
+     C.1.  eN2N methods  . . . . . . . . . . . . . . . . . . . . . .  36
+     C.2.  iN2N methods  . . . . . . . . . . . . . . . . . . . . . .  37
+   Change History (Pre-Submission Iterations)  . . . . . . . . . . .  38
+   Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  40
+   Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  40
 
 1.  Introduction
 
@@ -375,17 +375,17 @@ Internet-Draft                    NCFED                        July 2026
    port and its discrimination unchanged.  Section 14 discusses the
    security consequences of sharing a port with BGP.
 
-5.  Federation Handshake
-
-   Immediately after the "NCFED" magic, the initiating peer sends 8
-   further octets: a 4-octet Autonomous System number followed by a
-   4-octet router identifier (a packed IPv4 address).  With the magic,
-   the complete handshake is 13 octets, as shown in Figure 2.
-
-
-
-
-
+   The shared port is a deployment constraint, not an aesthetic
+   preference: the reference deployments reach one another through
+   single-port tunnel forwarders (and the equivalent NAT and firewall
+   pinholes), where every additional listening port is an additional
+   tunnel endpoint, credential, and access-control exception to
+   provision, advertise after every address rotation, and keep
+   consistent across operators.  Multiplexing NCFED and its data plane
+   onto the port the BGP mesh already uses lets one pinhole -- and one
+   endpoint re-announcement (Section 13) -- carry all three protocols.
+   The discrimination layer is internal to the NCFED daemon, which
+   embeds its own BGP engine; this document does _not_ propose that
 
 
 
@@ -393,6 +393,19 @@ Capobianco, et al.       Expires 20 January 2027                [Page 7]
 
 Internet-Draft                    NCFED                        July 2026
 
+
+   general-purpose BGP implementations adopt first-octet discrimination
+   or accept a shim in front of TCP port 179.  A deployment that peers
+   with a conventional BGP stack on its own port simply runs NCFED on a
+   separate configured port, where the discrimination step degenerates
+   to validating the NCFED preamble.
+
+5.  Federation Handshake
+
+   Immediately after the "NCFED" magic, the initiating peer sends 8
+   further octets: a 4-octet Autonomous System number followed by a
+   4-octet router identifier (a packed IPv4 address).  With the magic,
+   the complete handshake is 13 octets, as shown in Figure 2.
 
     0                   1                   2                   3
     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -412,6 +425,30 @@ Internet-Draft                    NCFED                        July 2026
    byte order (big-endian).  The router identifier is a 4-octet packed
    IPv4 address.  All multi-octet fields in NCFED are network byte
    order.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027                [Page 8]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    The initiator (the peer that opened the connection; see Section 4)
    sends its 13-octet handshake immediately.  If the acceptor admits the
@@ -441,15 +478,6 @@ Internet-Draft                    NCFED                        July 2026
    the handshake reply and the nonce, so the nonce and all subsequent
    traffic are protected.
 
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027                [Page 8]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    To avoid a simultaneous-open ambiguity (both peers dialing at once),
    NCFED designates a deterministic initiator: peers are ordered by the
    tuple (AS number, router-id), comparing AS numbers numerically and,
@@ -467,6 +495,16 @@ Internet-Draft                    NCFED                        July 2026
    authentication mechanism, its two trust models, and the admission
    tiers are specified in Section 6; the residual properties are
    analyzed in Section 14.2.
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027                [Page 9]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    There is no version octet in the handshake; versioning is negotiated
    in-band (Section 10).  Appending a version octet immediately after
@@ -498,14 +536,6 @@ Internet-Draft                    NCFED                        July 2026
    integrity-protected, and each peer proves possession of the
    credential bound to its claimed identity.  This closes the peer-
    impersonation exposure present in earlier iterations of the protocol
-
-
-
-Capobianco, et al.       Expires 20 January 2027                [Page 9]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    (Section 14.2).
 
 6.1.  Transport encryption
@@ -519,6 +549,18 @@ Internet-Draft                    NCFED                        July 2026
    TLS client and verifies that certificate according to the peer's
    trust model (Section 6.2).  The possession challenge nonce and all
    subsequent frames are carried inside this TLS session.
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 10]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    A deployment MAY operate a channel in cleartext for a private,
    controlled environment (for example, a loopback lab).  An
@@ -554,14 +596,6 @@ Internet-Draft                    NCFED                        July 2026
       consent of Section 12.1 (trust on first use); the pinned value is
       the SHA-256 of the certificate's SubjectPublicKeyInfo, so the pin
       survives certificate rotation with the same key.  A later
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 10]
-
-Internet-Draft                    NCFED                        July 2026
-
-
       connection under the same identity presenting a different key MUST
       be refused and flagged to the operator, and MUST NOT be silently
       re-pinned (Section 14.3).
@@ -575,6 +609,14 @@ Internet-Draft                    NCFED                        July 2026
    Identity is proven by possession of the private key for the
    certificate a peer presents, over the acceptor's per-connection
    nonce:
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 11]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    1.  The acceptor issues a fresh 32-octet random nonce (in the
        handshake reply, or, on an encrypted channel, immediately after
@@ -610,14 +652,6 @@ Internet-Draft                    NCFED                        July 2026
    outage, an acceptor admits a *consented* peer at one of two tiers,
    and refuses a non-consented one outright:
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 11]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  *possession* (full): the peer proved possession of a key (and, if
       pinned, matched its pin).  It receives the full method surface
       subject to the per-peer authorization of Section 12.1.
@@ -631,6 +665,14 @@ Internet-Draft                    NCFED                        July 2026
    *  A peer for which no local consent exists is closed before a nonce
       is issued (Section 5); it obtains no channel, not even the
       restricted tier.
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 12]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    An acceptor operating in *enforcing* mode admits only the possession
    tier and refuses a self-asserted peer, making a certificate a hard
@@ -663,17 +705,6 @@ Internet-Draft                    NCFED                        July 2026
                            Figure 3: NCFED frame
 
    Length:  Unsigned 32-bit integer, network byte order, counting the
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 12]
-
-Internet-Draft                    NCFED                        July 2026
-
-
       payload octets only.  A payload MUST NOT exceed 65536 octets (64
       KiB).  A larger message MUST be split across multiple frames using
       the CONTINUATION flag.  A receiver that reads a Length greater
@@ -691,6 +722,14 @@ Internet-Draft                    NCFED                        July 2026
    channel MUST be a fragment of the same message until a frame with
    CONTINUATION clear terminates the message.  Fragments MUST be
    transmitted contiguously.  A frame with Length 0 and CONTINUATION set
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 13]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    is a legal empty fragment that contributes no octets to reassembly.
    Because a heartbeat (Section 8) is a Length-0, CONTINUATION-clear
    frame, and because reassembly is never in progress between messages,
@@ -722,14 +761,6 @@ Internet-Draft                    NCFED                        July 2026
    heartbeat, is evidence of liveness and resets the endpoint's missed-
    interval count for that channel.  An endpoint that receives no
    inbound frame for 3 consecutive intervals (approximately 90 seconds)
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 13]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    MUST consider the channel dead and close it.  These values mirror the
    BGP keepalive (30 s) and hold time (90 s) defaults [RFC4271].  On
    close, an endpoint that initiated the session SHOULD attempt to re-
@@ -747,6 +778,14 @@ Internet-Draft                    NCFED                        July 2026
    message that is not well-formed UTF-8 JSON is discarded and SHOULD be
    logged; its receipt does not by itself require closing the channel.
    The concrete parameter and result objects for each method are
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 14]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    specified in Appendix C.
 
    Before federation (eN2N) or trust establishment (iN2N) completes, an
@@ -778,14 +817,6 @@ Internet-Draft                    NCFED                        July 2026
 
    A delegated task progresses through the states:
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 14]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    submitted --> working --> completed
                         \--> failed
                         \--> cancelled
@@ -803,6 +834,13 @@ Internet-Draft                    NCFED                        July 2026
    probed by a third party (see Section 14.6).  This document does not
    define a retention or garbage-collection policy for terminal task
    state, nor idempotency or retry semantics for resubmission.
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 15]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    Completion signalling is advisory; polled task state is
    authoritative.  Any notification that a task reached a terminal state
@@ -826,21 +864,6 @@ Internet-Draft                    NCFED                        July 2026
    (-32000 to -32099) [JSONRPC]; this reuse is intentional and
    permitted.  The following application error codes are defined for
    eN2N:
-
-
-
-
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 15]
-
-Internet-Draft                    NCFED                        July 2026
-
 
              +========+======================================+
              | Code   | Name                                 |
@@ -868,6 +891,13 @@ Internet-Draft                    NCFED                        July 2026
 
                          Table 1: eN2N error codes
 
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 16]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    The following application error codes are defined for iN2N
    (Section 12.2):
 
@@ -888,15 +918,6 @@ Internet-Draft                    NCFED                        July 2026
                      +--------+----------------------+
 
                          Table 2: iN2N error codes
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 16]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    MEMBER_ID_TAKEN (-32022) reports an enrollment whose member
    identifier is already pinned to a different key.  A key-possession
@@ -926,6 +947,21 @@ Internet-Draft                    NCFED                        July 2026
    unrecognized feature name is simply not used, and no failure is
    defined for a feature one side requires but the other lacks.
 
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 17]
+
+Internet-Draft                    NCFED                        July 2026
+
+
+   If a future revision defines a baseline with which an endpoint cannot
+   interoperate, the endpoint SHOULD reject the peer's n2n/hello with
+   JSON-RPC error -32602 (invalid params), carrying a diagnostic message
+   that names the baseline(s) it does support, and then close the
+   channel.  This gives the remote operator a parseable, attributable
+   failure instead of a silently degraded feature set.  The absence of a
+   descriptor is never an error; it selects the baseline as above.
+
    Because the binary handshake carries no version indicator, an
    incompatible change cannot be signaled below the JSON-RPC layer, and
    -- as noted in Section 5 -- a version octet cannot simply be appended
@@ -946,14 +982,6 @@ Internet-Draft                    NCFED                        July 2026
 
    *  badges: coarse capability tags;
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 17]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  posture: the advertiser's operational security posture, as {
       "mode", "state", "controls" } (e.g., mode production, state
       enforced, and the set of active controls);
@@ -966,6 +994,21 @@ Internet-Draft                    NCFED                        July 2026
    of a risk.  A Border advertises its own reasoning model and MAY note
    that members run their own tiered models, without revealing
    individual members.
+
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 18]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    Even so, because a card enumerates skills, MCP servers, security
    posture, and reasoning-model family, it discloses metadata about the
@@ -993,23 +1036,6 @@ Internet-Draft                    NCFED                        July 2026
    a peer occupies depends only on which grant has been recorded so far,
    not on a fixed order.
 
-
-
-
-
-
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 18]
-
-Internet-Draft                    NCFED                        July 2026
-
-
                          not_federated
                         (neither grant)
                        /               \
@@ -1033,6 +1059,13 @@ Internet-Draft                    NCFED                        July 2026
       Figure 4: eN2N consent state, derived from the local and remote
                                    grants
 
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 19]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    Only n2n/hello is accepted before federated.  Remote tool invocation
    is default-deny: a tool call is rejected (NOT_ALLOWLISTED) unless a
    per-peer grant authorizes it, and grants MAY carry approval
@@ -1053,18 +1086,6 @@ Internet-Draft                    NCFED                        July 2026
    mode it is refused entirely.  The residual properties (the first-use
    pinning window, restricted-tier card exposure) are analyzed in
    Section 14.2 and Section 14.3.
-
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 19]
-
-Internet-Draft                    NCFED                        July 2026
-
 
 12.2.  Internal federation: iN2N
 
@@ -1092,6 +1113,15 @@ Internet-Draft                    NCFED                        July 2026
 
    Enrollment and pinning:
 
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 20]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    1.  The Border issues a single-use enrollment token, conveyed to the
        member out of band (for example, at install time).  The token has
        the form in2n_<random> with at least 128 bits of entropy; the
@@ -1114,14 +1144,6 @@ Internet-Draft                    NCFED                        July 2026
    selecting deterministically (most-specific specialist first, then
    lexicographically by member identity); if no active member covers the
    capability it returns NO_CAPABLE_MEMBER, and a member asked to act
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 20]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    beyond its advertised scope returns OUT_OF_SCOPE.  Operator removal
    of a member unpins its key; a member that fails pinned-key
    authentication more than a configurable number of times is
@@ -1145,6 +1167,16 @@ Internet-Draft                    NCFED                        July 2026
    A member enrolled before hub attestation was introduced holds no
    anchor and continues without hub verification until it is re-
    enrolled, so the change is backward compatible within a risk.
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 21]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    The iN2N socket MAY additionally be wrapped in TLS [RFC8446] for
    members reached across an untrusted network, providing
@@ -1170,14 +1202,6 @@ Internet-Draft                    NCFED                        July 2026
    *  A standalone claw is a degenerate risk of one that is its own
       Border; no protocol change is required for that case.
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 21]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  Endpoint mobility: peers reached over ephemeral transports
       (tunnels whose public address rotates) change address routinely.
       An implementation SHOULD persist the most recently _successfully
@@ -1200,6 +1224,31 @@ Internet-Draft                    NCFED                        July 2026
    s for the magic) and close on any malformed or unexpected preamble,
    to limit resource consumption by connections that stall before
    discrimination.
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 22]
+
+Internet-Draft                    NCFED                        July 2026
+
+
+   Although the in-place TLS upgrade of Section 6.1 is "STARTTLS"-style
+   in mechanics, it does not inherit the classic STARTTLS stripping
+   weakness: there is no cleartext upgrade command or capability offer
+   on the wire for an active attacker to strip.  Discrimination is
+   positional -- the first octets of the TCP stream select the protocol
+   -- and whether a given channel is then encrypted is decided by each
+   endpoint's local, per-peer configuration (Section 6.1), never by an
+   in-band offer from the remote peer.  A peer therefore cannot induce
+   cleartext operation: cleartext exists only as an explicit local
+   operator mode, and an acceptor in enforcing mode (Section 6.4)
+   refuses a cleartext channel outright.  An attacker who tampers with
+   the cleartext preamble octets can only change which protocol engine
+   receives the stream or which identity is claimed; the claimed
+   identity is then still subject to the certificate verification and
+   possession proof of Section 6, which the attacker cannot satisfy.
 
    The co-resident BGP-4 mesh session itself is not protected by NCFED's
    channel security: after discrimination selects BGP, the mesh session
@@ -1226,14 +1275,6 @@ Internet-Draft                    NCFED                        July 2026
    and the channel is closed, and a consented peer that presents no key
    is confined to the restricted tier (Section 6.4), which exposes no
    invocation, delegation, chat, or endpoint-update surface. iN2N is
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 22]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    mutually authenticated: the member proves possession of its pinned
    key, and the Border proves, by an attestation chaining to the
    member's enrolled trust anchor, that it is the legitimate hub
@@ -1241,6 +1282,13 @@ Internet-Draft                    NCFED                        July 2026
 
    Two residual properties remain and are, by design, out of scope for
    the on-wire mechanism:
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 23]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    *  *First-use trust.* In the pinned model, and at iN2N enrollment,
       the initial key is accepted on first contact (see Section 14.3).
@@ -1282,14 +1330,6 @@ Internet-Draft                    NCFED                        July 2026
    set-of-known-peers applicability (Section 1.1), but it is not a
    substitute for a PKI.
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 23]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    To detect an intercepted first contact, the enrolling member's
    certificate fingerprint is surfaced to the operator on both the
    Border and member sides for out-of-band comparison; a mismatch aborts
@@ -1298,6 +1338,14 @@ Internet-Draft                    NCFED                        July 2026
    The automatic quarantine that unpins a member after repeated failed
    authentications (Section 12.2) was previously an availability hazard:
    a host that learned a member identifier and could reach the Border's
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 24]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    iN2N listener could submit failing authentications to drive that
    member over the quarantine threshold and remove it from routing.
    Failed-authentication accounting is now attributed per source:
@@ -1322,30 +1370,6 @@ Internet-Draft                    NCFED                        July 2026
    confidentiality and MUST NOT be used across an untrusted network or
    negotiated at a remote peer's request.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 24]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    NCFED inherits its key exchange from TLS 1.3 [RFC8446].
    Implementations SHOULD offer a post-quantum hybrid group (for example
    X25519MLKEM768) ahead of classical curves where the TLS stack
@@ -1363,6 +1387,20 @@ Internet-Draft                    NCFED                        July 2026
    a hybrid by default, as OpenSSL 3.5 does -- the posture view MUST
    report the group as unknown rather than as classical or as post-
    quantum: posture reports what the implementation can attest.
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 25]
+
+Internet-Draft                    NCFED                        July 2026
+
 
 14.5.  Observable metadata
 
@@ -1395,13 +1433,6 @@ Internet-Draft                    NCFED                        July 2026
       can carry prompt-injection payloads; such content SHOULD NOT be
       interpreted as instructions;
 
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 25]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  SHOULD log every federated invocation at the Border for audit, and
       MAY gate execution behind a production-mode guardrail that
       inspects model input/output;
@@ -1419,6 +1450,13 @@ Internet-Draft                    NCFED                        July 2026
    not exist, and cannot read, cancel, or even confirm the existence of
    the task.  Implementations SHOULD still generate unguessable task
    identifiers as defence in depth.
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 26]
+
+Internet-Draft                    NCFED                        July 2026
+
 
 14.7.  Denial of service
 
@@ -1451,13 +1489,6 @@ Internet-Draft                    NCFED                        July 2026
    in the Service Name and Transport Protocol Port Number Registry
    [RFC6335]:
 
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 26]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  Service Name: ncfed
 
    *  Transport Protocol: TCP
@@ -1471,6 +1502,17 @@ Internet-Draft                    NCFED                        July 2026
       (mailto:ptcapo@gmail.com)
 
    *  Reference: This document
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 27]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    *  Port Number: none requested.  NCFED does not define a fixed well-
       known port; a deployment multiplexes NCFED onto an operator-
@@ -1504,16 +1546,6 @@ Internet-Draft                    NCFED                        July 2026
               DOI 10.17487/RFC2119, March 1997,
               <https://www.rfc-editor.org/rfc/rfc2119>.
 
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 27]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    [RFC4271]  Rekhter, Y., Ed., Li, T., Ed., and S. Hares, Ed., "A
               Border Gateway Protocol 4 (BGP-4)", RFC 4271,
               DOI 10.17487/RFC4271, January 2006,
@@ -1529,6 +1561,14 @@ Internet-Draft                    NCFED                        July 2026
               "Elliptic Curve Cryptography Subject Public Key
               Information", RFC 5480, DOI 10.17487/RFC5480, March 2009,
               <https://www.rfc-editor.org/rfc/rfc5480>.
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 28]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    [RFC5929]  Altman, J., Williams, N., and L. Zhu, "Channel Bindings
               for TLS", RFC 5929, DOI 10.17487/RFC5929, July 2010,
@@ -1562,14 +1602,6 @@ Internet-Draft                    NCFED                        July 2026
               (ACME)", RFC 8555, DOI 10.17487/RFC8555, March 2019,
               <https://www.rfc-editor.org/rfc/rfc8555>.
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 28]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    [RFC9525]  Saint-Andre, P. and R. Salz, "Service Identity in TLS",
               RFC 9525, DOI 10.17487/RFC9525, November 2023,
               <https://www.rfc-editor.org/rfc/rfc9525>.
@@ -1585,6 +1617,14 @@ Internet-Draft                    NCFED                        July 2026
               Pignataro, "The Generalized TTL Security Mechanism
               (GTSM)", RFC 5082, DOI 10.17487/RFC5082, October 2007,
               <https://www.rfc-editor.org/rfc/rfc5082>.
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 29]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    [RFC6335]  Cotton, M., Eggert, L., Touch, J., Westerlund, M., and S.
               Cheshire, "Internet Assigned Numbers Authority (IANA)
@@ -1616,15 +1656,10 @@ Internet-Draft                    NCFED                        July 2026
               RFC 8126, DOI 10.17487/RFC8126, June 2017,
               <https://www.rfc-editor.org/rfc/rfc8126>.
 
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 29]
-
-Internet-Draft                    NCFED                        July 2026
-
+   [RFC9000]  Iyengar, J., Ed. and M. Thomson, Ed., "QUIC: A UDP-Based
+              Multiplexed and Secure Transport", RFC 9000,
+              DOI 10.17487/RFC9000, May 2021,
+              <https://www.rfc-editor.org/rfc/rfc9000>.
 
    [WIREGUARD]
               Donenfeld, J. A., "WireGuard: Next Generation Kernel
@@ -1635,6 +1670,17 @@ Internet-Draft                    NCFED                        July 2026
               Management Agents", 2025,
               <https://datatracker.ietf.org/doc/draft-yan-a2a-device-
               agent-applicability/>.
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 30]
+
+Internet-Draft                    NCFED                        July 2026
+
 
 Appendix A.  Prior Art and Design Rationale
 
@@ -1647,6 +1693,50 @@ Appendix A.  Prior Art and Design Rationale
    [RFC6455].  Its use of AS/router-id as agent identity reuses the
    operational identity model of BGP-4 [RFC4271], which fits the
    network-engineering deployment.
+
+   _Transport choice._ NCFED runs over raw TCP with its own minimal
+   framing rather than QUIC [RFC9000] or WebSocket [RFC6455].  The
+   deciding constraint is the shared listening port (Section 4): co-
+   tenancy with BGP-4 requires discriminating the first octets of a TCP
+   byte stream, which QUIC (UDP-based) cannot share at all and WebSocket
+   (an HTTP upgrade) could share only by putting an HTTP server in front
+   of BGP.  QUIC is otherwise attractive for exactly the properties this
+   document works around: it integrates TLS 1.3 natively (removing the
+   in-place upgrade of Section 6.1), it survives endpoint address
+   changes through connection migration (removing much of the re-dial
+   machinery of Section 13), and its independent streams would eliminate
+   the head-of-line blocking that a large fragmented message imposes on
+   this framing -- a heartbeat cannot be interleaved mid-message
+   (Section 7), so the 16 MiB reassembly bound caps, but does not
+   remove, the delay a bulk transfer can impose on liveness and
+   cancellation traffic.  These trade-offs are accepted for the
+   experimental deployment because the single shared pinhole (Section 4)
+   dominates the operational cost.  A future revision MAY define a QUIC
+   binding for deployments that do not require BGP co-tenancy; the
+   framing layer is deliberately thin so that the semantic layers of the
+   two bindings would be identical.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 31]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    NCFED is closest, among current IETF work, to [YAN-A2A]
    ("Applicability of A2A Protocol for Network Management Agents").
@@ -1673,15 +1763,6 @@ Appendix B.  Implementation Status
 
    This section is to be removed before publishing as an RFC.
 
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 30]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    This section records the status of known implementations of the
    protocol defined by this specification at the time of posting, per
    [RFC7942].  It is to be removed before publication as an RFC.
@@ -1701,6 +1782,17 @@ Internet-Draft                    NCFED                        July 2026
    certificate rotation.  The reference deployment's own claw is domain-
    verified (a publicly trusted certificate for a claw domain, obtained
    and auto-renewed via DNS-01).
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 32]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    *Interoperability evidence (packet capture):* a 37.5-second capture
    of a live NCFED channel between johns-risk (AS 65001) and Nick (AS
@@ -1730,14 +1822,6 @@ Internet-Draft                    NCFED                        July 2026
    -- real endpoints, a persistent established session, healthy TCP, and
    a request/response traffic shape between two independently operated
    ASes -- but it does *not* expose decrypted NCFED frames, so the
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 31]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    segment sizes above are TLS-record sizes carrying NCFED, not raw
    NCFED frame boundaries.  A plaintext capture of the NCFED frames
    themselves requires capturing at the application layer (e.g., on
@@ -1758,6 +1842,14 @@ Internet-Draft                    NCFED                        July 2026
       unknown four-octet magic ("NXXXX") were each closed by the
       acceptor with no bytes returned.  A first octet of 0xFF was handed
       to the BGP engine and the connection was held open awaiting the
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 33]
+
+Internet-Draft                    NCFED                        July 2026
+
+
       remainder of the 16-octet BGP marker.  Only the "NCFED" magic
       advanced to the federation handshake.  This confirms, on the wire,
       that a direct TLS connection to the shared port is refused (the
@@ -1787,13 +1879,6 @@ Internet-Draft                    NCFED                        July 2026
       both the STARTTLS-style upgrade and the domain-verified trust
       model of Section 6.2 on the live channel.
 
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 32]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  Section 7 framing bound.  The receive path reads a five-octet
       header (four-octet big-endian length + one-octet flags) and closes
       the channel when the length field exceeds 65536.  This was
@@ -1812,6 +1897,14 @@ Internet-Draft                    NCFED                        July 2026
    handshake impersonation of a consented, tool-granted peer was
    reproduced on a two-daemon loopback and is closed by the possession
    proof and admission tiers of Section 6.
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 34]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    *Dialer-side admission tier (Section 6.4), resolved.* An earlier
    build granted the possession tier only on the acceptor side of a
@@ -1842,14 +1935,6 @@ Internet-Draft                    NCFED                        July 2026
    gaps remain in the current implementation and are targeted for a
    future NCFED revision:
 
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 33]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    *  The tool and task method families carry no delegation hop count.
       Transitive re-delegation is not implemented, so the field is
       deferred until it exists; an implementation that adds transitive
@@ -1865,6 +1950,17 @@ Internet-Draft                    NCFED                        July 2026
 
    This evidence is provided to document running code and operational
    reality; it is not a normative part of the protocol.
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 35]
+
+Internet-Draft                    NCFED                        July 2026
+
 
 Appendix C.  JSON-RPC Method Reference
 
@@ -1885,26 +1981,6 @@ C.1.  eN2N methods
    its possession proof* (Section 6.3): cert_pem is the sender's
    certificate and signature proves possession of the matching private
    key over the acceptor's nonce.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 34]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    params: {
      "identity": "as65001-192.0.2.1",
@@ -1934,6 +2010,14 @@ Internet-Draft                    NCFED                        July 2026
    and signature is admitted only at the restricted self-asserted tier
    (Section 6.4), and is refused outright in enforcing mode.
 
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 36]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    n2n/tools/call -- the tool member MUST have the form server_id/
    tool_name; otherwise the callee returns JSON-RPC error -32602
    (invalid params).  The result is the MCP [MCP] tool-result object
@@ -1950,17 +2034,6 @@ Internet-Draft                    NCFED                        July 2026
              "input_text": "<free text passed to the skill>",
              "request_id": "as65001-192.0.2.1:43" }
    result: { "task_id": "<opaque string>", "state": "submitted" }
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 35]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    n2n/tasks/status, n2n/tasks/result, n2n/tasks/cancel -- each takes
    params: { "task_id": "<opaque string>" }. Retrieval is bound to the
@@ -1989,6 +2062,18 @@ C.2.  iN2N methods
    "IN2N1" preamble and 32-octet nonce (Section 12.2); the signature
    proves possession of the member's pinned key over that nonce.
 
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 37]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    in2n/enroll -- first contact.  On success the Border spends the token
    and pins the certificate's SubjectPublicKeyInfo.  Errors:
    NOT_A_BORDER (-32024); MEMBER_NOT_TRUSTED (-32023) on possession
@@ -2007,16 +2092,6 @@ C.2.  iN2N methods
    in2n/hello -- reconnect.  A mismatched fingerprint or signature
    returns MEMBER_NOT_TRUSTED (-32023) and counts toward auto-quarantine
    (Section 14.3).
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 36]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    params: { "member_id":       "<risk-local id>",
              "key_fingerprint": "<hex SHA-256 of SubjectPublicKeyInfo>",
@@ -2047,6 +2122,14 @@ Change History (Pre-Submission Iterations)
       initiator is ordered by the (AS, router-id) tuple, removing the
       equal-AS ambiguity.
 
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 38]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    *  Section 6.2: the consent record's binding of the NCFED identity to
       the expected claw domain is now normative.
 
@@ -2064,15 +2147,17 @@ Change History (Pre-Submission Iterations)
       emitted on the wire (Section 9.3); and the (AS, router-id) tie-
       break implemented for the federation channel.
 
+   *  Design rationale added from transport/routing-area review:
+      Section 4 now states why the shared port is a deployment
+      constraint and that general-purpose BGP stacks are not asked to
+      adopt discrimination; a transport-choice paragraph (TCP + custom
+      framing versus QUIC/WebSocket, including the head-of-line-blocking
+      trade-off) added to the prior-art appendix; Section 14.1 states
+      why the in-place TLS upgrade has no strippable STARTTLS command;
+      Section 10 defines the failure for an unsupported future baseline
+      (-32602 + close).
+
    Changes in internal -02 (from internal -01):
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 37]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    *  Asynchronous task delegation (Section 9): completion signalling is
       now explicitly advisory with polled state authoritative; callers
@@ -2090,6 +2175,16 @@ Internet-Draft                    NCFED                        July 2026
       opportunistically, with a fail-loud require mode and honest
       posture reporting -- a group the implementation cannot attest is
       reported as unknown, never as classical or post-quantum.
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 39]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    *  Sharing a listening port with BGP (Section 14.1): the mesh
       session's trust boundary is stated honestly -- cleartext BGP
@@ -2125,4 +2220,21 @@ Authors' Addresses
 
 
 
-Capobianco, et al.       Expires 20 January 2027               [Page 38]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 40]

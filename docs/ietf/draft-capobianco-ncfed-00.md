@@ -288,6 +288,20 @@ after the handshake ("STARTTLS"-style; see {{channel-sec}}), which keeps the sha
 and its discrimination unchanged. {{seccons}} discusses the security consequences of
 sharing a port with BGP.
 
+The shared port is a deployment constraint, not an aesthetic preference: the
+reference deployments reach one another through single-port tunnel forwarders (and
+the equivalent NAT and firewall pinholes), where every additional listening port is
+an additional tunnel endpoint, credential, and access-control exception to
+provision, advertise after every address rotation, and keep consistent across
+operators. Multiplexing NCFED and its data plane onto the port the BGP mesh
+already uses lets one pinhole -- and one endpoint re-announcement ({{operational}})
+-- carry all three protocols. The discrimination layer is internal to the NCFED
+daemon, which embeds its own BGP engine; this document does *not* propose that
+general-purpose BGP implementations adopt first-octet discrimination or accept a
+shim in front of TCP port 179. A deployment that peers with a conventional BGP
+stack on its own port simply runs NCFED on a separate configured port, where the
+discrimination step degenerates to validating the NCFED preamble.
+
 # Federation Handshake {#handshake}
 
 Immediately after the "NCFED" magic, the initiating peer sends 8 further octets: a
@@ -673,6 +687,13 @@ feature advertisement with graceful degradation, not selection of a single commo
 version: an unrecognized feature name is simply not used, and no failure is defined
 for a feature one side requires but the other lacks.
 
+If a future revision defines a baseline with which an endpoint cannot interoperate,
+the endpoint SHOULD reject the peer's `n2n/hello` with JSON-RPC error -32602
+(invalid params), carrying a diagnostic message that names the baseline(s) it does
+support, and then close the channel. This gives the remote operator a parseable,
+attributable failure instead of a silently degraded feature set. The absence of a
+descriptor is never an error; it selects the baseline as above.
+
 Because the binary handshake carries no version indicator, an incompatible change
 cannot be signaled below the JSON-RPC layer, and -- as noted in {{handshake}} -- a
 version octet cannot simply be appended to the handshake. It is RECOMMENDED that any
@@ -870,6 +891,20 @@ Mechanism {{RFC5082}}. Implementations MUST enforce the discrimination read time
 malformed or unexpected preamble, to limit resource consumption by connections that
 stall before discrimination.
 
+Although the in-place TLS upgrade of {{channel-sec-tls}} is "STARTTLS"-style in
+mechanics, it does not inherit the classic STARTTLS stripping weakness: there is no
+cleartext upgrade command or capability offer on the wire for an active attacker to
+strip. Discrimination is positional -- the first octets of the TCP stream select
+the protocol -- and whether a given channel is then encrypted is decided by each
+endpoint's local, per-peer configuration ({{channel-sec-tls}}), never by an in-band
+offer from the remote peer. A peer therefore cannot induce cleartext operation:
+cleartext exists only as an explicit local operator mode, and an acceptor in
+enforcing mode ({{channel-sec-tiers}}) refuses a cleartext channel outright. An
+attacker who tampers with the cleartext preamble octets can only change which
+protocol engine receives the stream or which identity is claimed; the claimed
+identity is then still subject to the certificate verification and possession
+proof of {{channel-sec}}, which the attacker cannot satisfy.
+
 The co-resident BGP-4 mesh session itself is not protected by NCFED's channel
 security: after discrimination selects BGP, the mesh session proceeds as cleartext
 BGP and, on an untrusted path, its confidentiality currently depends on whatever
@@ -1065,6 +1100,25 @@ can co-tenant with BGP without terminating TLS. Its length-prefixed, flag-bearin
 framing and post-handshake message model are in the lineage of WebSocket {{RFC6455}}.
 Its use of AS/router-id as agent identity reuses the operational identity model of
 BGP-4 {{RFC4271}}, which fits the network-engineering deployment.
+
+*Transport choice.* NCFED runs over raw TCP with its own minimal framing rather
+than QUIC {{?RFC9000}} or WebSocket {{RFC6455}}. The deciding constraint is the
+shared listening port ({{discrimination}}): co-tenancy with BGP-4 requires
+discriminating the first octets of a TCP byte stream, which QUIC (UDP-based) cannot
+share at all and WebSocket (an HTTP upgrade) could share only by putting an HTTP
+server in front of BGP. QUIC is otherwise attractive for exactly the properties
+this document works around: it integrates TLS 1.3 natively (removing the in-place
+upgrade of {{channel-sec-tls}}), it survives endpoint address changes through
+connection migration (removing much of the re-dial machinery of {{operational}}),
+and its independent streams would eliminate the head-of-line blocking that a large
+fragmented message imposes on this framing -- a heartbeat cannot be interleaved
+mid-message ({{framing}}), so the 16 MiB reassembly bound caps, but does not
+remove, the delay a bulk transfer can impose on liveness and cancellation traffic.
+These trade-offs are accepted for the experimental deployment because the single
+shared pinhole ({{discrimination}}) dominates the operational cost. A future
+revision MAY define a QUIC binding for deployments that do not require BGP
+co-tenancy; the framing layer is deliberately thin so that the semantic layers of
+the two bindings would be identical.
 
 NCFED is closest, among current IETF work, to
 {{YAN-A2A}} ("Applicability of A2A Protocol for Network Management Agents"). That
@@ -1377,6 +1431,14 @@ Changes in the pre-submission review pass (from internal `-02`):
   with non-owners answered as unknown ({{semantics}}, {{seccons-deleg}});
   MEMBER_ID_TAKEN (-32022) emitted on the wire ({{errors}}); and the
   (AS, router-id) tie-break implemented for the federation channel.
+* Design rationale added from transport/routing-area review: {{discrimination}}
+  now states why the shared port is a deployment constraint and that
+  general-purpose BGP stacks are not asked to adopt discrimination; a
+  transport-choice paragraph (TCP + custom framing versus QUIC/WebSocket,
+  including the head-of-line-blocking trade-off) added to the prior-art
+  appendix; {{seccons-port}} states why the in-place TLS upgrade has no
+  strippable STARTTLS command; {{negotiation}} defines the failure for an
+  unsupported future baseline (-32602 + close).
 
 Changes in internal `-02` (from internal `-01`):
 
