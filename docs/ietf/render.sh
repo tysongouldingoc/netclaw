@@ -10,7 +10,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DRAFT="draft-capobianco-ncfed-02"
+DRAFT="draft-capobianco-ncfed-00"
 
 # The apt ruby3.0 that /usr/local/bin/kdrfc's shebang points at was removed by
 # the 26.04 upgrade; the working gem lives in the user install for ruby3.3.
