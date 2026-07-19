@@ -115,7 +115,7 @@ Internet-Draft                    NCFED                        July 2026
 
 
      9.1.  Method families . . . . . . . . . . . . . . . . . . . . .  14
-     9.2.  Asynchronous task delegation  . . . . . . . . . . . . . .  15
+     9.2.  Asynchronous task delegation  . . . . . . . . . . . . . .  14
      9.3.  Error codes . . . . . . . . . . . . . . . . . . . . . . .  15
    10. Version Signaling and Capability Advertisement  . . . . . . .  17
    11. Capability Cards  . . . . . . . . . . . . . . . . . . . . . .  17
@@ -698,15 +698,17 @@ Internet-Draft                    NCFED                        July 2026
    message's fragments; an endpoint MUST NOT emit a heartbeat while a
    message it is sending is partially transmitted.  A receiver that
    observes a Length-0, CONTINUATION-clear frame while a reassembly is
-   in progress SHOULD treat it as a protocol error and close the
-   channel.
+   in progress MUST treat it as a protocol error and close the channel.
 
    A reassembled message is a complete JSON-RPC 2.0 message (Section 9).
-   Receivers SHOULD bound both the total size of a reassembled message
-   and the memory held for in-progress reassembly, and close a channel
-   that exceeds the bound; see Section 14.7.  This document does not
-   define a specific aggregate bound; the reference implementation does
-   not currently enforce one (see Appendix B).
+   Reassembly is bounded in both size and time: a reassembled message
+   MUST NOT exceed 16 MiB (16,777,216 octets), and a receiver MUST close
+   the channel when an in-progress reassembly exceeds that bound or
+   remains incomplete more than 30 seconds after its first fragment was
+   received.  These bounds cap the memory and time a peer can consume
+   with CONTINUATION frames -- including a drip of the legal zero-length
+   fragments, each of which also counts as liveness (Section 8); see
+   Section 14.7.
 
 8.  Heartbeat and Liveness
 
@@ -715,13 +717,11 @@ Internet-Draft                    NCFED                        July 2026
    payload and MUST NOT be delivered to the application layer; it is
    sent only between complete messages (Section 7).
 
-
-
-
-
-
-
-
+   An endpoint SHOULD send a heartbeat frame approximately every 30
+   seconds (the heartbeat interval).  Any inbound frame, including a
+   heartbeat, is evidence of liveness and resets the endpoint's missed-
+   interval count for that channel.  An endpoint that receives no
+   inbound frame for 3 consecutive intervals (approximately 90 seconds)
 
 
 
@@ -730,11 +730,6 @@ Capobianco, et al.       Expires 20 January 2027               [Page 13]
 Internet-Draft                    NCFED                        July 2026
 
 
-   An endpoint SHOULD send a heartbeat frame approximately every 30
-   seconds (the heartbeat interval).  Any inbound frame, including a
-   heartbeat, is evidence of liveness and resets the endpoint's missed-
-   interval count for that channel.  An endpoint that receives no
-   inbound frame for 3 consecutive intervals (approximately 90 seconds)
    MUST consider the channel dead and close it.  These values mirror the
    BGP keepalive (30 s) and hold time (90 s) defaults [RFC4271].  On
    close, an endpoint that initiated the session SHOULD attempt to re-
@@ -779,16 +774,17 @@ Internet-Draft                    NCFED                        July 2026
    Additional methods (e.g., claw-to-claw chat) MAY be present; unknown
    methods are rejected with METHOD_NOT_FOUND (Section 9.3).
 
+9.2.  Asynchronous task delegation
+
+   A delegated task progresses through the states:
+
+
 
 
 Capobianco, et al.       Expires 20 January 2027               [Page 14]
 
 Internet-Draft                    NCFED                        July 2026
 
-
-9.2.  Asynchronous task delegation
-
-   A delegated task progresses through the states:
 
    submitted --> working --> completed
                         \--> failed
@@ -798,11 +794,13 @@ Internet-Draft                    NCFED                        July 2026
    the caller retrieves progress and the terminal result via n2n/tasks/
    status and n2n/tasks/result, and MAY request cancellation via
    n2n/tasks/cancel.  Task state persists across channel drops so that
-   results survive reconnection.  In the reference implementation these
-   retrieval methods are keyed by the task identifier alone and do not
-   verify that the caller is the peer that submitted the task; the task
-   identifier therefore functions as a bearer capability and MUST be
-   treated as a secret (see Section 14.6).  This document does not
+   results survive reconnection.  Task retrieval is bound to the
+   submitter: the callee MUST verify that the caller of n2n/tasks/
+   status, n2n/tasks/result, or n2n/tasks/cancel is the authenticated
+   peer that submitted the task, and MUST answer a request for a task
+   the caller does not own exactly as it answers a request for a task
+   that does not exist, so that task identifiers can be neither used nor
+   probed by a third party (see Section 14.6).  This document does not
    define a retention or garbage-collection policy for terminal task
    state, nor idempotency or retry semantics for resubmission.
 
@@ -828,6 +826,8 @@ Internet-Draft                    NCFED                        July 2026
    (-32000 to -32099) [JSONRPC]; this reuse is intentional and
    permitted.  The following application error codes are defined for
    eN2N:
+
+
 
 
 
@@ -898,12 +898,10 @@ Capobianco, et al.       Expires 20 January 2027               [Page 16]
 Internet-Draft                    NCFED                        July 2026
 
 
-   MEMBER_ID_TAKEN (-32022) is reserved for an enrollment whose member
-   identifier is already pinned to a different key.  In the reference
-   implementation this condition is currently reported as
-   ENROLL_TOKEN_INVALID (-32021), and -32022 is not yet emitted on the
-   wire (see Appendix B).  A key-possession failure at in2n/hello or
-   in2n/enroll is reported as MEMBER_NOT_TRUSTED (-32023).
+   MEMBER_ID_TAKEN (-32022) reports an enrollment whose member
+   identifier is already pinned to a different key.  A key-possession
+   failure at in2n/hello or in2n/enroll is reported as
+   MEMBER_NOT_TRUSTED (-32023).
 
 10.  Version Signaling and Capability Advertisement
 
@@ -946,6 +944,8 @@ Internet-Draft                    NCFED                        July 2026
       to expose to this peer, after applying the per-peer visibility/
       authorization policy (not the endpoint's full local set);
 
+   *  badges: coarse capability tags;
+
 
 
 
@@ -953,8 +953,6 @@ Capobianco, et al.       Expires 20 January 2027               [Page 17]
 
 Internet-Draft                    NCFED                        July 2026
 
-
-   *  badges: coarse capability tags;
 
    *  posture: the advertiser's operational security posture, as {
       "mode", "state", "controls" } (e.g., mode production, state
@@ -994,6 +992,8 @@ Internet-Draft                    NCFED                        July 2026
    shown in Figure 4.  Federation requires both.  Which "pending" state
    a peer occupies depends only on which grant has been recorded so far,
    not on a fixed order.
+
+
 
 
 
@@ -1413,23 +1413,23 @@ Internet-Draft                    NCFED                        July 2026
       revision is expected to carry a decrementing hop count in the tool
       and task method families (Appendix B).
 
-   Because the task-retrieval methods are keyed by task identifier alone
-   (Section 9), a task identifier is a bearer capability: a peer that
-   learns another peer's task identifier could read or cancel that task.
-   Implementations SHOULD generate unguessable task identifiers, and a
-   future revision SHOULD bind a task to the requesting peer and
-   authorize retrieval accordingly.
+   Task retrieval is bound to the submitting peer (Section 9), so a task
+   identifier is not by itself a bearer capability: a third party that
+   learns another peer's task identifier is answered as if the task did
+   not exist, and cannot read, cancel, or even confirm the existence of
+   the task.  Implementations SHOULD still generate unguessable task
+   identifiers as defence in depth.
 
 14.7.  Denial of service
 
    A payload is capped at 64 KiB per frame (Section 7) and an oversize
-   Length MUST cause a close.  However, a message MAY be reassembled
-   from an unbounded number of CONTINUATION frames; a receiver SHOULD
-   impose an upper bound on the total reassembled message size and on
-   the memory retained for in-progress reassembly, and close a channel
-   that exceeds it.  The reference implementation does not currently
-   enforce such an aggregate bound (Appendix B); a future revision is
-   expected to define one together with a reassembly timeout.  The
+   Length MUST cause a close.  A message reassembled from CONTINUATION
+   frames is further bounded to 16 MiB in aggregate and to 30 seconds of
+   reassembly time (Section 7); a receiver MUST close a channel that
+   exceeds either bound.  Without the time bound, a peer could hold a
+   reassembly buffer open indefinitely with a drip of legal zero-length
+   fragments, each of which also resets the liveness accounting of
+   Section 8 -- the size bound alone does not close that hole.  The
    heartbeat mechanism (Section 8) and cold-start (Section 13) can be
    abused as resource-exhaustion vectors; operators SHOULD apply the
    per-peer rate/approval controls above and the port protections of
@@ -1750,8 +1750,8 @@ Internet-Draft                    NCFED                        July 2026
    frame- and handshake-level behavior that the tunnel capture above
    could not expose was verified directly against the reference daemon
    on its cleartext loopback listen port, before any TLS upgrade, with a
-   purpose-built client (ncfed-conformance-test.py in the project
-   repository).  Observed results, each matching this specification:
+   purpose-built conformance client.  Observed results, each matching
+   this specification:
 
    *  Section 4 discrimination.  A first octet of 0x00 (unrecognized), a
       direct TLS ClientHello (first octet 0x16), and 'N' followed by an
@@ -1828,20 +1828,20 @@ Internet-Draft                    NCFED                        July 2026
    and the direct BGP session re-established at the new endpoint on the
    first re-dial, verified end to end between AS 65099 and AS 65001.
 
+   *Hardened at pre-submission review.* Four protections that earlier
+   internal iterations recorded as known limitations are implemented in
+   the reference implementation as specified in this document: the (AS,
+   router-id) deterministic- initiator tie-break (Section 5); the 16 MiB
+   / 30 s reassembly bounds, including closing on a heartbeat received
+   mid-reassembly (Section 7, Section 14.7); task retrieval bound to the
+   submitting peer, answering non-owners with the missing-task shape
+   (Section 9, Section 14.6); and MEMBER_ID_TAKEN (-32022) emitted on
+   the wire (Section 9.3).  Each is covered by the project test suite.
+
    *Known limitations recorded for a future revision.* The following
    gaps remain in the current implementation and are targeted for a
    future NCFED revision:
 
-   *  Message reassembly enforces the 64 KiB per-frame cap but no
-      aggregate size bound or reassembly timeout.  See Section 14.7.
-
-   *  The tool and task method families carry no delegation hop count,
-      and task-retrieval methods do not verify caller ownership.  See
-      Section 14.6.
-
-   *  MEMBER_ID_TAKEN (-32022) is defined but not yet emitted; the
-      condition is currently reported as ENROLL_TOKEN_INVALID (-32021).
-      See Section 9.3.
 
 
 
@@ -1850,14 +1850,18 @@ Capobianco, et al.       Expires 20 January 2027               [Page 33]
 Internet-Draft                    NCFED                        July 2026
 
 
+   *  The tool and task method families carry no delegation hop count.
+      Transitive re-delegation is not implemented, so the field is
+      deferred until it exists; an implementation that adds transitive
+      delegation MUST add and enforce one first.  See Section 14.6.
+
    *  In-band "version negotiation" is feature advertisement with
       graceful degradation, not selection of a common protocol version.
       See Section 10.
 
-   *  The deterministic-initiator comparison is implemented on the AS
-      number alone (strictly lower dials); the (AS, router-id) tie-break
-      of Section 5 for equal AS numbers is specified but not yet
-      implemented, so equal-AS peers do not yet establish a channel.
+   *  The tuple tie-break of Section 5 governs the NCFED federation
+      channel; the associated NCTUN data plane (out of scope here) still
+      keys tunnels by AS alone and does not support equal-AS peers.
 
    This evidence is provided to document running code and operational
    reality; it is not a normative part of the protocol.
@@ -1881,10 +1885,6 @@ C.1.  eN2N methods
    its possession proof* (Section 6.3): cert_pem is the sender's
    certificate and signature proves possession of the matching private
    key over the acceptor's nonce.
-
-
-
-
 
 
 
@@ -1951,8 +1951,8 @@ Internet-Draft                    NCFED                        July 2026
              "request_id": "as65001-192.0.2.1:43" }
    result: { "task_id": "<opaque string>", "state": "submitted" }
 
-   n2n/tasks/status, n2n/tasks/result, n2n/tasks/cancel -- each takes
-   params: { "task_id": "<opaque string>" } and returns:
+
+
 
 
 
@@ -1961,6 +1961,12 @@ Capobianco, et al.       Expires 20 January 2027               [Page 35]
 
 Internet-Draft                    NCFED                        July 2026
 
+
+   n2n/tasks/status, n2n/tasks/result, n2n/tasks/cancel -- each takes
+   params: { "task_id": "<opaque string>" }. Retrieval is bound to the
+   submitter (Section 9): a caller other than the authenticated peer
+   that submitted the task receives the same answer as for an unknown
+   task_id (state unknown; cancelled: false).  Each returns:
 
    status: {
      "task_id": "...", "target": "<skill-name>",
@@ -2002,12 +2008,6 @@ C.2.  iN2N methods
    returns MEMBER_NOT_TRUSTED (-32023) and counts toward auto-quarantine
    (Section 14.3).
 
-   params: { "member_id":       "<risk-local id>",
-             "key_fingerprint": "<hex SHA-256 of SubjectPublicKeyInfo>",
-             "signature":       "<hex DER ECDSA over the nonce>" }
-   result: { "risk": "<risk name>", "trusted": true,
-             "member_state": "active" }
-
 
 
 
@@ -2017,6 +2017,12 @@ Capobianco, et al.       Expires 20 January 2027               [Page 36]
 
 Internet-Draft                    NCFED                        July 2026
 
+
+   params: { "member_id":       "<risk-local id>",
+             "key_fingerprint": "<hex SHA-256 of SubjectPublicKeyInfo>",
+             "signature":       "<hex DER ECDSA over the nonce>" }
+   result: { "risk": "<risk name>", "trusted": true,
+             "member_state": "active" }
 
 Change History (Pre-Submission Iterations)
 
@@ -2050,7 +2056,23 @@ Change History (Pre-Submission Iterations)
    *  Section 10 retitled "Version Signaling and Capability
       Advertisement" to reflect that no common version is negotiated.
 
+   *  Protocol hardening, specified and implemented together: reassembly
+      bounded to 16 MiB / 30 seconds with heartbeat-mid-reassembly a
+      MUST-close protocol error (Section 7, Section 14.7); task
+      retrieval bound to the submitting peer with non-owners answered as
+      unknown (Section 9, Section 14.6); MEMBER_ID_TAKEN (-32022)
+      emitted on the wire (Section 9.3); and the (AS, router-id) tie-
+      break implemented for the federation channel.
+
    Changes in internal -02 (from internal -01):
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 37]
+
+Internet-Draft                    NCFED                        July 2026
+
 
    *  Asynchronous task delegation (Section 9): completion signalling is
       now explicitly advisory with polled state authoritative; callers
@@ -2062,17 +2084,6 @@ Change History (Pre-Submission Iterations)
       (Section 14.5): the cleartext discrimination preamble (AS/router-
       id) and the domain-verified SNI are documented as accepted,
       posture-surfaced residuals; ECH is recommended where available.
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 37]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    *  Confidentiality and integrity (Section 14.4): post-quantum hybrid
       key exchange (e.g. X25519MLKEM768) is recommended
@@ -2111,17 +2122,6 @@ Authors' Addresses
    Byrn Baker
    Email: byrn@byrnbaker.me
    URI:   https://byrnbaker.me
-
-
-
-
-
-
-
-
-
-
-
 
 
 

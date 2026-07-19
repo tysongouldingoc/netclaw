@@ -517,14 +517,16 @@ is a Length-0, CONTINUATION-clear frame, and because reassembly is never in prog
 between messages, a heartbeat is sent only between complete messages, never between a
 message's fragments; an endpoint MUST NOT emit a heartbeat while a message it is
 sending is partially transmitted. A receiver that observes a Length-0,
-CONTINUATION-clear frame while a reassembly is in progress SHOULD treat it as a
+CONTINUATION-clear frame while a reassembly is in progress MUST treat it as a
 protocol error and close the channel.
 
-A reassembled message is a complete JSON-RPC 2.0 message ({{semantics}}). Receivers
-SHOULD bound both the total size of a reassembled message and the memory held for
-in-progress reassembly, and close a channel that exceeds the bound; see
-{{seccons-dos}}. This document does not define a specific aggregate bound; the
-reference implementation does not currently enforce one (see {{impl-status}}).
+A reassembled message is a complete JSON-RPC 2.0 message ({{semantics}}). Reassembly
+is bounded in both size and time: a reassembled message MUST NOT exceed 16 MiB
+(16,777,216 octets), and a receiver MUST close the channel when an in-progress
+reassembly exceeds that bound or remains incomplete more than 30 seconds after its
+first fragment was received. These bounds cap the memory and time a peer can consume
+with CONTINUATION frames -- including a drip of the legal zero-length fragments,
+each of which also counts as liveness ({{heartbeat}}); see {{seccons-dos}}.
 
 # Heartbeat and Liveness {#heartbeat}
 
@@ -589,10 +591,12 @@ submitted --> working --> completed
 The callee returns an opaque task identifier from `n2n/tasks/submit`; the caller
 retrieves progress and the terminal result via `n2n/tasks/status` and
 `n2n/tasks/result`, and MAY request cancellation via `n2n/tasks/cancel`. Task state
-persists across channel drops so that results survive reconnection. In the reference
-implementation these retrieval methods are keyed by the task identifier alone and do
-not verify that the caller is the peer that submitted the task; the task identifier
-therefore functions as a bearer capability and MUST be treated as a secret (see
+persists across channel drops so that results survive reconnection. Task retrieval
+is bound to the submitter: the callee MUST verify that the caller of
+`n2n/tasks/status`, `n2n/tasks/result`, or `n2n/tasks/cancel` is the authenticated
+peer that submitted the task, and MUST answer a request for a task the caller does
+not own exactly as it answers a request for a task that does not exist, so that
+task identifiers can be neither used nor probed by a third party (see
 {{seccons-deleg}}). This document does not define a retention or garbage-collection
 policy for terminal task state, nor idempotency or retry semantics for resubmission.
 
@@ -642,10 +646,8 @@ The following application error codes are defined for iN2N ({{trust-in2n}}):
 | -32031 | OUT_OF_SCOPE          |
 {: title="iN2N error codes"}
 
-MEMBER_ID_TAKEN (-32022) is reserved for an enrollment whose member identifier is
-already pinned to a different key. In the reference implementation this condition is
-currently reported as ENROLL_TOKEN_INVALID (-32021), and -32022 is not yet emitted on
-the wire (see {{impl-status}}). A key-possession failure at `in2n/hello` or
+MEMBER_ID_TAKEN (-32022) reports an enrollment whose member identifier is already
+pinned to a different key. A key-possession failure at `in2n/hello` or
 `in2n/enroll` is reported as MEMBER_NOT_TRUSTED (-32023).
 
 # Version Signaling and Capability Advertisement {#negotiation}
@@ -1002,21 +1004,21 @@ at the request of a remote AI agent. Deployments:
   future revision is expected to carry a decrementing hop count in the tool and task
   method families ({{impl-status}}).
 
-Because the task-retrieval methods are keyed by task identifier alone
-({{semantics}}), a task identifier is a bearer capability: a peer that learns another
-peer's task identifier could read or cancel that task. Implementations SHOULD generate
-unguessable task identifiers, and a future revision SHOULD bind a task to the
-requesting peer and authorize retrieval accordingly.
+Task retrieval is bound to the submitting peer ({{semantics}}), so a task identifier
+is not by itself a bearer capability: a third party that learns another peer's task
+identifier is answered as if the task did not exist, and cannot read, cancel, or
+even confirm the existence of the task. Implementations SHOULD still generate
+unguessable task identifiers as defence in depth.
 
 ## Denial of service {#seccons-dos}
 
 A payload is capped at 64 KiB per frame ({{framing}}) and an oversize Length MUST
-cause a close. However, a message MAY be reassembled from an unbounded number of
-CONTINUATION frames; a receiver SHOULD impose an upper bound on the total reassembled
-message size and on the memory retained for in-progress reassembly, and close a
-channel that exceeds it. The reference implementation does not currently enforce such
-an aggregate bound ({{impl-status}}); a future revision is expected to define one
-together with a reassembly timeout. The heartbeat mechanism ({{heartbeat}}) and
+cause a close. A message reassembled from CONTINUATION frames is further bounded to
+16 MiB in aggregate and to 30 seconds of reassembly time ({{framing}}); a receiver
+MUST close a channel that exceeds either bound. Without the time bound, a peer
+could hold a reassembly buffer open indefinitely with a drip of legal zero-length
+fragments, each of which also resets the liveness accounting of {{heartbeat}} --
+the size bound alone does not close that hole. The heartbeat mechanism ({{heartbeat}}) and
 cold-start ({{operational}}) can be abused as resource-exhaustion vectors; operators
 SHOULD apply the per-peer rate/approval controls above and the port protections of
 {{seccons-port}}.
@@ -1134,8 +1136,8 @@ the frame-level behavior specified in {{framing}} and {{handshake}} directly.
 **Loopback discrimination and handshake conformance (AS 65099).** The frame- and
 handshake-level behavior that the tunnel capture above could not expose was verified
 directly against the reference daemon on its cleartext loopback listen port, before
-any TLS upgrade, with a purpose-built client (`ncfed-conformance-test.py` in the
-project repository). Observed results, each matching this specification:
+any TLS upgrade, with a purpose-built conformance client. Observed results, each
+matching this specification:
 
 * {{discrimination}} discrimination. A first octet of 0x00 (unrecognized), a direct
   TLS ClientHello (first octet 0x16), and 'N' followed by an unknown four-octet magic
@@ -1196,21 +1198,27 @@ live mesh, a peer's rotated endpoint announcement was accepted and the direct BG
 session re-established at the new endpoint on the first re-dial, verified end to end
 between AS 65099 and AS 65001.
 
+**Hardened at pre-submission review.** Four protections that earlier internal
+iterations recorded as known limitations are implemented in the reference
+implementation as specified in this document: the (AS, router-id) deterministic-
+initiator tie-break ({{handshake}}); the 16 MiB / 30 s reassembly bounds, including
+closing on a heartbeat received mid-reassembly ({{framing}}, {{seccons-dos}});
+task retrieval bound to the submitting peer, answering non-owners with the
+missing-task shape ({{semantics}}, {{seccons-deleg}}); and MEMBER_ID_TAKEN (-32022)
+emitted on the wire ({{errors}}). Each is covered by the project test suite.
+
 **Known limitations recorded for a future revision.** The following gaps remain in the
 current implementation and are targeted for a future NCFED revision:
 
-* Message reassembly enforces the 64 KiB per-frame cap but no aggregate size bound or
-  reassembly timeout. See {{seccons-dos}}.
-* The tool and task method families carry no delegation hop count, and task-retrieval
-  methods do not verify caller ownership. See {{seccons-deleg}}.
-* MEMBER_ID_TAKEN (-32022) is defined but not yet emitted; the condition is currently
-  reported as ENROLL_TOKEN_INVALID (-32021). See {{errors}}.
+* The tool and task method families carry no delegation hop count. Transitive
+  re-delegation is not implemented, so the field is deferred until it exists; an
+  implementation that adds transitive delegation MUST add and enforce one first.
+  See {{seccons-deleg}}.
 * In-band "version negotiation" is feature advertisement with graceful degradation,
   not selection of a common protocol version. See {{negotiation}}.
-* The deterministic-initiator comparison is implemented on the AS number alone
-  (strictly lower dials); the (AS, router-id) tie-break of {{handshake}} for equal
-  AS numbers is specified but not yet implemented, so equal-AS peers do not yet
-  establish a channel.
+* The tuple tie-break of {{handshake}} governs the NCFED federation channel; the
+  associated NCTUN data plane (out of scope here) still keys tunnels by AS alone
+  and does not support equal-AS peers.
 
 This evidence is provided to document running code and operational reality; it is not
 a normative part of the protocol.
@@ -1283,7 +1291,10 @@ result: { "task_id": "<opaque string>", "state": "submitted" }
 ~~~
 
 `n2n/tasks/status`, `n2n/tasks/result`, `n2n/tasks/cancel` -- each takes
-`params: { "task_id": "<opaque string>" }` and returns:
+`params: { "task_id": "<opaque string>" }`. Retrieval is bound to the submitter
+({{semantics}}): a caller other than the authenticated peer that submitted the
+task receives the same answer as for an unknown task_id (state `unknown`;
+`cancelled: false`). Each returns:
 
 ~~~
 status: {
@@ -1360,6 +1371,12 @@ Changes in the pre-submission review pass (from internal `-02`):
   authentication members and the exact signed input (`nonce || B`).
 * {{negotiation}} retitled "Version Signaling and Capability Advertisement" to
   reflect that no common version is negotiated.
+* Protocol hardening, specified and implemented together: reassembly bounded to
+  16 MiB / 30 seconds with heartbeat-mid-reassembly a MUST-close protocol error
+  ({{framing}}, {{seccons-dos}}); task retrieval bound to the submitting peer
+  with non-owners answered as unknown ({{semantics}}, {{seccons-deleg}});
+  MEMBER_ID_TAKEN (-32022) emitted on the wire ({{errors}}); and the
+  (AS, router-id) tie-break implemented for the federation channel.
 
 Changes in internal `-02` (from internal `-01`):
 
