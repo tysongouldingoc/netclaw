@@ -65,6 +65,7 @@ informative:
   RFC6335:
   RFC6455:
   RFC7301:
+  RFC9266:
   RFC7435:
   RFC8126:
   WIREGUARD:
@@ -89,9 +90,14 @@ informative:
 --- abstract
 
 This document specifies the NetClaw-to-NetClaw Federation Protocol (NCFED), an
-application-layer protocol that lets independently operated AI network-engineering
-agents ("NetClaws") discover one another's capabilities, invoke remote tools, and
-delegate tasks over long-lived TCP sessions. NCFED multiplexes its federation
+implementation-agnostic application-layer protocol that lets independently
+operated, heterogeneous AI network-engineering agents ("NCFED peers", or "claws")
+discover one another's capabilities, invoke remote tools, and delegate tasks over
+long-lived TCP sessions. Although named for its reference instantiation, NCFED is a
+wire specification, not an SDK, and federates arbitrary autonomous agent
+architectures across distinct administrative boundaries; a peer needs no knowledge
+of its counterparty's internal reasoning framework, prompt structure, or execution
+runtime. NCFED multiplexes its federation
 channel with BGP-4 and an associated tunneling data plane on a single listening
 port, using first-octet protocol discrimination. Its payload is JSON-RPC 2.0, onto
 which Model Context Protocol (MCP) tool-invocation semantics and Agent2Agent (A2A)
@@ -174,28 +180,34 @@ of-a-Feather), with the goal of a future Standards-Track document. This document
 asserts no IETF consensus. The technical content is category-neutral and may be
 re-targeted without change if adopted.
 
-# Conventions and Definitions
+# Conventions and Definitions {#terminology}
 
 {::boilerplate bcp14-tagged}
 
 The following terms are used:
 
-NetClaw (or "claw"):
-: A long-running AI agent process that exposes network-engineering capabilities as
-  tools.
+NCFED peer (or "claw"):
+: Any long-running, autonomous AI agent process that implements the NCFED state
+  machine and exposes network-engineering capabilities over JSON-RPC. The term is
+  implementation-agnostic: distinct agent architectures (for example, the NetClaw
+  reference implementation, the independently developed Hermes agent, OpenClaw, or
+  a proprietary vendor framework) are all NCFED peers when they speak this
+  protocol. "NetClaw" refers specifically to the reference implementation
+  ({{impl-status}}); "claw" is used generically for any peer.
 
 Risk:
-: A named group of claws under a single operator's administrative control,
-  coordinated by a Border. ("A risk" is the collective noun for lobsters, the
-  project mascot.)
+: A named, logical cluster of NCFED peers under a single operator's administrative
+  control, coordinated by a Border. The members of a risk MAY run entirely
+  different agent engines. ("A risk" is the collective noun for lobsters, the
+  reference project's mascot.)
 
 Border:
-: The single claw in a risk that terminates external communication, routes requests
-  to members, and holds the risk's external identity.
+: The single NCFED peer in a risk that terminates external communication, routes
+  requests to members, and holds the risk's external identity.
 
 Member:
-: A narrowly scoped claw within a risk that dials outbound to its Border and accepts
-  delegated work only over that channel.
+: A narrowly scoped NCFED peer within a risk that dials outbound to its Border and
+  accepts delegated work only over that channel.
 
 eN2N (external federation):
 : Federation between claws in different trust domains (different operators),
@@ -288,6 +300,20 @@ after the handshake ("STARTTLS"-style; see {{channel-sec}}), which keeps the sha
 and its discrimination unchanged. {{seccons}} discusses the security consequences of
 sharing a port with BGP.
 
+The shared port is a deployment constraint, not an aesthetic preference: the
+reference deployments reach one another through single-port tunnel forwarders (and
+the equivalent NAT and firewall pinholes), where every additional listening port is
+an additional tunnel endpoint, credential, and access-control exception to
+provision, advertise after every address rotation, and keep consistent across
+operators. Multiplexing NCFED and its data plane onto the port the BGP mesh
+already uses lets one pinhole -- and one endpoint re-announcement ({{operational}})
+-- carry all three protocols. The discrimination layer is internal to the NCFED
+daemon, **which embeds its own BGP engine**; this document does *not* propose that
+general-purpose BGP implementations adopt first-octet discrimination or accept a
+shim in front of TCP port 179. A deployment that peers with a conventional BGP
+stack on its own port simply runs NCFED on a separate configured port, where the
+discrimination step degenerates to validating the NCFED preamble.
+
 # Federation Handshake {#handshake}
 
 Immediately after the "NCFED" magic, the initiating peer sends 8 further octets: a
@@ -362,7 +388,8 @@ future incompatible change be negotiated in-band ({{negotiation}}), or be introd
 only in a form that a legacy peer rejects cleanly rather than misparses.
 
 The 32-octet possession challenge appended to the acceptor's reply is
-such an incompatible change: it appears **after** the acceptor's 13-octet handshake, so
+such an incompatible change. The nonce is *not* part of the 13-octet binary
+handshake itself: it appears **after** the acceptor's 13-octet handshake, so
 a peer implementing an earlier iteration of the protocol (which reads only 13 octets and sends
 `n2n/hello` without a signature) does not interoperate with a peer implementing this
 document. This is intentional -- the secured channel ({{channel-sec}}) is a prerequisite
@@ -421,9 +448,23 @@ Each peer is authenticated under one of two per-peer trust models, recorded loca
   the same identity presenting a different key MUST be refused and flagged to the
   operator, and MUST NOT be silently re-pinned ({{seccons-tofu}}).
 
-The two models interoperate on one channel: the acceptor MAY present a domain-verified
-certificate while a pinned initiator authenticates itself with a self-signed one, or
-vice versa.
+The trust model governs the credential a peer presents in the **acceptor
+(listener) role**: when a peer is dialed, it presents either a domain-verified or a
+pinned server certificate, and the dialer authenticates it accordingly during the
+TLS handshake ({{channel-sec-tls}}). In the **initiator (dialer) role** a peer
+authenticates itself at the application layer by proving possession of a self-signed
+identity key ({{channel-sec-pop}}), which the acceptor pins on first contact (TOFU);
+the initiator does not present a domain-verified certificate in this direction, and
+in the reference implementation the possession proof is always over the self-signed
+identity key regardless of the peer's acceptor-role trust model. Because the
+deterministic-initiator rule ({{handshake}}) assigns the two roles per peer pair,
+each identity is domain-validated in the direction where it is dialed and pinned in
+the direction where it dials. Authentication is therefore mutual on every encrypted
+channel, but the mechanism is asymmetric by role; a deployment that requires a
+peer's identity to be domain-anchored in both directions cannot rely on the
+initiator-role possession proof for that and SHOULD constrain the domain-verified
+peer to the acceptor role (i.e., assign it the higher-or-equal (AS, router-id)
+tuple).
 
 ## Proof of possession {#channel-sec-pop}
 
@@ -438,13 +479,21 @@ presents, over the acceptor's per-connection nonce:
    active forgery and MUST be rejected with the channel closed.
 3. On an encrypted channel the signed value is `nonce || B`, where `B` is the
    tls-server-end-point channel binding {{RFC5929}}: the SHA-256 of the acceptor's
-   certificate. The initiator computes `B` from the certificate it verified during
-   the TLS handshake, and the acceptor from its own certificate; the two agree only
-   for the same session, so a proof captured on one channel does not verify on
-   another even if the nonce were reused. On a cleartext channel `B` is empty and the
-   proof is over the nonce alone. Because the nonce is fresh, single-use, and -- on an
-   encrypted channel -- delivered confidentially under a verified server certificate
-   and bound to it, a proof cannot be replayed or relayed to a different session.
+   certificate. `B` is an *endpoint* binding, not a per-connection value -- the same
+   certificate yields the same `B` across every connection that presents it -- so
+   `B` alone does not make a proof session-unique. Replay and relay resistance come
+   instead from the nonce: it is fresh, single-use, and -- on an encrypted channel --
+   delivered confidentially under the acceptor's server certificate, which the
+   initiator has already verified under its trust model. An initiator therefore signs
+   only a nonce it received over a TLS session to the acceptor it authenticated, so a
+   proof cannot be relayed to a different acceptor (whose certificate the relay
+   cannot present); `B` adds defence in depth by additionally binding the proof to
+   the acceptor's certificate. A future revision SHOULD adopt the {{RFC9266}}
+   `tls-exporter` binding, which *is* per-connection, once the implementation's TLS
+   stack exposes it (the reference deployment's Python `ssl` module does not through
+   3.14; see {{impl-status}}). On a cleartext channel `B` is empty, the proof is over
+   the nonce alone, and it does not authenticate the acceptor to the initiator --
+   such a channel MUST NOT be described as mutually authenticated.
 
 The acceptor authenticates the initiator by this proof; the initiator authenticates the
 acceptor by verifying the acceptor's certificate during the TLS handshake
@@ -499,7 +548,10 @@ Length:
 : Unsigned 32-bit integer, network byte order, counting the payload octets only.
   A payload MUST NOT exceed 65536 octets (64 KiB). A larger message MUST be split
   across multiple frames using the CONTINUATION flag. A receiver that reads a Length
-  greater than 65536 MUST close the connection.
+  greater than 65536 MUST close the connection. The 64 KiB cap keeps a receiver's
+  per-frame buffer small and predictable while still fitting typical NCFED
+  messages -- hellos, capability cards, tool calls -- in a single frame;
+  fragmentation is the exception, for bulk tool output and task results.
 
 Flags:
 : One octet. Bit 0 (0x01), CONTINUATION: when set, the payload is a fragment of a
@@ -553,6 +605,21 @@ single JSON-RPC object per reassembled message. A reassembled message that is no
 well-formed UTF-8 JSON is discarded and SHOULD be logged; its receipt does not by
 itself require closing the channel. The concrete parameter and result objects for
 each method are specified in {{method-ref}}.
+
+Because NCFED is implementation-agnostic ({{terminology}}), its method families are
+a normalized wire wrapper over whatever internal representation each peer uses:
+disparate agent implementations translate their local tool-execution and
+task-delegation strategies into the common MCP and A2A constructs carried here, and
+a peer requires no knowledge of its counterparty's reasoning framework to
+interoperate. A consequence is a clean separation between *protocol* errors and
+*tool* errors. The JSON-RPC error codes of {{errors}} report NCFED-level failures --
+federation, authorization, transport, framing. An error *inside* an invoked tool
+(for example, a callee-side input-schema validation failure) is not an NCFED
+protocol error: it is returned in the MCP tool-result object as a successful
+`n2n/tools/call` response whose result carries the tool's own error indication,
+and is relayed verbatim to the calling peer. This lets a foreign peer surface a
+remote tool's failure to its operator without either side sharing tool internals,
+and keeps the NCFED error space stable regardless of what tools a peer exposes.
 
 Before federation (eN2N) or trust establishment (iN2N) completes, an endpoint MUST
 reject any method other than the handshake method (`n2n/hello` for eN2N;
@@ -672,6 +739,13 @@ peer as the baseline "052" with an empty feature set. This mechanism is therefor
 feature advertisement with graceful degradation, not selection of a single common
 version: an unrecognized feature name is simply not used, and no failure is defined
 for a feature one side requires but the other lacks.
+
+If a future revision defines a baseline with which an endpoint cannot interoperate,
+the endpoint SHOULD reject the peer's `n2n/hello` with JSON-RPC error -32602
+(invalid params), carrying a diagnostic message that names the baseline(s) it does
+support, and then close the channel. This gives the remote operator a parseable,
+attributable failure instead of a silently degraded feature set. The absence of a
+descriptor is never an error; it selects the baseline as above.
 
 Because the binary handshake carries no version indicator, an incompatible change
 cannot be signaled below the JSON-RPC layer, and -- as noted in {{handshake}} -- a
@@ -864,11 +938,26 @@ Because NCFED, BGP-4, and NCTUN share a TCP listening port ({{discrimination}}),
 NCFED discrimination and handshake parsers are reachable by any host that can reach
 the BGP port. Operators SHOULD protect the shared port with the same controls they
 apply to BGP peers -- for example, access-control lists restricting the permitted
-source addresses and, where the deployment allows, the Generalized TTL Security
-Mechanism {{RFC5082}}. Implementations MUST enforce the discrimination read timeouts
+source addresses, connection rate limiting applied before discrimination, and,
+where the deployment allows, the Generalized TTL Security Mechanism {{RFC5082}}.
+Implementations MUST enforce the discrimination read timeouts
 ({{discrimination}}: 30 s for the first octet, 10 s for the magic) and close on any
 malformed or unexpected preamble, to limit resource consumption by connections that
 stall before discrimination.
+
+Although the in-place TLS upgrade of {{channel-sec-tls}} is "STARTTLS"-style in
+mechanics, it does not inherit the classic STARTTLS stripping weakness: there is no
+cleartext upgrade command or capability offer on the wire for an active attacker to
+strip. Discrimination is positional -- the first octets of the TCP stream select
+the protocol -- and whether a given channel is then encrypted is decided by each
+endpoint's local, per-peer configuration ({{channel-sec-tls}}), never by an in-band
+offer from the remote peer. A peer therefore cannot induce cleartext operation:
+cleartext exists only as an explicit local operator mode, and an acceptor in
+enforcing mode ({{channel-sec-tiers}}) refuses a cleartext channel outright. An
+attacker who tampers with the cleartext preamble octets can only change which
+protocol engine receives the stream or which identity is claimed; the claimed
+identity is then still subject to the certificate verification and possession
+proof of {{channel-sec}}, which the attacker cannot satisfy.
 
 The co-resident BGP-4 mesh session itself is not protected by NCFED's channel
 security: after discrimination selects BGP, the mesh session proceeds as cleartext
@@ -907,9 +996,13 @@ mechanism:
   considers card contents sensitive SHOULD operate in enforcing mode, which admits only
   the possession tier.
 
-On an encrypted channel the possession proof is bound to the session by the
-tls-server-end-point channel binding ({{channel-sec-pop}}), so it cannot be relayed.
-Deployments SHOULD still apply defence in depth: the shared-port source controls of
+On an encrypted channel the possession proof cannot be relayed to a different
+acceptor: the fresh single-use nonce is delivered confidentially under the
+acceptor's verified server certificate, so an initiator only ever signs a nonce
+bound to the acceptor it authenticated, and the tls-server-end-point value adds a
+further endpoint binding ({{channel-sec-pop}}). (That value is an endpoint, not a
+per-connection, binding; a future revision SHOULD adopt {{RFC9266}} `tls-exporter`
+once the TLS stack exposes it.) Deployments SHOULD still apply defence in depth: the shared-port source controls of
 {{seccons-port}} and the default-deny per-peer authorization of {{seccons-deleg}}. An
 emerging agent-identity and naming layer such as the Agent Name Service {{ANS}} could in
 future supply discovery and naming above this authentication layer.
@@ -923,7 +1016,9 @@ therefore MUST have at least 128 bits of entropy, MUST be single-use, SHOULD car
 expiry, and SHOULD be delivered over a confidential out-of-band channel. To detect an
 intercepted enrollment, the member SHOULD display the SHA-256 fingerprint of its
 generated certificate out of band so the operator can confirm it matches the value the
-Border pinned. If enrollment is suspected to have been intercepted, the operator
+Border pinned. The Border SHOULD log every enrollment fingerprint mismatch and
+surface it to the operator as a security alert, not merely a failed enrollment.
+If enrollment is suspected to have been intercepted, the operator
 removes (unpins) the member and re-enrolls it with a fresh token; the compromised key
 is thereby refused. This model is a deliberate instance of opportunistic security
 {{RFC7435}}: it raises the bar against passive attackers and is appropriate for the
@@ -1056,7 +1151,7 @@ extensions of the tag space emerge, a future document may define such a registry
 
 --- back
 
-# Prior Art and Design Rationale
+# Prior Art and Design Rationale {#prior-art}
 
 NCFED's first-octet discrimination is analogous in spirit to, but distinct from, TLS
 ALPN {{RFC7301}}, which negotiates the application protocol within the TLS
@@ -1065,6 +1160,25 @@ can co-tenant with BGP without terminating TLS. Its length-prefixed, flag-bearin
 framing and post-handshake message model are in the lineage of WebSocket {{RFC6455}}.
 Its use of AS/router-id as agent identity reuses the operational identity model of
 BGP-4 {{RFC4271}}, which fits the network-engineering deployment.
+
+*Transport choice.* NCFED runs over raw TCP with its own minimal framing rather
+than QUIC {{?RFC9000}} or WebSocket {{RFC6455}}. The deciding constraint is the
+shared listening port ({{discrimination}}): co-tenancy with BGP-4 requires
+discriminating the first octets of a TCP byte stream, which QUIC (UDP-based) cannot
+share at all and WebSocket (an HTTP upgrade) could share only by putting an HTTP
+server in front of BGP. QUIC is otherwise attractive for exactly the properties
+this document works around: it integrates TLS 1.3 natively (removing the in-place
+upgrade of {{channel-sec-tls}}), it survives endpoint address changes through
+connection migration (removing much of the re-dial machinery of {{operational}}),
+and its independent streams would eliminate the head-of-line blocking that a large
+fragmented message imposes on this framing -- a heartbeat cannot be interleaved
+mid-message ({{framing}}), so the 16 MiB reassembly bound caps, but does not
+remove, the delay a bulk transfer can impose on liveness and cancellation traffic.
+These trade-offs are accepted for the experimental deployment because the single
+shared pinhole ({{discrimination}}) dominates the operational cost. A future
+revision MAY define a QUIC binding for deployments that do not require BGP
+co-tenancy; the framing layer is deliberately thin so that the semantic layers of
+the two bindings would be identical.
 
 NCFED is closest, among current IETF work, to
 {{YAN-A2A}} ("Applicability of A2A Protocol for Network Management Agents"). That
@@ -1085,6 +1199,20 @@ provides one audit, policy, and routing boundary and one external identity for a
 risk; members never accept inbound connections, which minimizes their attack
 surface.
 
+Defining NCFED as a strict wire specification rather than an SDK API is a
+deliberate choice for runtime agnosticism. Everything a peer must agree on is
+on the wire -- first-octet discrimination ({{discrimination}}), the binary
+handshake ({{handshake}}), the TLS upgrade and possession proof ({{channel-sec}}),
+the frame format ({{framing}}), and the JSON-RPC method families ({{semantics}}) --
+and nothing above the wire is prescribed. Two peers therefore interoperate with no
+shared code and no knowledge of each other's LLM orchestration, prompt structures,
+or local execution runtime; each side maps its internal representation onto the
+common MCP/A2A constructs at the boundary. This is what lets a risk mix agent
+engines ({{terminology}}) and lets independently developed agents federate across
+operators. The multi-implementation interoperability recorded in {{impl-status}}
+(the NetClaw reference engine and the independently developed Hermes agent) exercises
+this separation directly.
+
 # Implementation Status {#impl-status}
 {:removeinrfc="true"}
 
@@ -1097,13 +1225,36 @@ NCFED (eN2N and iN2N) is deployed and in daily use across a live three-operator 
 (AS 65001, AS 65007, AS 65099) and within one operator's risk (a Border and its
 member claws). Coverage: protocol discrimination, the 13-octet handshake, the frame
 format and heartbeat, JSON-RPC method families, in-band negotiation, and both trust
-models are all implemented and interoperating. The channel security of {{channel-sec}}
+models are all implemented and in daily use across the operators of the mesh, all
+running the reference implementation; interoperability with a second, independently
+developed implementation (Hermes) is recorded separately below. The channel security of {{channel-sec}}
 is implemented: the in-place TLS 1.3 upgrade, application-layer proof of possession
 with the two trust models (domain-verified via ACME/DNS-01 and pinned/TOFU), the
 possession/self-asserted admission tiers with enforcing mode, iN2N Border-as-CA hub
 attestation, and automatic certificate rotation. The reference deployment's own claw is
 domain-verified (a publicly trusted certificate for a claw domain, obtained and
 auto-renewed via DNS-01).
+
+**Multi-implementation interoperability (Hermes <-> NetClaw).** NCFED has been
+exercised between two independently developed agent implementations: the NetClaw
+reference engine and Hermes, a separate agent framework with its own codebase and
+reasoning runtime. In a captured session, a Hermes peer initiated an NCFED channel
+and issued an `n2n/tools/call` to audit a remote Cisco Modeling Labs (CML)
+environment held by the counterparty. The federation layer behaved exactly as
+specified end to end: the channel was discriminated, upgraded to TLS, authenticated,
+and authorized, and the call was routed to the remote tool. The remote tool then
+failed internally on an upstream input-schema (Pydantic) validation error on an
+`effective_permissions` field, and that tool-side error was returned to the Hermes
+peer within the MCP tool-result -- as a tool error, not an NCFED protocol error
+({{semantics}}) -- and surfaced cleanly to its operator. This exercises the design's
+central claim: the transport, identity, and federation layers are decoupled from any
+single agent's internal codebase, so two disparate implementations interoperate over
+the wire with neither sharing the other's runtime, and an in-tool failure is relayed
+faithfully rather than corrupting the channel. This is genuine interoperability
+evidence (two independently developed implementations exercising the same normative
+behavior), distinct from the multi-operator *operational* evidence above (which runs
+one implementation). The terminal captures are retained as artifacts in the project
+repository.
 
 **Interoperability evidence (packet capture):** a 37.5-second capture of a live NCFED
 channel between johns-risk (AS 65001) and Nick (AS 65007) was taken at the initiator
@@ -1355,7 +1506,7 @@ repository as internal revisions `-01` and `-02`; those iterations are archived
 there. The summaries below record what changed across them, for reviewers who
 followed the repository drafts.
 
-Changes in the pre-submission review pass (from internal `-02`):
+Changes in the pre-submission review passes (July 2026, from internal `-02`):
 
 * Abstract and {{trust-in2n}}: the eN2N and iN2N security models are now stated
   distinctly -- TLS 1.3 is integral to eN2N, while iN2N is mutually authenticated
@@ -1377,8 +1528,32 @@ Changes in the pre-submission review pass (from internal `-02`):
   with non-owners answered as unknown ({{semantics}}, {{seccons-deleg}});
   MEMBER_ID_TAKEN (-32022) emitted on the wire ({{errors}}); and the
   (AS, router-id) tie-break implemented for the federation channel.
+* Design rationale added from transport/routing-area review: {{discrimination}}
+  now states why the shared port is a deployment constraint and that
+  general-purpose BGP stacks are not asked to adopt discrimination; a
+  transport-choice paragraph (TCP + custom framing versus QUIC/WebSocket,
+  including the head-of-line-blocking trade-off) added to the prior-art
+  appendix; {{seccons-port}} states why the in-place TLS upgrade has no
+  strippable STARTTLS command; {{negotiation}} defines the failure for an
+  unsupported future baseline (-32602 + close).
+* Deep code-review reconciliation: the remote sever method was removed so
+  severing is strictly local ({{operational}}); the reassembly timer was
+  corrected so a zero-length-fragment drip cannot reset it ({{framing}}); TLS
+  1.3 is enforced as the minimum ({{channel-sec-tls}}). The eN2N trust model is
+  restated as asymmetric by role ({{channel-sec-models}}) -- domain-verification
+  applies to the acceptor-role credential, while the initiator authenticates by a
+  pinned self-signed possession proof -- matching the implementation rather than
+  overstating symmetry. The channel binding is described accurately as an
+  endpoint (not per-connection) binding, with replay/relay resistance from the
+  fresh confidential nonce and {{RFC9266}} `tls-exporter` noted as the intended
+  per-connection upgrade ({{channel-sec-pop}}, {{seccons-peer-auth}}).
+* Agent agnosticism made explicit (abstract, {{terminology}}, {{semantics}},
+  {{prior-art}}): NCFED is a wire specification that federates heterogeneous
+  agent engines, and the protocol/tool error separation is stated. Multi-
+  implementation interoperability with the independently developed Hermes agent
+  is recorded in {{impl-status}}.
 
-Changes in internal `-02` (from internal `-01`):
+Changes in internal `-02` (July 2026, from internal `-01`):
 
 * Asynchronous task delegation ({{semantics}}): completion signalling is now
   explicitly advisory with polled state authoritative; callers reconcile
