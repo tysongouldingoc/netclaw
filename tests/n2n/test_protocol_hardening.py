@@ -136,6 +136,20 @@ def test_zero_length_continuation_fragment_is_legal():
     assert len(seen) == 1 and seen[0]["ok"] == 2
 
 
+def test_zero_length_continuation_drip_still_times_out(monkeypatch):
+    # Regression for the reassembly-timer bug: a drip of legal zero-length
+    # continuation frames kept _recv_buf empty, which reset the deadline every
+    # frame. With state tracked by an explicit flag, the timer starts on the
+    # first fragment and the drip cannot hold the reassembly open past the bound.
+    import bgp.federation.channel as chmod
+    monkeypatch.setattr(chmod, "NCFED_REASSEMBLY_TIMEOUT", -1.0)
+    frames = [_frame(b"", True), _frame(b"", True), _frame(b"", True),
+              _frame(b"payload", False)] + _hello_frames()
+    ch, seen = _run_channel(frames)
+    assert ch._closed
+    assert seen == []
+
+
 # ---- 3. task retrieval bound to the submitting peer ----------------------
 
 @pytest.fixture
@@ -229,3 +243,38 @@ def test_enroll_maps_spent_token_to_32021():
             "token": "in2n_x", "member_id": "r/cml",
             "cert_pem": "PEM", "signature": ""}))
     assert ei.value.code == IN2N_ERR_ENROLL_TOKEN_INVALID == -32021
+
+
+# ---- 5. no remote sever method (NCFED -00 §13) ---------------------------
+
+def test_no_remote_sever_handler(manager):
+    from bgp.federation.service import FederationService
+    svc = FederationService(local_as=65001, router_id="4.4.4.4", manager=manager)
+    # Severing is local-only; there must be no wire method a peer can call to
+    # revoke our grant (a keyless federated claimant could otherwise do so).
+    assert "n2n/sever" not in svc.handlers
+    assert not hasattr(svc, "_on_sever")
+
+
+def test_sever_local_still_works(manager):
+    from bgp.federation.service import FederationService
+    svc = FederationService(local_as=65001, router_id="4.4.4.4", manager=manager)
+    manager.local_consent(65007, "7.7.7.7")
+    manager.remote_consent(65007, "7.7.7.7")
+    ident = "as65007-7.7.7.7"
+    assert manager.is_federated(ident)
+    assert asyncio.run(svc.sever_local(ident)) is True
+    assert not manager.is_federated(ident)
+
+
+# ---- 6. TLS 1.3 minimum (NCFED -00 §6.1) ---------------------------------
+
+def test_tls_contexts_require_tls13():
+    import ssl
+    from bgp.federation import tls, certs
+    cert_pem, key_pem = certs.create_self_signed("as65001-4.4.4.4")
+    sctx = tls.server_context(cert_pem, key_pem)
+    assert sctx.minimum_version == ssl.TLSVersion.TLSv1_3
+    for model in ("domain-verified", "pinned"):
+        cctx, _ = tls.client_context(model, claw_domain="example.test")
+        assert cctx.minimum_version == ssl.TLSVersion.TLSv1_3
