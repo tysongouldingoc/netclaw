@@ -146,9 +146,9 @@ Internet-Draft                    NCFED                        July 2026
      16.2.  Informative References . . . . . . . . . . . . . . . . .  31
    Appendix A.  Prior Art and Design Rationale . . . . . . . . . . .  33
    Appendix B.  Implementation Status  . . . . . . . . . . . . . . .  34
-   Appendix C.  JSON-RPC Method Reference  . . . . . . . . . . . . .  38
+   Appendix C.  JSON-RPC Method Reference  . . . . . . . . . . . . .  39
      C.1.  eN2N methods  . . . . . . . . . . . . . . . . . . . . . .  39
-     C.2.  iN2N methods  . . . . . . . . . . . . . . . . . . . . . .  40
+     C.2.  iN2N methods  . . . . . . . . . . . . . . . . . . . . . .  41
    Change History (Pre-Submission Iterations)  . . . . . . . . . . .  41
    Acknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .  43
    Authors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  43
@@ -1924,36 +1924,36 @@ Internet-Draft                    NCFED                        July 2026
 
    *Multi-implementation interoperability (Hermes <-> NetClaw).* NCFED
    has been exercised between two independently developed agent
-   implementations: the NetClaw reference engine and Hermes, a separate
-   agent framework with its own codebase and reasoning runtime.  In a
-   captured session, a Hermes peer initiated an NCFED channel and issued
-   an n2n/tools/call to audit a remote Cisco Modeling Labs (CML)
-   environment held by the counterparty.  The federation layer behaved
-   exactly as specified end to end: the channel was discriminated,
-   upgraded to TLS, authenticated, and authorized, and the call was
-   routed to the remote tool.  The remote tool then failed internally on
-   an upstream input-schema (Pydantic) validation error on an
-   effective_permissions field, and that tool-side error was returned to
-   the Hermes peer within the MCP tool-result -- as a tool error, not an
-   NCFED protocol error (Section 9) -- and surfaced cleanly to its
-   operator.  This exercises the design's central claim: the transport,
-   identity, and federation layers are decoupled from any single agent's
-   internal codebase, so two disparate implementations interoperate over
-   the wire with neither sharing the other's runtime, and an in-tool
-   failure is relayed faithfully rather than corrupting the channel.
-   This is genuine interoperability evidence (two independently
-   developed implementations exercising the same normative behavior),
-   distinct from the multi-operator _operational_ evidence above (which
-   runs one implementation).  The terminal captures are retained as
-   artifacts in the project repository.
-
-   *Interoperability evidence (packet capture):* a 37.5-second capture
-   of a live NCFED channel between johns-risk (AS 65001) and Nick (AS
-   65007) was taken at the initiator (ncfed-johns-risk-nick-
-   20260714.pcap in the project repository) while three application-
-   level round-trips were exercised:
-
-
+   implementations with different codebases and different reasoning
+   runtimes: the NetClaw reference engine (running a Claude model in the
+   captured session) and Hermes, a separate agent framework (running a
+   GPT model).  In the captured session a Hermes peer initiated NCFED
+   delegation over the federation channel (n2n-federation / cml-lab-
+   lifecycle skills) to audit a remote Cisco Modeling Labs (CML)
+   environment held by a third operator's claw.  The federation layer
+   behaved exactly as specified end to end: the channel was
+   discriminated, upgraded to TLS (the peer's trust auto-upgraded to
+   domain-verified when its claw connected), authenticated, and
+   authorized, and the delegated call was routed to the remote tool.
+   The remote cml-mcp tool then failed internally on an upstream input-
+   schema (Pydantic) validation error -- a missing effective_permissions
+   field, its models out of sync with the remote CML 2.8.0 API -- and
+   that tool-side error was returned to the Hermes peer within the tool
+   result, as a tool error rather than an NCFED protocol error
+   (Section 9), and surfaced cleanly to its operator.  Hermes's own
+   summary recorded the distinction precisely: "this isn't a
+   connectivity or federation problem -- the N2N channel, authorization,
+   and delegation all worked end-to-end[;] it's a version mismatch
+   between [the remote] cml-mcp package and their CML 2.8.0 server."
+   This exercises the design's central claim: the transport, identity,
+   and federation layers are decoupled from any single agent's internal
+   codebase, so two disparate implementations interoperate over the wire
+   with neither sharing the other's runtime, and an in-tool failure is
+   relayed faithfully rather than corrupting the channel.  This is
+   genuine interoperability evidence (two independently developed
+   implementations exercising the same normative behavior), distinct
+   from the multi-operator _operational_ evidence above (which runs one
+   implementation).  The terminal captures (captures/hermes00.png,
 
 
 
@@ -1961,6 +1961,16 @@ Capobianco, et al.       Expires 20 January 2027               [Page 35]
 
 Internet-Draft                    NCFED                        July 2026
 
+
+   captures/hermes01.png) and the correlated encrypted packet capture
+   are retained in the project repository under a SHA-256 manifest
+   (captures/MANIFEST.sha256).
+
+   *Interoperability evidence (packet capture):* a 37.5-second capture
+   of a live NCFED channel between johns-risk (AS 65001) and Nick (AS
+   65007) was taken at the initiator (ncfed-johns-risk-nick-
+   20260714.pcap in the project repository) while three application-
+   level round-trips were exercised:
 
    *  One long-lived TCP conversation, 192.168.2.61:45722 <->
       13.58.157.220:10416 (the initiator to the peer's tunnel edge); 24
@@ -1999,6 +2009,15 @@ Internet-Draft                    NCFED                        July 2026
    purpose-built conformance client.  Observed results, each matching
    this specification:
 
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 36]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    *  Section 4 discrimination.  A first octet of 0x00 (unrecognized), a
       direct TLS ClientHello (first octet 0x16), and 'N' followed by an
       unknown four-octet magic ("NXXXX") were each closed by the
@@ -2009,14 +2028,6 @@ Internet-Draft                    NCFED                        July 2026
       that a direct TLS connection to the shared port is refused (the
       STARTTLS-style in-place upgrade of Section 6.1 is the only path to
       TLS), as Section 4 requires.
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 36]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    *  Section 5 handshake, consent gate.  A connection presenting the
       "NCFED" magic and the AS/router-id of a consented peer
@@ -2055,6 +2066,14 @@ Internet-Draft                    NCFED                        July 2026
    limitation is closed and implemented: eN2N and iN2N are now
    cryptographically, mutually authenticated (Section 6, Section 12.2),
    and the iN2N quarantine denial-of-service is fixed by per-source
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 37]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    failed-authentication accounting (Section 14.3).  A reported forged-
    handshake impersonation of a consented, tool-granted peer was
    reproduced on a two-daemon loopback and is closed by the possession
@@ -2066,14 +2085,6 @@ Internet-Draft                    NCFED                        July 2026
    *dialed* stuck at the self-asserted tier indefinitely.  Because
    endpoint update (Section 13) is denied at the self-asserted tier,
    this silently rejected a dialed peer's endpoint re-announcements --
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 37]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    observed in production as a consented peer re-announcing a rotated
    tunnel endpoint roughly every 30 seconds with the announcements
    refused, so the direct BGP session never re-formed at the new
@@ -2110,6 +2121,15 @@ Internet-Draft                    NCFED                        July 2026
       channel; the associated NCTUN data plane (out of scope here) still
       keys tunnels by AS alone and does not support equal-AS peers.
 
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 38]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    This evidence is provided to document running code and operational
    reality; it is not a normative part of the protocol.
 
@@ -2122,14 +2142,6 @@ Appendix C.  JSON-RPC Method Reference
    signature is a lowercase hexadecimal string of a DER-encoded ECDSA
    signature [RFC6090] over the relevant nonce; a certificate is PEM-
    encoded [RFC5280]; a key fingerprint is the lowercase hexadecimal
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 38]
-
-Internet-Draft                    NCFED                        July 2026
-
-
    SHA-256 [RFC6234] of the certificate's SubjectPublicKeyInfo
    [RFC5480].  Examples are illustrative.
 
@@ -2159,6 +2171,21 @@ C.1.  eN2N methods
      "capabilities": { ...same shape as params.capabilities... }
    }
 
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 39]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    The signed input is the raw octet concatenation nonce || B, with no
    length prefix or separator: nonce is the acceptor's 32-octet
    possession challenge (Section 5), and B is the tls-server-end-point
@@ -2178,13 +2205,6 @@ C.1.  eN2N methods
    params: { "tool":       "<server_id>/<tool_name>",
              "arguments":  { ...tool-specific JSON... },
              "request_id": "as65001-192.0.2.1:42" }
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 39]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    n2n/tasks/submit -- A2A-style [A2A] delegation:
 
@@ -2214,6 +2234,14 @@ Internet-Draft                    NCFED                        July 2026
    n2n/inventory, n2n/inventory_get -- push and pull of the capability
    card (Section 11).
 
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 40]
+
+Internet-Draft                    NCFED                        July 2026
+
+
 C.2.  iN2N methods
 
    Each iN2N method is sent by the member after receiving the Border's
@@ -2234,13 +2262,6 @@ C.2.  iN2N methods
              "runtime_kind":      "process",
              "display_name":      "<optional>",
              "transport_binding": "distributed" }
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 40]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    in2n/hello -- reconnect.  A mismatched fingerprint or signature
    returns MEMBER_NOT_TRUSTED (-32023) and counts toward auto-quarantine
@@ -2264,6 +2285,19 @@ Change History (Pre-Submission Iterations)
    Changes in the pre-submission review passes (July 2026, from internal
    -02):
 
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 41]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    *  Abstract and Section 12.2: the eN2N and iN2N security models are
       now stated distinctly -- TLS 1.3 is integral to eN2N, while iN2N
       is mutually authenticated at the application layer with TLS as an
@@ -2284,19 +2318,6 @@ Change History (Pre-Submission Iterations)
 
    *  Section 10 retitled "Version Signaling and Capability
       Advertisement" to reflect that no common version is negotiated.
-
-
-
-
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 41]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    *  Protocol hardening, specified and implemented together: reassembly
       bounded to 16 MiB / 30 seconds with heartbeat-mid-reassembly a
@@ -2325,6 +2346,14 @@ Internet-Draft                    NCFED                        July 2026
       credential, while the initiator authenticates by a pinned self-
       signed possession proof -- matching the implementation rather than
       overstating symmetry.  The channel binding is described accurately
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 42]
+
+Internet-Draft                    NCFED                        July 2026
+
+
       as an endpoint (not per-connection) binding, with replay/relay
       resistance from the fresh confidential nonce and [RFC9266] tls-
       exporter noted as the intended per-connection upgrade
@@ -2344,15 +2373,6 @@ Internet-Draft                    NCFED                        July 2026
       reconcile non-terminal tasks after channel re-establishment.
       Motivated by observed loss of completion notifications across
       channel bounces in the reference deployment.
-
-
-
-
-
-Capobianco, et al.       Expires 20 January 2027               [Page 42]
-
-Internet-Draft                    NCFED                        July 2026
-
 
    *  New Security Considerations subsection "Observable metadata"
       (Section 14.5): the cleartext discrimination preamble (AS/router-
@@ -2382,6 +2402,14 @@ Acknowledgments
 
 Authors' Addresses
 
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 43]
+
+Internet-Draft                    NCFED                        July 2026
+
+
    John Capobianco
    Automate Your Network
    Email: ptcapo@gmail.com
@@ -2405,4 +2433,32 @@ Authors' Addresses
 
 
 
-Capobianco, et al.       Expires 20 January 2027               [Page 43]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Capobianco, et al.       Expires 20 January 2027               [Page 44]

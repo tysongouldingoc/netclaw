@@ -1236,25 +1236,34 @@ domain-verified (a publicly trusted certificate for a claw domain, obtained and
 auto-renewed via DNS-01).
 
 **Multi-implementation interoperability (Hermes <-> NetClaw).** NCFED has been
-exercised between two independently developed agent implementations: the NetClaw
-reference engine and Hermes, a separate agent framework with its own codebase and
-reasoning runtime. In a captured session, a Hermes peer initiated an NCFED channel
-and issued an `n2n/tools/call` to audit a remote Cisco Modeling Labs (CML)
-environment held by the counterparty. The federation layer behaved exactly as
-specified end to end: the channel was discriminated, upgraded to TLS, authenticated,
-and authorized, and the call was routed to the remote tool. The remote tool then
-failed internally on an upstream input-schema (Pydantic) validation error on an
-`effective_permissions` field, and that tool-side error was returned to the Hermes
-peer within the MCP tool-result -- as a tool error, not an NCFED protocol error
-({{semantics}}) -- and surfaced cleanly to its operator. This exercises the design's
-central claim: the transport, identity, and federation layers are decoupled from any
-single agent's internal codebase, so two disparate implementations interoperate over
-the wire with neither sharing the other's runtime, and an in-tool failure is relayed
-faithfully rather than corrupting the channel. This is genuine interoperability
-evidence (two independently developed implementations exercising the same normative
-behavior), distinct from the multi-operator *operational* evidence above (which runs
-one implementation). The terminal captures are retained as artifacts in the project
-repository.
+exercised between two independently developed agent implementations with different
+codebases and different reasoning runtimes: the NetClaw reference engine (running a
+Claude model in the captured session) and Hermes, a separate agent framework
+(running a GPT model). In the captured session a Hermes peer initiated NCFED
+delegation over the federation channel (`n2n-federation` / `cml-lab-lifecycle`
+skills) to audit a remote Cisco Modeling Labs (CML) environment held by a third
+operator's claw. The federation layer behaved exactly as specified end to end: the
+channel was discriminated, upgraded to TLS (the peer's trust auto-upgraded to
+domain-verified when its claw connected), authenticated, and authorized, and the
+delegated call was routed to the remote tool. The remote `cml-mcp` tool then failed
+internally on an upstream input-schema (Pydantic) validation error -- a missing
+`effective_permissions` field, its models out of sync with the remote CML 2.8.0
+API -- and that tool-side error was returned to the Hermes peer within the tool
+result, as a tool error rather than an NCFED protocol error ({{semantics}}), and
+surfaced cleanly to its operator. Hermes's own summary recorded the distinction
+precisely: "this isn't a connectivity or federation problem -- the N2N channel,
+authorization, and delegation all worked end-to-end[;] it's a version mismatch
+between [the remote] `cml-mcp` package and their CML 2.8.0 server." This exercises
+the design's central claim: the transport, identity, and federation layers are
+decoupled from any single agent's internal codebase, so two disparate
+implementations interoperate over the wire with neither sharing the other's runtime,
+and an in-tool failure is relayed faithfully rather than corrupting the channel.
+This is genuine interoperability evidence (two independently developed
+implementations exercising the same normative behavior), distinct from the
+multi-operator *operational* evidence above (which runs one implementation). The
+terminal captures (`captures/hermes00.png`, `captures/hermes01.png`) and the
+correlated encrypted packet capture are retained in the project repository under a
+SHA-256 manifest (`captures/MANIFEST.sha256`).
 
 **Interoperability evidence (packet capture):** a 37.5-second capture of a live NCFED
 channel between johns-risk (AS 65001) and Nick (AS 65007) was taken at the initiator
