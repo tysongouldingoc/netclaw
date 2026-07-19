@@ -217,15 +217,22 @@ class Invoker:
         tm.run(task_id, worker)
         return {"task_id": task_id, "state": "submitted"}
 
+    # Retrieval is bound to the submitting peer (NCFED -00 §9.2/§14.6): the
+    # authenticated channel identity must match the task's recorded owner, and
+    # a non-owner is answered as if the task did not exist.
+
     async def handle_task_status(self, channel, params):
-        return self.service.tasks.status(params.get("task_id", ""))
+        return self.service.tasks.status(params.get("task_id", ""),
+                                         owner=channel.peer_identity)
 
     async def handle_task_result(self, channel, params):
-        return self.service.tasks.result(params.get("task_id", ""))
+        return self.service.tasks.result(params.get("task_id", ""),
+                                         owner=channel.peer_identity)
 
     async def handle_task_cancel(self, channel, params):
         task_id = params.get("task_id", "")
-        return {"task_id": task_id, "cancelled": self.service.tasks.cancel(task_id)}
+        return {"task_id": task_id,
+                "cancelled": self.service.tasks.cancel(task_id, owner=channel.peer_identity)}
 
     async def _await_approval(self, approval_id: int) -> bool:
         deadline = time.time() + self.authz.approval_window_s

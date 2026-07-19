@@ -14,11 +14,13 @@ import asyncio
 import json
 import logging
 import struct
+import time
 from typing import Awaitable, Callable, Optional
 
 from ..constants import (
     NCFED_MAGIC, NCFED_MAX_PAYLOAD, NCFED_FLAG_CONTINUATION,
     NCFED_HEARTBEAT_INTERVAL, NCFED_HEARTBEAT_MISS_LIMIT,
+    NCFED_MAX_MESSAGE, NCFED_REASSEMBLY_TIMEOUT,
 )
 
 logger = logging.getLogger("n2n.channel")
@@ -147,12 +149,40 @@ class FederationChannel:
                     break
                 chunk = await self.reader.readexactly(length) if length else b""
                 if flags & NCFED_FLAG_CONTINUATION:
+                    # NCFED -00 §7/§14.7: bound both the aggregate reassembled
+                    # size and how long a partial reassembly may stay open. A
+                    # peer can otherwise hold memory forever with 64 KiB frames,
+                    # or hold the buffer open with a drip of zero-length
+                    # fragments (legal, and each resets heartbeat liveness).
+                    if not self._recv_buf:
+                        self._reasm_started = time.monotonic()
                     self._recv_buf += chunk
+                    if len(self._recv_buf) > NCFED_MAX_MESSAGE:
+                        self.logger.warning(
+                            "Reassembly exceeds %d-octet aggregate bound — closing",
+                            NCFED_MAX_MESSAGE)
+                        break
+                    if (time.monotonic() - self._reasm_started
+                            > NCFED_REASSEMBLY_TIMEOUT):
+                        self.logger.warning(
+                            "Reassembly open longer than %.0fs — closing",
+                            NCFED_REASSEMBLY_TIMEOUT)
+                        break
                     continue
+                if not length and self._recv_buf:
+                    # §7: a Length-0, CONTINUATION-clear frame is a heartbeat and
+                    # is legal only between messages, never mid-reassembly.
+                    self.logger.warning("Heartbeat inside reassembly — closing")
+                    break
                 full = self._recv_buf + chunk
                 self._recv_buf = b""
                 if not full:
                     continue  # heartbeat
+                if len(full) > NCFED_MAX_MESSAGE:
+                    self.logger.warning(
+                        "Reassembled message exceeds %d-octet bound — closing",
+                        NCFED_MAX_MESSAGE)
+                    break
                 await self._dispatch(full)
         except (asyncio.IncompleteReadError, ConnectionError):
             self.logger.info("Channel closed by peer")
