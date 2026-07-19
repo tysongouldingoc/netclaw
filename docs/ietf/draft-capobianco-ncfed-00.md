@@ -41,7 +41,7 @@ normative:
   RFC5480:
   RFC6090:
   RFC6234:
-  RFC8446:
+  RFC9846:
   RFC5929:
   RFC8555:
   RFC9525:
@@ -410,7 +410,7 @@ closes the peer-impersonation exposure present in earlier iterations of the prot
 ## Transport encryption {#channel-sec-tls}
 
 After the binary handshake ({{handshake}}) and before the possession challenge, the
-connection is upgraded in place to TLS 1.3 {{RFC8446}} (a "STARTTLS"-style upgrade on
+connection is upgraded in place to TLS 1.3 {{RFC9846}} (a "STARTTLS"-style upgrade on
 the already-open connection, so the shared discrimination port of {{discrimination}}
 is preserved and no additional listener or tunnel is required). The acceptor acts as
 the TLS server and presents its certificate; the initiator acts as the TLS client and
@@ -904,7 +904,7 @@ not. A member enrolled before hub attestation was introduced holds no anchor and
 verification until it is re-enrolled, so the change is backward compatible within a
 risk.
 
-The iN2N socket MAY additionally be wrapped in TLS {{RFC8446}} for members reached
+The iN2N socket MAY additionally be wrapped in TLS {{RFC9846}} for members reached
 across an untrusted network, providing confidentiality that complements the
 application-layer mutual authentication above.
 
@@ -1042,7 +1042,7 @@ to member hosts.
 ## Confidentiality and integrity {#seccons-conf}
 
 NCFED provides its own confidentiality and integrity by upgrading the channel to TLS
-1.3 {{RFC8446}} after the handshake ({{channel-sec-tls}}), with the peer's certificate
+1.3 {{RFC9846}} after the handshake ({{channel-sec-tls}}), with the peer's certificate
 verified under its trust model. A deployment MAY additionally run over an encrypted
 underlay or tunnel -- for example an encrypted data-plane tunnel, a VPN such as
 WireGuard {{WIREGUARD}}, or an outer TLS tunnel -- and the reference deployment does so
@@ -1052,7 +1052,7 @@ operator-selected mode for a controlled environment ({{channel-sec-tls}}); it pr
 no confidentiality and MUST NOT be used across an untrusted network or negotiated at a
 remote peer's request.
 
-NCFED inherits its key exchange from TLS 1.3 {{RFC8446}}. Implementations SHOULD
+NCFED inherits its key exchange from TLS 1.3 {{RFC9846}}. Implementations SHOULD
 offer a post-quantum hybrid group (for example X25519MLKEM768) ahead of classical
 curves where the TLS stack supports it; because a hybrid is negotiated only when both
 peers' stacks support it, NCFED treats post-quantum key exchange as opportunistic by
