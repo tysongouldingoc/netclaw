@@ -296,7 +296,7 @@ provision, advertise after every address rotation, and keep consistent across
 operators. Multiplexing NCFED and its data plane onto the port the BGP mesh
 already uses lets one pinhole -- and one endpoint re-announcement ({{operational}})
 -- carry all three protocols. The discrimination layer is internal to the NCFED
-daemon, which embeds its own BGP engine; this document does *not* propose that
+daemon, **which embeds its own BGP engine**; this document does *not* propose that
 general-purpose BGP implementations adopt first-octet discrimination or accept a
 shim in front of TCP port 179. A deployment that peers with a conventional BGP
 stack on its own port simply runs NCFED on a separate configured port, where the
@@ -376,7 +376,8 @@ future incompatible change be negotiated in-band ({{negotiation}}), or be introd
 only in a form that a legacy peer rejects cleanly rather than misparses.
 
 The 32-octet possession challenge appended to the acceptor's reply is
-such an incompatible change: it appears **after** the acceptor's 13-octet handshake, so
+such an incompatible change. The nonce is *not* part of the 13-octet binary
+handshake itself: it appears **after** the acceptor's 13-octet handshake, so
 a peer implementing an earlier iteration of the protocol (which reads only 13 octets and sends
 `n2n/hello` without a signature) does not interoperate with a peer implementing this
 document. This is intentional -- the secured channel ({{channel-sec}}) is a prerequisite
@@ -513,7 +514,10 @@ Length:
 : Unsigned 32-bit integer, network byte order, counting the payload octets only.
   A payload MUST NOT exceed 65536 octets (64 KiB). A larger message MUST be split
   across multiple frames using the CONTINUATION flag. A receiver that reads a Length
-  greater than 65536 MUST close the connection.
+  greater than 65536 MUST close the connection. The 64 KiB cap keeps a receiver's
+  per-frame buffer small and predictable while still fitting typical NCFED
+  messages -- hellos, capability cards, tool calls -- in a single frame;
+  fragmentation is the exception, for bulk tool output and task results.
 
 Flags:
 : One octet. Bit 0 (0x01), CONTINUATION: when set, the payload is a fragment of a
@@ -885,8 +889,9 @@ Because NCFED, BGP-4, and NCTUN share a TCP listening port ({{discrimination}}),
 NCFED discrimination and handshake parsers are reachable by any host that can reach
 the BGP port. Operators SHOULD protect the shared port with the same controls they
 apply to BGP peers -- for example, access-control lists restricting the permitted
-source addresses and, where the deployment allows, the Generalized TTL Security
-Mechanism {{RFC5082}}. Implementations MUST enforce the discrimination read timeouts
+source addresses, connection rate limiting applied before discrimination, and,
+where the deployment allows, the Generalized TTL Security Mechanism {{RFC5082}}.
+Implementations MUST enforce the discrimination read timeouts
 ({{discrimination}}: 30 s for the first octet, 10 s for the magic) and close on any
 malformed or unexpected preamble, to limit resource consumption by connections that
 stall before discrimination.
@@ -958,7 +963,9 @@ therefore MUST have at least 128 bits of entropy, MUST be single-use, SHOULD car
 expiry, and SHOULD be delivered over a confidential out-of-band channel. To detect an
 intercepted enrollment, the member SHOULD display the SHA-256 fingerprint of its
 generated certificate out of band so the operator can confirm it matches the value the
-Border pinned. If enrollment is suspected to have been intercepted, the operator
+Border pinned. The Border SHOULD log every enrollment fingerprint mismatch and
+surface it to the operator as a security alert, not merely a failed enrollment.
+If enrollment is suspected to have been intercepted, the operator
 removes (unpins) the member and re-enrolls it with a fresh token; the compromised key
 is thereby refused. This model is a deliberate instance of opportunistic security
 {{RFC7435}}: it raises the bar against passive attackers and is appropriate for the
@@ -1409,7 +1416,7 @@ repository as internal revisions `-01` and `-02`; those iterations are archived
 there. The summaries below record what changed across them, for reviewers who
 followed the repository drafts.
 
-Changes in the pre-submission review pass (from internal `-02`):
+Changes in the pre-submission review passes (July 2026, from internal `-02`):
 
 * Abstract and {{trust-in2n}}: the eN2N and iN2N security models are now stated
   distinctly -- TLS 1.3 is integral to eN2N, while iN2N is mutually authenticated
@@ -1440,7 +1447,7 @@ Changes in the pre-submission review pass (from internal `-02`):
   strippable STARTTLS command; {{negotiation}} defines the failure for an
   unsupported future baseline (-32602 + close).
 
-Changes in internal `-02` (from internal `-01`):
+Changes in internal `-02` (July 2026, from internal `-01`):
 
 * Asynchronous task delegation ({{semantics}}): completion signalling is now
   explicitly advisory with polled state authoritative; callers reconcile
