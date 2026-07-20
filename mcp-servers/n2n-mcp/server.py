@@ -188,8 +188,8 @@ async def n2n_set_visibility(item_type: str, item_name: str, visibility: str,
     """Control what we advertise to federated peers.
 
     Args:
-        item_type: 'skill' or 'tool'
-        item_name: Name of the skill or tool
+        item_type: 'skill', 'mcp_server', or 'knowledge' (a RAG collection, feature 064)
+        item_name: Name of the skill / mcp_server / RAG collection
         visibility: 'all_federated', 'selected_peers', or 'hidden'
         peers: Comma-separated peer identities (for 'selected_peers' visibility)
     """

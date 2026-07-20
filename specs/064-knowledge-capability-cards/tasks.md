@@ -17,7 +17,7 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the feature-062 RAG surface is callable from the daemon env: `rag_list` (registry) and `rag_search` (retrieval) resolve and return expected shapes; note the exact call path (direct import vs. MCP stdio) to use from `bgp/federation/` in `specs/064-knowledge-capability-cards/research.md` (append a "D7 — RAG call path" note).
+- [X] T001 Confirm the feature-062 RAG surface is callable from the daemon env: `rag_list` (registry) and `rag_search` (retrieval) resolve and return expected shapes; note the exact call path (direct import vs. MCP stdio) to use from `bgp/federation/` in `specs/064-knowledge-capability-cards/research.md` (append a "D7 — RAG call path" note).
 - [ ] T002 [P] Create empty test modules `tests/n2n/test_knowledge_cards.py` and `tests/n2n/test_knowledge_routing.py` with the shared fixtures import (`conftest.py` manager fixture) so later test tasks just add cases.
 
 ---
@@ -26,9 +26,9 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 
 **Purpose**: The content-free knowledge-entry builder that US1 advertises and US2/US3 depend on.
 
-- [ ] T003 Create `mcp-servers/protocol-mcp/bgp/federation/knowledge.py` with a `build_entries()` that reads the RAG registry (via the T001 path) and returns one content-free entry per **ready** collection (`collection_id`=`knowledge:<collection>`, `name`, `description` from titles/topics, `tags` from distinct `doc_type`, `doc_count`/`page_count`/`chunk_count`, `retrieval`=`n2n/knowledge/query`) per `data-model.md`. Never reads `source_path`/`content_hash`/`capture_*`. (New module also hosts eN2N selection — T013/T014.)
-- [ ] T004 Extend `_assert_no_secrets` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py` to also scan the `knowledge` array (reject any chunk text / path / hash / secret), so the invariant covers the new surface.
-- [ ] T005 [P] Add a `topic-only` description mode toggle (env `N2N_KNOWLEDGE_TOPIC_ONLY`, default off) in `knowledge.build_entries()` so titles can be suppressed without hiding the collection (research D5); default advertises titles.
+- [X] T003 Create `mcp-servers/protocol-mcp/bgp/federation/knowledge.py` with a `build_entries()` that reads the RAG registry (via the T001 path) and returns one content-free entry per **ready** collection (`collection_id`=`knowledge:<collection>`, `name`, `description` from titles/topics, `tags` from distinct `doc_type`, `doc_count`/`page_count`/`chunk_count`, `retrieval`=`n2n/knowledge/query`) per `data-model.md`. Never reads `source_path`/`content_hash`/`capture_*`. (New module also hosts eN2N selection — T013/T014.)
+- [X] T004 Extend `_assert_no_secrets` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py` to also scan the `knowledge` array (reject any chunk text / path / hash / secret), so the invariant covers the new surface.
+- [X] T005 [P] Add a `topic-only` description mode toggle (env `N2N_KNOWLEDGE_TOPIC_ONLY`, default off) in `knowledge.build_entries()` so titles can be suppressed without hiding the collection (research D5); default advertises titles.
 
 **Checkpoint**: Builder produces correct content-free entries and the no-secrets invariant covers them (unit-testable without a live peer).
 
@@ -39,12 +39,12 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 **Goal**: A peer pulling the card sees one content-free knowledge entry per authorized collection.
 **Independent test**: Ingest a doc, pull the card as a peer, confirm the collection is listed with counts and no content; hidden-for-peer filtering works.
 
-- [ ] T006 [US1] Wire `knowledge.build_entries()` into `InventoryBuilder.build` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py`: add a `knowledge` array to the card (sibling of `skills`/`mcp_servers`), advertised **by default** (FR-003), filtered by the existing per-peer `_visibility` on `("knowledge", collection, peer_identity)`.
-- [ ] T007 [US1] Extend the visibility mechanism (`n2n_set_visibility` path) to accept a `knowledge` kind so an operator can hide a collection from a given peer; confirm hidden collections drop from that peer's card only.
-- [ ] T008 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: card lists one entry per ready collection with correct counts; a claw with zero ready docs emits no `knowledge` entries (absence, not empty).
-- [ ] T009 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: the card contains no chunk text, no `source_path`, no `content_hash`; `_assert_no_secrets` passes with knowledge present and fails if a secret is injected.
-- [ ] T010 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: per-peer visibility — hidden collection absent for peer X, present for peer Y; topic-only mode omits titles but keeps counts/tags.
-- [ ] T010a [P] [US1] Test in `tests/n2n/test_knowledge_cards.py` (SC-005): the serialized `knowledge` entry size is ~constant as document/chunk counts grow — build a card for a collection with N docs and 10×N docs and assert the entry byte size does not scale with corpus size.
+- [X] T006 [US1] Wire `knowledge.build_entries()` into `InventoryBuilder.build` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py`: add a `knowledge` array to the card (sibling of `skills`/`mcp_servers`), advertised **by default** (FR-003), filtered by the existing per-peer `_visibility` on `("knowledge", collection, peer_identity)`.
+- [X] T007 [US1] Extend the visibility mechanism (`n2n_set_visibility` path) to accept a `knowledge` kind so an operator can hide a collection from a given peer; confirm hidden collections drop from that peer's card only.
+- [X] T008 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: card lists one entry per ready collection with correct counts; a claw with zero ready docs emits no `knowledge` entries (absence, not empty).
+- [X] T009 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: the card contains no chunk text, no `source_path`, no `content_hash`; `_assert_no_secrets` passes with knowledge present and fails if a secret is injected.
+- [X] T010 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: per-peer visibility — hidden collection absent for peer X, present for peer Y; topic-only mode omits titles but keeps counts/tags.
+- [X] T010a [P] [US1] Test in `tests/n2n/test_knowledge_cards.py` (SC-005): the serialized `knowledge` entry size is ~constant as document/chunk counts grow — build a card for a collection with N docs and 10×N docs and assert the entry byte size does not scale with corpus size.
 
 **Checkpoint**: US1 independently demonstrable — card advertisement complete and secret-safe.
 
