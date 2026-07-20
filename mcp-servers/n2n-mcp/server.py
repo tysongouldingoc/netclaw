@@ -242,12 +242,13 @@ async def n2n_set_visibility(item_type: str, item_name: str, visibility: str,
 @mcp.tool()
 async def n2n_grant(peer: str, target_type: str, target_name: str,
                     requires_approval: bool = False, timeout_s: Optional[int] = None) -> str:
-    """Allowlist a tool or skill for a peer to invoke remotely.
+    """Allowlist a tool, skill, or knowledge collection for a peer to invoke.
 
     Args:
         peer: Peer identity string
-        target_type: 'tool' or 'skill'
-        target_name: Name of the tool/skill to grant (e.g. 'cml-mcp/list_labs')
+        target_type: 'tool', 'skill', or 'knowledge' (a RAG collection, feature 064)
+        target_name: Name to grant — e.g. 'cml-mcp/list_labs' (tool) or
+            'knowledge:documents' (collection; retrieval is default-deny)
         requires_approval: If True, each invocation requires explicit approval
         timeout_s: Optional grant expiry in seconds
     """
