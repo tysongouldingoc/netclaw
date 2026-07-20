@@ -26,9 +26,9 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 
 **Purpose**: The content-free knowledge-entry builder that US1 advertises and US2/US3 depend on.
 
-- [ ] T003 Add a knowledge-advertisement builder in `mcp-servers/protocol-mcp/bgp/federation/inventory.py` that reads the RAG registry (via the T001 path) and returns one content-free entry per **ready** collection (`id`=`knowledge:<collection>`, `name`, `description` from titles/topics, `tags` from distinct `doc_type`, `doc_count`/`page_count`/`chunk_count`, `retrieval`=`n2n-knowledge/query`) per `data-model.md`. Never reads `source_path`/`content_hash`/`capture_*`.
+- [ ] T003 Create `mcp-servers/protocol-mcp/bgp/federation/knowledge.py` with a `build_entries()` that reads the RAG registry (via the T001 path) and returns one content-free entry per **ready** collection (`collection_id`=`knowledge:<collection>`, `name`, `description` from titles/topics, `tags` from distinct `doc_type`, `doc_count`/`page_count`/`chunk_count`, `retrieval`=`n2n/knowledge/query`) per `data-model.md`. Never reads `source_path`/`content_hash`/`capture_*`. (New module also hosts eN2N selection — T013/T014.)
 - [ ] T004 Extend `_assert_no_secrets` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py` to also scan the `knowledge` array (reject any chunk text / path / hash / secret), so the invariant covers the new surface.
-- [ ] T005 [P] Add a `topic-only` description mode toggle (env/config, default off) in the T003 builder so titles can be suppressed without hiding the collection (research D5); default advertises titles.
+- [ ] T005 [P] Add a `topic-only` description mode toggle (env `N2N_KNOWLEDGE_TOPIC_ONLY`, default off) in `knowledge.build_entries()` so titles can be suppressed without hiding the collection (research D5); default advertises titles.
 
 **Checkpoint**: Builder produces correct content-free entries and the no-secrets invariant covers them (unit-testable without a live peer).
 
@@ -39,11 +39,12 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 **Goal**: A peer pulling the card sees one content-free knowledge entry per authorized collection.
 **Independent test**: Ingest a doc, pull the card as a peer, confirm the collection is listed with counts and no content; hidden-for-peer filtering works.
 
-- [ ] T006 [US1] Wire the T003 builder into `InventoryBuilder.build` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py`: add a `knowledge` array to the card (sibling of `skills`/`mcp_servers`), advertised **by default** (FR-003), filtered by the existing per-peer `_visibility` on `("knowledge", collection, peer_identity)`.
+- [ ] T006 [US1] Wire `knowledge.build_entries()` into `InventoryBuilder.build` in `mcp-servers/protocol-mcp/bgp/federation/inventory.py`: add a `knowledge` array to the card (sibling of `skills`/`mcp_servers`), advertised **by default** (FR-003), filtered by the existing per-peer `_visibility` on `("knowledge", collection, peer_identity)`.
 - [ ] T007 [US1] Extend the visibility mechanism (`n2n_set_visibility` path) to accept a `knowledge` kind so an operator can hide a collection from a given peer; confirm hidden collections drop from that peer's card only.
 - [ ] T008 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: card lists one entry per ready collection with correct counts; a claw with zero ready docs emits no `knowledge` entries (absence, not empty).
 - [ ] T009 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: the card contains no chunk text, no `source_path`, no `content_hash`; `_assert_no_secrets` passes with knowledge present and fails if a secret is injected.
 - [ ] T010 [P] [US1] Test in `tests/n2n/test_knowledge_cards.py`: per-peer visibility — hidden collection absent for peer X, present for peer Y; topic-only mode omits titles but keeps counts/tags.
+- [ ] T010a [P] [US1] Test in `tests/n2n/test_knowledge_cards.py` (SC-005): the serialized `knowledge` entry size is ~constant as document/chunk counts grow — build a card for a collection with N docs and 10×N docs and assert the entry byte size does not scale with corpus size.
 
 **Checkpoint**: US1 independently demonstrable — card advertisement complete and secret-safe.
 
@@ -54,14 +55,14 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 **Goal**: A claw delegates a knowledge query to the peer whose corpus is authoritative and returns its cited answer.
 **Independent test**: On claw A with no local corpus on T but peer B advertising one, ask A about T → A routes to B, returns B's cited answer, does not fabricate.
 
-- [ ] T011 [US2] Implement the invocable retrieval skill handler `n2n-knowledge/query` in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`: accept `{corpus_id, query, k}`, run `rag_search` against the **live** local RAG, and return `{answer, provenance:{peer, corpus_id, citations}}` per `contracts/knowledge-card-and-retrieval.md`. Register it in the service handler map.
-- [ ] T012 [US2] Wire the retrieval answer composition through `gateway.run_agent_turn` (or direct `rag_search` + compose) so the returned answer is grounded and carries the source's citations when present, in `mcp-servers/protocol-mcp/bgp/federation/gateway.py`/`invocation.py`.
-- [ ] T013 [US2] Implement knowledge-aware selection in `mcp-servers/protocol-mcp/bgp/federation/router.py`: score a query against all visible advertised collection descriptions (local + federated peers' cached cards), pick the best, deterministic tiebreak by ascending peer identity then `corpus_id`; return a Knowledge Route Decision (`target`, `peer_identity`, `corpus_id`, `score`, `rationale`) per `data-model.md`.
-- [ ] T014 [US2] Implement the fallback order in the router/agent path: matching **peer** corpus → **local** corpus → **model**; MUST NOT emit a `peer`/`corpus_id` when no corpus clears the relevance threshold (no fabricated source), in `mcp-servers/protocol-mcp/bgp/federation/router.py`.
-- [ ] T015 [US2] Add delegation guidance to `workspace/skills/n2n-federation/SKILL.md`: before answering a document/factual question, check peers' advertised knowledge and route to the authoritative corpus; state the peer→local→model fallback and the "never invent a federated source" rule.
-- [ ] T016 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: deterministic selection — same query + same advertised set → same corpus; tiebreak applied and recorded in `rationale`.
-- [ ] T017 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: peer-corpus match → route decision targets that peer/corpus; no match → `target=model`, no `peer_identity`/`corpus_id`.
-- [ ] T018 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: `n2n-knowledge/query` against a granted, possession-tier peer returns an answer with provenance and citations (stub `rag_search`).
+- [ ] T011 [US2] Implement the **dedicated NCFED method** `n2n/knowledge/query` handler in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` and register it in the service handler map (alongside `n2n/tasks/*`, NOT via the MCP `tools/call` proxy — finding H1): accept `{collection_id, query, k}`, run `rag_search` against the **live** local RAG, and return `{answer, provenance:{peer, collection_id, citations}}` per `contracts/knowledge-card-and-retrieval.md`.
+- [ ] T012 [US2] Compose the retrieval answer via a local **agent turn** (`gateway.run_agent_turn` fed the `rag_search` hits) so the result is a grounded, cited answer (not raw chunks; FR-008), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`/`gateway.py`.
+- [ ] T013 [US2] Implement eN2N knowledge selection in **`mcp-servers/protocol-mcp/bgp/federation/knowledge.py`** (NOT `router.py` — finding H2): embed the query with the RAG embedder, compute cosine similarity against all visible advertised collection descriptions (local + federated peers' cached cards in `service.peer_caps`), pick the highest, deterministic tiebreak by ascending peer identity then `collection_id`; return a Knowledge Route Decision (`target`, `peer_identity`, `collection_id`, `score`, `rationale`) per `data-model.md`.
+- [ ] T014 [US2] Implement threshold + fallback in `knowledge.py`: a collection matches only at score ≥ `N2N_KNOWLEDGE_MATCH_THRESHOLD` (default 0.5); fallback order **peer → local → model**; MUST NOT emit `peer`/`collection_id` when nothing clears the threshold (no fabricated source, FR-006).
+- [ ] T015 [US2] Add delegation guidance to `workspace/skills/n2n-federation/SKILL.md`: before answering a document/factual question, consult peers' advertised knowledge and route to the authoritative collection via `n2n/knowledge/query`; state the peer→local→model fallback and the "never invent a federated source" rule.
+- [ ] T016 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: deterministic cosine selection — same query + same advertised set → same collection (stub the embedder for fixed vectors); tiebreak applied and recorded in `rationale`.
+- [ ] T017 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: peer-collection above threshold → decision targets that peer/collection; nothing above threshold → `target=model`, no `peer_identity`/`collection_id`.
+- [ ] T018 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: `n2n/knowledge/query` against a granted, possession-tier peer returns an agent-composed answer with provenance and citations (stub `rag_search` + agent turn).
 
 **Checkpoint**: US2 independently demonstrable — the Byrn book round-trip now happens by deliberate routing.
 
@@ -72,11 +73,11 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 **Goal**: Federated knowledge respects visibility, per-peer authorization, admission tier, and audit.
 **Independent test**: unauthorized/ hidden-corpus/ restricted-tier attempts are all refused and audited; successful retrieval is audited with corpus + GAIT.
 
-- [ ] T019 [US3] Enforce default-deny + possession tier on `n2n-knowledge/query` in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`: reuse `negotiate.allows` so a self-asserted (keyless) peer is denied, and require a per-peer grant for the corpus (default-deny) — reusing the authorizer path used by `tools/call`/`tasks/submit`.
-- [ ] T020 [US3] No existence oracle: an unknown or not-visible `corpus_id` MUST be answered exactly as "no such corpus" (same shape as a missing one), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`.
-- [ ] T021 [US3] Emit one audit record per retrieval in `invocation.py` via the existing `Auditor`: `{direction=inbound, peer_identity, target_type="knowledge", target_name=corpus_id, decision, outcome, channel_kind, gait_ref}` (FR-007).
+- [ ] T019 [US3] Extend the **T011 handler** in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` (edit it in place, not a parallel path — finding L1) to enforce default-deny + possession tier on `n2n/knowledge/query`: reuse `negotiate.allows` so a self-asserted (keyless) peer is denied, and require a per-peer grant for the collection (default-deny), reusing the authorizer path used by `tools/call`/`tasks/submit`. The grant is the Principle-XIV control point (FR-007).
+- [ ] T020 [US3] No existence oracle: an unknown or not-visible `collection_id` MUST be answered exactly as "no such collection" (same shape as a missing one), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`.
+- [ ] T021 [US3] Emit one audit record per retrieval in `invocation.py` via the existing `Auditor`: `{direction=inbound, peer_identity, target_type="knowledge", target_name=collection_id, decision, outcome, channel_kind, gait_ref}` (FR-007).
 - [ ] T022 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: self-asserted (tier-0) peer denied retrieval but may still see authorized knowledge advertisements; possession-tier peer without a grant denied (default-deny); both audited.
-- [ ] T023 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: hidden/unknown `corpus_id` returns the missing-corpus shape (no existence leak); successful retrieval produces exactly one audit record with corpus + GAIT reference.
+- [ ] T023 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: hidden/unknown `collection_id` returns the missing-collection shape (no existence leak); successful retrieval produces exactly one audit record with collection + GAIT reference.
 
 **Checkpoint**: US3 independently demonstrable — sovereignty/audit guarantees hold under adversarial peers.
 
@@ -105,7 +106,7 @@ Full value = + **US2** (deliberate distributed-RAG routing). **US3** makes it pr
 ## Parallel Opportunities
 
 - T002 ∥ T001-note; T005 ∥ T003/T004 review.
-- Within US1: T008/T009/T010 in parallel (all in one test file, independent cases).
+- Within US1: T008/T009/T010/T010a in parallel (all in one test file, independent cases).
 - Within US2: T016/T017/T018 in parallel after T011–T014.
 - Within US3: T022/T023 in parallel after T019–T021.
 - Polish: T024 (draft) ∥ T025 (walkthrough) ∥ T027 (deploy check); T026 after code tasks.

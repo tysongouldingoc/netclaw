@@ -10,15 +10,17 @@ knowledge skills on the NCFED capability card, and route knowledge queries to th
 corpus is authoritative — generalizing the demonstrated Hermes↔NetClaw book-summary interop
 into deliberate, discoverable routing. The card gains one entry per RAG collection (from the
 `rag_list` registry: title/topics/doc_type/counts, no content); retrieval is a dedicated
-invocable knowledge-retrieval skill addressable from the card and fulfilled by the owner's
-local agent/RAG (`rag_search`); the agent/router selects the corpus by semantic match on the
-advertised description with a stable tiebreak. Reuses existing per-peer visibility, admission
-tiers, default-deny authorization, and audit/GAIT (057/060). No new MCP server.
+dedicated `n2n/knowledge/query` method addressable from the card and fulfilled by the owner's
+agent composing over local RAG (`rag_search`); a new `knowledge.py` helper selects the
+collection by embedding-cosine similarity (query vs advertised description) with a configurable
+threshold and stable tiebreak. Reuses existing per-peer visibility, admission tiers,
+default-deny authorization, and audit/GAIT (057/060). No new MCP server; iN2N `router.py`
+untouched.
 
 ## Technical Context
 
 **Language/Version**: Python 3.10+ (daemon + `bgp/federation/*`, matching 052–063); Markdown (SOUL/skill docs + NCFED draft §11 for -01)
-**Primary Dependencies**: Existing only — `bgp/federation/inventory.py` (card), `router.py` (selection), `invocation.py`/`gateway.py` (retrieval turn), the feature-062 rag-mcp (`rag_list`, `rag_search`). No new third-party packages.
+**Primary Dependencies**: Existing only — new `bgp/federation/knowledge.py` (advertisement builder + eN2N cosine selection), `inventory.py` (card), `invocation.py`/`gateway.py` (retrieval method + agent composition), the feature-062 rag-mcp (`rag_list`, `rag_search`, and its embedder for query vectors). No new third-party packages.
 **Storage**: Reuses `~/.openclaw/rag/rag.db` (documents registry, read-only for advertisement) and the issued capability card. Per-peer visibility reuses existing federation.db rows. No new store.
 **Testing**: pytest under `tests/n2n/` (card contents, no-secrets invariant, visibility filtering, deterministic selection, tier/authorization/audit on retrieval).
 **Target Platform**: Linux (systemd --user mesh/member services), consistent with the live deployment.
@@ -62,22 +64,25 @@ specs/064-knowledge-capability-cards/
 
 ```text
 mcp-servers/protocol-mcp/bgp/federation/
-├── inventory.py         # + build knowledge skills from rag_list; per-peer visibility; _assert_no_secrets covers them
-├── router.py            # + knowledge-aware selection: semantic match on advertised descriptions, stable tiebreak
-├── invocation.py        # + invocable knowledge-retrieval skill handler (default-deny, possession-tier, audited)
-└── gateway.py           # retrieval turn reuses rag_search (wiring only)
+├── knowledge.py         # NEW: build content-free collection entries from the RAG registry;
+│                        #      eN2N cosine selection (query vs advertised descriptions) + threshold
+├── inventory.py         # + call knowledge.build_entries() into the card; _assert_no_secrets covers them
+├── invocation.py        # + n2n/knowledge/query handler (default-deny, possession-tier, audited, agent-composed answer)
+├── gateway.py           # retrieval answer composition reuses the agent turn + rag_search (wiring only)
+└── router.py            # UNCHANGED — iN2N RiskRouter is not the eN2N knowledge selector (finding H2)
 
-workspace/skills/n2n-federation/SKILL.md   # + delegation guidance: prefer authoritative peer corpus; fallback peer→local→model; never fabricate a source
+workspace/skills/n2n-federation/SKILL.md   # + delegation guidance: prefer authoritative peer collection; fallback peer→local→model; never fabricate a source
 docs/ietf/draft-capobianco-ncfed-00.md     # §11 note staged for -01 (FR-010) — NOT the live -00 submission
 
 tests/n2n/
-├── test_knowledge_cards.py        # advertisement contents, no-secrets, visibility filtering, collection granularity
-└── test_knowledge_routing.py      # deterministic semantic selection, fallback order, tier/authorization/audit on retrieval
+├── test_knowledge_cards.py        # advertisement contents, no-secrets, visibility filtering, collection granularity, card-size independence (SC-005)
+└── test_knowledge_routing.py      # deterministic cosine selection, threshold fallback, tier/authorization/audit/no-oracle on n2n/knowledge/query
 ```
 
-**Structure Decision**: Single-project, in-repo extension of the existing federation package
-and RAG integration. No new package or service; the four `bgp/federation/*` files above are
-the code surface, plus the skill/SOUL doc and the (deferred) NCFED §11 update.
+**Structure Decision**: Single-project, in-repo extension. A new `bgp/federation/knowledge.py`
+holds the advertisement builder and the eN2N cosine selection helper; `inventory.py` and
+`invocation.py` wire it into the card and a dedicated `n2n/knowledge/query` method; `router.py`
+(the iN2N RiskRouter) is deliberately untouched. No new package, MCP server, or store.
 
 ## Complexity Tracking
 

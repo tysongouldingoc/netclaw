@@ -11,10 +11,10 @@ Hermes↔NetClaw book summary), then the automated checks.
    `netclaw n2n inventory get as65001-4.4.4.4` → the card now contains a `knowledge` array
    with `knowledge:documents` (topics, tags, counts) and no document content.
 3. **Route to it.** Ask B a question answerable only by A's corpus. B semantically matches
-   the query to A's advertised `knowledge:documents`, invokes `n2n-knowledge/query` against
+   the query to A's advertised `knowledge:documents`, invokes `n2n/knowledge/query` against
    A, and returns A's grounded, cited answer — attributed to A.
 4. **Confirm sovereignty + audit.** Check that B never received chunks/embeddings (only the
-   answer), and that A's audit trail has one record `{peer=B, corpus_id, gait_ref}`.
+   answer), and that A's audit trail has one record `{peer=B, collection_id, gait_ref}`.
 5. **Confirm visibility.** Hide the collection from B (`n2n_set_visibility`); re-pull the
    card as B → `knowledge:documents` is gone; a permitted peer C still sees it.
 6. **Confirm fallback.** Ask B something no advertised corpus covers → B answers from its own
@@ -33,7 +33,7 @@ Expected coverage:
 - Hidden collection absent for the hidden peer, present for a permitted peer.
 - Deterministic selection: same query + same advertised set → same corpus; stable tiebreak.
 - Retrieval: possession-tier + granted peer succeeds and is audited; self-asserted or
-  ungranted peer refused; unknown/hidden `corpus_id` answered as "no such corpus".
+  ungranted peer refused; unknown/hidden `collection_id` answered as "no such corpus".
 - Fallback order peer → local → model; never fabricates a federated source.
 
 ## Success signals (from spec)

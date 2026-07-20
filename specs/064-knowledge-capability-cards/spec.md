@@ -13,20 +13,22 @@ claw knows**. The RAG knowledge base (feature 062) is invisible to peers, so the
 a remote claw discovers that another claw can answer questions about a corpus (e.g. John's
 book) is to ask it and see. The Hermes↔NetClaw book-summary interop proved the *retrieval*
 works over NCFED; this feature makes that knowledge **discoverable and routable** by
-advertising each claw's RAG corpora as A2A-style skills on the card, and by teaching the
-router/agent to prefer the authoritative peer KB for questions about that peer's domain.
+advertising each claw's RAG collections as A2A-style entries on the card, and by teaching
+the agent to prefer the authoritative peer KB for questions about that peer's domain.
 
-This is a lightweight feature: it extends the existing capability card, the existing
-router, and the delegation instructions. It adds **no new MCP server** and moves **no
-document content** across the federation — only content-free metadata (titles, topics,
-counts) that a peer is authorized to see.
+This is a lightweight feature: it extends the existing capability card, adds a small
+eN2N knowledge-selection helper and a dedicated `n2n/knowledge/query` method, and updates
+the delegation instructions. It adds **no new MCP server** and moves **no document
+content** across the federation — only content-free metadata (titles, topics, counts) that
+a peer is authorized to see. (The iN2N `router.py` is unchanged; peer selection is an eN2N
+concern handled separately.)
 
 ## Clarifications
 
 ### Session 2026-07-19
 
 - Q: At what granularity should a claw advertise its RAG knowledge on the card? → A: Per collection (one card skill per RAG collection).
-- Q: How should a remote claw invoke retrieval against an advertised corpus? → A: A dedicated invocable knowledge-retrieval skill, addressable from the card, invoked via `n2n/tools/call` and fulfilled by the local agent/RAG.
+- Q: How should a remote claw invoke retrieval against an advertised corpus? → A: A dedicated NCFED method `n2n/knowledge/query` (a method family alongside `n2n/tools/call` / `n2n/tasks/*`, not the MCP proxy), addressable by the advertised `collection_id`, fulfilled by the owner's local RAG composed by its agent. [Refined per analysis H1.]
 - Q: How should the querying claw choose which advertised corpus answers a question? → A: Semantic match of the query against each corpus's advertised description; deterministic given the advertised set plus a stable tiebreak.
 - Q: Should RAG collections be advertised by default or opt-in? → A: Advertised by default (consistent with skills/MCP servers), with per-peer visibility to hide a collection.
 
@@ -67,9 +69,9 @@ text, no source paths, and no secrets.
 
 When a claw is asked a question whose answer lives in a **federated peer's** advertised
 knowledge base rather than its own, it delegates the retrieval to that peer (the
-authoritative source) instead of answering from the model alone or declining. The Border's
-router and the agent's delegation instructions consult peers' advertised knowledge skills
-and select the peer whose corpus best matches the query.
+authoritative source) instead of answering from the model alone or declining. The agent's
+delegation instructions and an eN2N knowledge-selection helper consult peers' advertised
+knowledge entries and select the peer whose collection best matches the query.
 
 **Why this priority**: This is the payoff — it turns advertised knowledge into a working
 distributed-RAG answer with correct provenance. It is the generalization of the
@@ -84,9 +86,9 @@ B's grounded answer with B's citations, and does not fabricate an answer locally
 1. **Given** claw A federated with claw B, where B advertises a knowledge skill matching
    topic T and A has no local corpus on T, **When** A is asked a question about T, **Then**
    A routes the retrieval to B and returns B's cited answer attributed to B.
-2. **Given** both A and B advertise corpora matching T, **When** A must choose, **Then**
-   selection is deterministic (most-specific/topic-match first, then a stable tiebreak) and
-   documented.
+2. **Given** both A and B advertise collections matching T, **When** A must choose, **Then**
+   selection is deterministic (highest embedding-cosine score, then a stable tiebreak by
+   peer identity/collection id) and documented.
 3. **Given** no federated peer advertises a matching corpus, **When** A is asked about T,
    **Then** A answers from its own knowledge/model and does not invent a federated source.
 
@@ -156,27 +158,40 @@ restricted-tier peer sees knowledge advertisement but cannot invoke retrieval.
   visibility: an operator MUST be able to hide a collection from a given peer (reusing the
   existing `n2n_set_visibility` mechanism), and a hidden collection MUST NOT appear in that
   peer's card.
-- **FR-004**: Retrieval against a peer's advertised corpus MUST be exposed as a dedicated,
-  invocable **knowledge-retrieval skill**, addressable directly from the corpus id the card
-  advertises (a peer needs no out-of-band knowledge), invoked via `n2n/tools/call` and
-  fulfilled by the owner's local agent/RAG. The free-form chat path (proven in the
-  Hermes↔NetClaw interop) MAY remain as a convenience, but the invocable skill is the
-  normative, routable interface.
-- **FR-005**: The router/agent MUST select the corpus by **semantic match** of the query
-  against each advertised collection's description, considering both local and federated
-  peers' advertised knowledge. Selection MUST be repeatable: given the same query and the
-  same advertised set, the same corpus is chosen, using a stable, documented tiebreak by
-  peer identity when scores are close.
-- **FR-006**: When a matching **peer** corpus exists and the local claw lacks the knowledge,
-  the agent MUST prefer delegating retrieval to the authoritative peer over answering from
-  the model alone; when no matching peer corpus exists, it MUST NOT fabricate a federated
-  source.
+- **FR-004**: Retrieval against a peer's advertised collection MUST be exposed as a
+  **dedicated NCFED method** `n2n/knowledge/query` (a member of the method families
+  alongside `n2n/tools/call` and `n2n/tasks/*`), NOT the generic MCP `n2n/tools/call`
+  proxy — that proxy resolves `server_id/tool_name` against real registered MCP servers and
+  cannot address a synthetic knowledge endpoint. The method takes the `collection_id` the
+  card advertises (a peer needs no out-of-band knowledge) plus the query, and is fulfilled
+  by the owner's local RAG (`rag_search`) composed into an answer by the owner's agent. The
+  free-form chat path (proven in the Hermes↔NetClaw interop) MAY remain as a convenience,
+  but `n2n/knowledge/query` is the normative, routable interface. The card's `retrieval`
+  field names this method.
+- **FR-005**: The querying claw MUST select the collection by **embedding cosine
+  similarity** between the query and each advertised collection's description, computed with
+  the local RAG embedder (feature 062), over both local and federated peers' advertised
+  collections. Because the same embedder yields the same vectors, selection is deterministic:
+  given the same query and the same advertised set, the same collection is chosen; ties (or
+  scores within a small epsilon) break by ascending peer identity then ascending
+  `collection_id`. A configurable relevance threshold (env `N2N_KNOWLEDGE_MATCH_THRESHOLD`,
+  default `0.5`) gates whether any collection is considered a match.
+- **FR-006**: When a **peer** collection scores at or above the threshold and the local claw
+  has no local collection scoring higher, the agent MUST delegate retrieval to that
+  authoritative peer rather than answer from the model. Fallback order is peer collection →
+  local collection → model. When no collection meets the threshold, the claw answers from the
+  model and MUST NOT fabricate a federated source.
 - **FR-007**: Federated knowledge retrieval MUST be default-deny and authorized per peer,
   admitted only at the possession tier (not self-asserted), and MUST be audited with peer
-  identity, corpus, and a GAIT reference (consistent with {{NCFED}} §6.4 and feature 057).
-- **FR-008**: Returned federated answers MUST carry provenance — which peer and which corpus
-  produced them — so the requesting agent can attribute the source (and pass along the
-  owner's citations when present).
+  identity, collection, and a GAIT reference (consistent with {{NCFED}} §6.4 and feature
+  057). The per-peer grant is the human-in-the-loop control point for answering an external
+  peer from a local knowledge base (constitution Principle XIV) — no per-call approval is
+  required once granted.
+- **FR-008**: `n2n/knowledge/query` MUST return an **agent-composed, grounded answer** (not
+  raw chunks) carrying provenance — which peer and which collection produced it — and the
+  owner's source citations when present, so the requesting agent can attribute the source.
+  Composition requires a local agent turn; deployments accept its latency/cost as the price
+  of a cited, sovereignty-preserving answer.
 - **FR-009**: The delegation/SOUL instructions MUST be updated so a claw, before answering a
   document/factual question, checks whether a federated peer advertises a corpus matching the
   topic and routes accordingly; guidance MUST also cover the fallback order (matching peer →
@@ -187,15 +202,19 @@ restricted-tier peer sees knowledge advertisement but cannot invoke retrieval.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Knowledge skill (card entry)**: The A2A-skill-shaped advertisement of one RAG collection
-  on the capability card. Attributes: stable id, name, semantic description (topics/titles),
-  tags (doc types), document/page/chunk counts. Content-free. Derived from the RAG registry;
-  filtered by per-peer visibility.
-- **RAG collection / corpus**: An existing feature-062 grouping of ingested documents in a
-  claw's local vector store. The authoritative source; never leaves the owner.
-- **Knowledge route decision**: The router's selection of which peer corpus (or the local
-  corpus, or the model) should answer a given knowledge query, with a deterministic rule and
-  a recorded rationale for audit.
+- **Knowledge entry (card advertisement)**: The A2A-skill-shaped advertisement of one RAG
+  collection on the capability card. Attributes: stable `collection_id`, name, semantic
+  description (topics/titles), tags (doc types), document/page/chunk counts, and the
+  `retrieval` method name (`n2n/knowledge/query`). Content-free. Derived from the RAG
+  registry; filtered by per-peer visibility. (Distinct from the **retrieval method**, the
+  invocable `n2n/knowledge/query` that returns answers.)
+- **RAG collection**: An existing feature-062 grouping of ingested documents in a claw's
+  local vector store. The authoritative source; never leaves the owner. ("Collection" is the
+  canonical term; earlier drafts also said "corpus".)
+- **Knowledge route decision**: The querying agent's selection (via the `knowledge.py`
+  selection helper, not the iN2N `router.py`) of which peer collection, local collection, or
+  the model should answer a query, with a deterministic embedding-cosine rule and a recorded
+  rationale for audit.
 
 ## Success Criteria *(mandatory)*
 
