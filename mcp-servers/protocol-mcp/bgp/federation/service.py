@@ -95,6 +95,7 @@ class FederationService:
             "n2n/tasks/status": self.invoker.handle_task_status,
             "n2n/tasks/result": self.invoker.handle_task_result,
             "n2n/tasks/cancel": self.invoker.handle_task_cancel,
+            "n2n/knowledge/query": self.invoker.handle_knowledge_query,
             "n2n/chat/open": self.chat.handle_chat_open,
             "n2n/chat/message": self.chat.handle_chat_message,
             "n2n/heartbeat": self._on_heartbeat,

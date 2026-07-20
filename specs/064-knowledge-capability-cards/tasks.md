@@ -18,7 +18,7 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 ## Phase 1: Setup
 
 - [X] T001 Confirm the feature-062 RAG surface is callable from the daemon env: `rag_list` (registry) and `rag_search` (retrieval) resolve and return expected shapes; note the exact call path (direct import vs. MCP stdio) to use from `bgp/federation/` in `specs/064-knowledge-capability-cards/research.md` (append a "D7 — RAG call path" note).
-- [ ] T002 [P] Create empty test modules `tests/n2n/test_knowledge_cards.py` and `tests/n2n/test_knowledge_routing.py` with the shared fixtures import (`conftest.py` manager fixture) so later test tasks just add cases.
+- [X] T002 [P] Create empty test modules `tests/n2n/test_knowledge_cards.py` and `tests/n2n/test_knowledge_routing.py` with the shared fixtures import (`conftest.py` manager fixture) so later test tasks just add cases.
 
 ---
 
@@ -55,14 +55,14 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 **Goal**: A claw delegates a knowledge query to the peer whose corpus is authoritative and returns its cited answer.
 **Independent test**: On claw A with no local corpus on T but peer B advertising one, ask A about T → A routes to B, returns B's cited answer, does not fabricate.
 
-- [ ] T011 [US2] Implement the **dedicated NCFED method** `n2n/knowledge/query` handler in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` and register it in the service handler map (alongside `n2n/tasks/*`, NOT via the MCP `tools/call` proxy — finding H1): accept `{collection_id, query, k}`, run `rag_search` against the **live** local RAG, and return `{answer, provenance:{peer, collection_id, citations}}` per `contracts/knowledge-card-and-retrieval.md`.
-- [ ] T012 [US2] Compose the retrieval answer via a local **agent turn** (`gateway.run_agent_turn` fed the `rag_search` hits) so the result is a grounded, cited answer (not raw chunks; FR-008), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`/`gateway.py`.
-- [ ] T013 [US2] Implement eN2N knowledge selection in **`mcp-servers/protocol-mcp/bgp/federation/knowledge.py`** (NOT `router.py` — finding H2): embed the query with the RAG embedder, compute cosine similarity against all visible advertised collection descriptions (local + federated peers' cached cards in `service.peer_caps`), pick the highest, deterministic tiebreak by ascending peer identity then `collection_id`; return a Knowledge Route Decision (`target`, `peer_identity`, `collection_id`, `score`, `rationale`) per `data-model.md`.
-- [ ] T014 [US2] Implement threshold + fallback in `knowledge.py`: a collection matches only at score ≥ `N2N_KNOWLEDGE_MATCH_THRESHOLD` (default 0.5); fallback order **peer → local → model**; MUST NOT emit `peer`/`collection_id` when nothing clears the threshold (no fabricated source, FR-006).
-- [ ] T015 [US2] Add delegation guidance to `workspace/skills/n2n-federation/SKILL.md`: before answering a document/factual question, consult peers' advertised knowledge and route to the authoritative collection via `n2n/knowledge/query`; state the peer→local→model fallback and the "never invent a federated source" rule.
-- [ ] T016 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: deterministic cosine selection — same query + same advertised set → same collection (stub the embedder for fixed vectors); tiebreak applied and recorded in `rationale`.
-- [ ] T017 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: peer-collection above threshold → decision targets that peer/collection; nothing above threshold → `target=model`, no `peer_identity`/`collection_id`.
-- [ ] T018 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: `n2n/knowledge/query` against a granted, possession-tier peer returns an agent-composed answer with provenance and citations (stub `rag_search` + agent turn).
+- [X] T011 [US2] Implement the **dedicated NCFED method** `n2n/knowledge/query` handler in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` and register it in the service handler map (alongside `n2n/tasks/*`, NOT via the MCP `tools/call` proxy — finding H1): accept `{collection_id, query, k}`, run `rag_search` against the **live** local RAG, and return `{answer, provenance:{peer, collection_id, citations}}` per `contracts/knowledge-card-and-retrieval.md`.
+- [X] T012 [US2] Compose the retrieval answer via a local **agent turn** (`gateway.run_agent_turn` fed the `rag_search` hits) so the result is a grounded, cited answer (not raw chunks; FR-008), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`/`gateway.py`.
+- [X] T013 [US2] Implement eN2N knowledge selection in **`mcp-servers/protocol-mcp/bgp/federation/knowledge.py`** (NOT `router.py` — finding H2): embed the query with the RAG embedder, compute cosine similarity against all visible advertised collection descriptions (local + federated peers' cached cards in `service.peer_caps`), pick the highest, deterministic tiebreak by ascending peer identity then `collection_id`; return a Knowledge Route Decision (`target`, `peer_identity`, `collection_id`, `score`, `rationale`) per `data-model.md`.
+- [X] T014 [US2] Implement threshold + fallback in `knowledge.py`: a collection matches only at score ≥ `N2N_KNOWLEDGE_MATCH_THRESHOLD` (default 0.5); fallback order **peer → local → model**; MUST NOT emit `peer`/`collection_id` when nothing clears the threshold (no fabricated source, FR-006).
+- [X] T015 [US2] Add delegation guidance to `workspace/skills/n2n-federation/SKILL.md`: before answering a document/factual question, consult peers' advertised knowledge and route to the authoritative collection via `n2n/knowledge/query`; state the peer→local→model fallback and the "never invent a federated source" rule.
+- [X] T016 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: deterministic cosine selection — same query + same advertised set → same collection (stub the embedder for fixed vectors); tiebreak applied and recorded in `rationale`.
+- [X] T017 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: peer-collection above threshold → decision targets that peer/collection; nothing above threshold → `target=model`, no `peer_identity`/`collection_id`.
+- [X] T018 [P] [US2] Test in `tests/n2n/test_knowledge_routing.py`: `n2n/knowledge/query` against a granted, possession-tier peer returns an agent-composed answer with provenance and citations (stub `rag_search` + agent turn).
 
 **Checkpoint**: US2 independently demonstrable — the Byrn book round-trip now happens by deliberate routing.
 
@@ -73,11 +73,11 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 **Goal**: Federated knowledge respects visibility, per-peer authorization, admission tier, and audit.
 **Independent test**: unauthorized/ hidden-corpus/ restricted-tier attempts are all refused and audited; successful retrieval is audited with corpus + GAIT.
 
-- [ ] T019 [US3] Extend the **T011 handler** in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` (edit it in place, not a parallel path — finding L1) to enforce default-deny + possession tier on `n2n/knowledge/query`: reuse `negotiate.allows` so a self-asserted (keyless) peer is denied, and require a per-peer grant for the collection (default-deny), reusing the authorizer path used by `tools/call`/`tasks/submit`. The grant is the Principle-XIV control point (FR-007).
-- [ ] T020 [US3] No existence oracle: an unknown or not-visible `collection_id` MUST be answered exactly as "no such collection" (same shape as a missing one), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`.
-- [ ] T021 [US3] Emit one audit record per retrieval in `invocation.py` via the existing `Auditor`: `{direction=inbound, peer_identity, target_type="knowledge", target_name=collection_id, decision, outcome, channel_kind, gait_ref}` (FR-007).
-- [ ] T022 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: self-asserted (tier-0) peer denied retrieval but may still see authorized knowledge advertisements; possession-tier peer without a grant denied (default-deny); both audited.
-- [ ] T023 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: hidden/unknown `collection_id` returns the missing-collection shape (no existence leak); successful retrieval produces exactly one audit record with collection + GAIT reference.
+- [X] T019 [US3] Extend the **T011 handler** in `mcp-servers/protocol-mcp/bgp/federation/invocation.py` (edit it in place, not a parallel path — finding L1) to enforce default-deny + possession tier on `n2n/knowledge/query`: reuse `negotiate.allows` so a self-asserted (keyless) peer is denied, and require a per-peer grant for the collection (default-deny), reusing the authorizer path used by `tools/call`/`tasks/submit`. The grant is the Principle-XIV control point (FR-007).
+- [X] T020 [US3] No existence oracle: an unknown or not-visible `collection_id` MUST be answered exactly as "no such collection" (same shape as a missing one), in `mcp-servers/protocol-mcp/bgp/federation/invocation.py`.
+- [X] T021 [US3] Emit one audit record per retrieval in `invocation.py` via the existing `Auditor`: `{direction=inbound, peer_identity, target_type="knowledge", target_name=collection_id, decision, outcome, channel_kind, gait_ref}` (FR-007).
+- [X] T022 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: self-asserted (tier-0) peer denied retrieval but may still see authorized knowledge advertisements; possession-tier peer without a grant denied (default-deny); both audited.
+- [X] T023 [P] [US3] Test in `tests/n2n/test_knowledge_routing.py`: hidden/unknown `collection_id` returns the missing-collection shape (no existence leak); successful retrieval produces exactly one audit record with collection + GAIT reference.
 
 **Checkpoint**: US3 independently demonstrable — sovereignty/audit guarantees hold under adversarial peers.
 
@@ -85,9 +85,9 @@ Tests: `tests/n2n/`. Skill docs: `workspace/skills/`. Draft: `docs/ietf/`.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T024 [P] Update the NCFED draft §11 (Capability Cards) in `docs/ietf/draft-capobianco-ncfed-00.md` to document the `knowledge` skill shape as part of the A2A card mapping, staged for the **-01** revision (FR-010) — do NOT re-render/alter the live -00 submission.
+- [X] T024 [P] Update the NCFED draft §11 (Capability Cards) in `docs/ietf/draft-capobianco-ncfed-00.md` to document the `knowledge` skill shape as part of the A2A card mapping, staged for the **-01** revision (FR-010) — do NOT re-render/alter the live -00 submission.
 - [ ] T025 [P] Run the quickstart.md manual walkthrough on the live mesh (ingest → advertise → route → answer with citations → visibility → fallback) and record the result; correlate mesh audit + RAG retrieval_log as in the Byrn demo.
-- [ ] T026 Run the full n2n suite (`python3 -m pytest tests/n2n -q`) and confirm zero regressions; map passing tests to SC-001…SC-005.
+- [X] T026 Run the full n2n suite (`python3 -m pytest tests/n2n -q`) and confirm zero regressions; map passing tests to SC-001…SC-005.
 - [ ] T027 [P] Restart the live services (`systemctl --user restart netclaw-mesh.service` + members) to deploy, then confirm a real peer sees the `knowledge` array and a routed query answers with provenance.
 
 ---

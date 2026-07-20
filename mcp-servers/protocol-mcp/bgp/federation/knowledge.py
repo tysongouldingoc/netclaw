@@ -100,6 +100,93 @@ def build_entries(topic_only: Optional[bool] = None,
     return entries
 
 
+def _match_threshold() -> float:
+    try:
+        return float(os.environ.get("N2N_KNOWLEDGE_MATCH_THRESHOLD", "0.5"))
+    except ValueError:
+        return 0.5
+
+
+def _embed_texts(texts: list):
+    """Embed texts with the RAG embedder (feature 062). Lazy-loaded and cached;
+    returns a list of vectors, or None if the embedder cannot be loaded — the
+    caller then falls back to lexical scoring so a missing model never breaks the
+    daemon. Deterministic: the same model yields the same vectors (FR-005)."""
+    global _EMBEDDER
+    try:
+        if _EMBEDDER is None:
+            from sentence_transformers import SentenceTransformer  # heavy, lazy
+            model = os.environ.get("RAG_EMBED_MODEL", "all-MiniLM-L6-v2")
+            _EMBEDDER = SentenceTransformer(model)
+        return [list(map(float, v)) for v in _EMBEDDER.encode(texts)]
+    except Exception:
+        return None
+
+
+_EMBEDDER = None
+
+
+def _cosine(a: list, b: list) -> float:
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a)) or 1.0
+    nb = math.sqrt(sum(y * y for y in b)) or 1.0
+    return dot / (na * nb)
+
+
+def _lexical(query: str, desc: str) -> float:
+    """Deterministic token-overlap (Jaccard) fallback when no embedder is loaded."""
+    q = {w for w in query.lower().split() if len(w) > 2}
+    d = {w for w in desc.lower().split() if len(w) > 2}
+    if not q or not d:
+        return 0.0
+    return len(q & d) / len(q | d)
+
+
+def score_query(query: str, descriptions: list) -> list:
+    """Similarity of `query` to each description, in [0,1]. Embedding cosine when
+    the embedder loads (deterministic), else lexical overlap."""
+    if not descriptions:
+        return []
+    vecs = _embed_texts([query] + list(descriptions))
+    if vecs:
+        qv, dvs = vecs[0], vecs[1:]
+        return [max(0.0, _cosine(qv, dv)) for dv in dvs]
+    return [_lexical(query, d) for d in descriptions]
+
+
+def select_collection(query: str, sources: list, threshold: Optional[float] = None) -> dict:
+    """Choose which advertised collection answers `query`. `sources` is a list of
+    {"source": "local"|<peer_identity>, "entries": [knowledge entries]}. Returns a
+    Knowledge Route Decision (data-model.md): highest-scoring collection at/above
+    the threshold, deterministic tiebreak by ascending source then collection_id;
+    fallback to the model when nothing clears the threshold (FR-005/FR-006). Never
+    emits a peer/collection when nothing matches (no fabricated source)."""
+    if threshold is None:
+        threshold = _match_threshold()
+    cands = [(s["source"], e) for s in sources for e in s.get("entries", [])]
+    if not cands:
+        return {"query": query, "target": "model", "peer_identity": None,
+                "collection_id": None, "score": 0.0,
+                "rationale": "no advertised collections"}
+    scores = score_query(query, [e["description"] for _, e in cands])
+    ranked = sorted(
+        zip(scores, cands),
+        key=lambda x: (-x[0], str(x[1][0]), x[1][1]["collection_id"]))
+    best_score, (src, entry) = ranked[0]
+    if best_score < threshold:
+        return {"query": query, "target": "model", "peer_identity": None,
+                "collection_id": None, "score": round(best_score, 4),
+                "rationale": f"best score {best_score:.4f} < threshold {threshold}"}
+    target = "local" if src == "local" else "peer"
+    return {"query": query, "target": target,
+            "peer_identity": None if target == "local" else src,
+            "collection_id": entry["collection_id"], "score": round(best_score, 4),
+            "rationale": f"{target} collection {entry['collection_id']} scored "
+                         f"{best_score:.4f} (>= {threshold}); deterministic tiebreak "
+                         f"by source then collection_id"}
+
+
 def assert_entry_clean(entry: dict) -> None:
     """Defense in depth (FR-002): a knowledge entry MUST carry only the allowed
     content-free keys — no source path, hash, chunk text, or other registry
