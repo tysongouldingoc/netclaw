@@ -21,6 +21,15 @@ router, and the delegation instructions. It adds **no new MCP server** and moves
 document content** across the federation — only content-free metadata (titles, topics,
 counts) that a peer is authorized to see.
 
+## Clarifications
+
+### Session 2026-07-19
+
+- Q: At what granularity should a claw advertise its RAG knowledge on the card? → A: Per collection (one card skill per RAG collection).
+- Q: How should a remote claw invoke retrieval against an advertised corpus? → A: A dedicated invocable knowledge-retrieval skill, addressable from the card, invoked via `n2n/tools/call` and fulfilled by the local agent/RAG.
+- Q: How should the querying claw choose which advertised corpus answers a question? → A: Semantic match of the query against each corpus's advertised description; deterministic given the advertised set plus a stable tiebreak.
+- Q: Should RAG collections be advertised by default or opt-in? → A: Advertised by default (consistent with skills/MCP servers), with per-peer visibility to hide a collection.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Advertise the knowledge base as an A2A skill on the card (Priority: P1)
@@ -124,28 +133,40 @@ restricted-tier peer sees knowledge advertisement but cannot invoke retrieval.
   treats it as "not available from that peer" and falls back (another peer, or local).
 - Empty/again: a claw with no RAG documents advertises no knowledge skill (absence, not an
   empty entry).
+- Title sensitivity: because collections are advertised by default (FR-003) and the
+  description may include document titles (FR-001), an operator who considers even titles
+  sensitive relies on per-peer visibility to hide the whole collection. A topic-only
+  description mode (counts/tags without titles) is a reasonable plan-time tunable if
+  needed — deferred to planning, not architecture-blocking.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The capability card MUST include a content-free description of each advertised
-  RAG collection, shaped as an A2A-style skill (stable id, human-readable name, semantic
-  description of topics/titles, coarse tags, and document/page/chunk counts).
+- **FR-001**: The capability card MUST advertise knowledge at **collection granularity** —
+  one A2A-style skill entry per RAG collection — each carrying a stable id, human-readable
+  name, a semantic description of the collection's topics/titles, coarse tags, and
+  document/page/chunk counts. All content-free.
 - **FR-002**: The knowledge advertisement MUST be sourced from the feature-062 RAG document
   registry (title, doc_type, collection, page_count, chunk_count) and MUST NOT include chunk
   text, embeddings, `source_path`, capture commands, or any secret; it MUST pass the
   existing card `_assert_no_secrets` invariant.
-- **FR-003**: Knowledge advertisements MUST honor per-peer visibility: an operator MUST be
-  able to hide a collection from a given peer (reusing the existing `n2n_set_visibility`
-  mechanism), and a hidden collection MUST NOT appear in that peer's card.
-- **FR-004**: A claw MUST be able to invoke retrieval against a peer's advertised corpus over
-  NCFED (the retrieval path proven in the Hermes↔NetClaw interop), and the corpus MUST be
-  addressable from what the card advertises (a peer needs no out-of-band knowledge of the
-  corpus id).
-- **FR-005**: The router MUST consider federated peers' advertised knowledge when selecting
-  where to answer a knowledge query, selecting the best-matching corpus deterministically
-  (most-specific topic match first, then a stable, documented tiebreak by peer identity).
+- **FR-003**: RAG collections MUST be advertised **by default** (consistent with how skills
+  and MCP servers are advertised today). Knowledge advertisements MUST honor per-peer
+  visibility: an operator MUST be able to hide a collection from a given peer (reusing the
+  existing `n2n_set_visibility` mechanism), and a hidden collection MUST NOT appear in that
+  peer's card.
+- **FR-004**: Retrieval against a peer's advertised corpus MUST be exposed as a dedicated,
+  invocable **knowledge-retrieval skill**, addressable directly from the corpus id the card
+  advertises (a peer needs no out-of-band knowledge), invoked via `n2n/tools/call` and
+  fulfilled by the owner's local agent/RAG. The free-form chat path (proven in the
+  Hermes↔NetClaw interop) MAY remain as a convenience, but the invocable skill is the
+  normative, routable interface.
+- **FR-005**: The router/agent MUST select the corpus by **semantic match** of the query
+  against each advertised collection's description, considering both local and federated
+  peers' advertised knowledge. Selection MUST be repeatable: given the same query and the
+  same advertised set, the same corpus is chosen, using a stable, documented tiebreak by
+  peer identity when scores are close.
 - **FR-006**: When a matching **peer** corpus exists and the local claw lacks the knowledge,
   the agent MUST prefer delegating retrieval to the authoritative peer over answering from
   the model alone; when no matching peer corpus exists, it MUST NOT fabricate a federated
@@ -209,6 +230,16 @@ restricted-tier peer sees knowledge advertisement but cannot invoke retrieval.
   is slightly stale.
 - Cross-source reconciliation, ranking answers from multiple peers, and transitive knowledge
   delegation (A asks B who asks C) are out of scope for this lightweight feature.
+- **Knowledge replication (RAG2RAG) is explicitly out of scope and reserved for a future
+  spec (065).** This feature is *federated query* — knowledge stays home, only the answer
+  travels (sovereignty by default). Replicating vectors/chunks across the wire is the
+  opposite governance model (the data leaves; revocation becomes best-effort; embeddings are
+  effectively document sharing given inversion risk and embedding-model coupling). It has
+  real value for availability/offline, volume latency, blended retrieval, and deliberate
+  knowledge publishing, but carries a sync/versioning/consent burden this feature avoids.
+  064 is a prerequisite for it (discovery before replication). A lighter middle ground —
+  answer/chunk caching with TTL and provenance on the querying side — may be worth folding
+  in later without a full replication protocol.
 
 ## Dependencies
 
