@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetClaw Enterprise Setup Wizard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #090d16 0%, #0d1527 50%, #080a10 100%);
+      --card-bg: rgba(18, 26, 44, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(59, 130, 246, 0.4);
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-purple: #8b5cf6;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 2rem;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto 2.5rem;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 1.5rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.4rem;
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+    }
+
+    .brand-text h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-text p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      color: var(--accent-emerald);
+      font-weight: 500;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 2rem;
+    }
+
+    .setup-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      box-shadow: var(--glass-shadow);
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: var(--card-border-hover);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+
+    .step-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-blue);
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      margin-bottom: 0.75rem;
+    }
+
+    .toggle-info h4 {
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .toggle-info p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.15);
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px; width: 18px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider { background-color: var(--accent-blue); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    .category-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      margin: 1.25rem 0 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .mcp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .mcp-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .mcp-card:hover {
+      background: rgba(59, 130, 246, 0.08);
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    .mcp-card.selected {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: var(--accent-blue);
+    }
+
+    .mcp-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .mcp-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .summary-box {
+      background: rgba(13, 21, 39, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      position: sticky;
+      top: 2rem;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.9rem;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+      color: white;
+      border: none;
+      padding: 1rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.95;
+      transform: translateY(-2px);
+    }
+
+    .log-box {
+      background: #05070c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #34d399;
+      height: 140px;
+      overflow-y: auto;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">N</div>
+      <div class="brand-text">
+        <h1>NetClaw Enterprise Setup</h1>
+        <p>OpenClaw • DefenseClaw Guardrails • Selective MCP Stack</p>
+      </div>
+    </div>
+    <div class="status-pill">
+      <div class="dot"></div>
+      <span id="posture-text">Posture: production — enforced</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="setup-steps">
+
+      <!-- Step 1: OpenClaw Core Setup -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">1. OpenClaw Core Configuration</div>
+          <span class="step-badge">Step 1</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Enable OpenClaw Gateway</h4>
+            <p>Run openclaw gateway background supervisor on port :18789</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="openclaw-enabled" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Step 2: DefenseClaw Security & Lockdown -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">2. DefenseClaw Security & Lockdown</div>
+          <span class="step-badge">Step 2</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>LLM & Tool Call Model-Guard Proxy (:4000)</h4>
+            <p>Enforce fail-closed inspection for Anthropic, OpenAI, and custom tool invocations</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="defenseclaw-proxy" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Host Kernel Confinement (Lockdown OpenClaw)</h4>
+            <p>Enforce NoNewPrivileges, read-only root, private /tmp, and secret file isolation (0600)</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="kernel-lockdown" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <h4>Pre-Activation Static Security Scan Gate</h4>
+            <p>Scan MCP Python/Node.js source files with CodeGuard; block HIGH/CRITICAL risks</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="static-scan" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Step 3: Selective MCP Server Selector -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">3. NetClaw Selective MCP Server Installer</div>
+          <span class="step-badge">Step 3</span>
+        </div>
+        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Select the network, security, and infrastructure MCP servers to deploy into your Docker Compose stack:
+        </p>
+
+        <div class="category-title">Network & Telemetry</div>
+        <div class="mcp-grid">
+          <div class="mcp-card selected" data-mcp="batfish-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">batfish-mcp</div>
+              <div class="mcp-desc">Network configuration analysis & ACL validation</div>
+            </div>
+          </div>
+          <div class="mcp-card selected" data-mcp="gnmi-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">gnmi-mcp</div>
+              <div class="mcp-desc">gNMI telemetry & OpenConfig telemetry</div>
+            </div>
+          </div>
+          <div class="mcp-card" data-mcp="aruba-cx-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">aruba-cx-mcp</div>
+              <div class="mcp-desc">Aruba CX switch REST API automation</div>
+            </div>
+          </div>
+          <div class="mcp-card" data-mcp="nautobot-mcp-v2" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">nautobot-mcp-v2</div>
+              <div class="mcp-desc">Nautobot SOT & IPAM queries</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="category-title">Security & Firewalls</div>
+        <div class="mcp-grid">
+          <div class="mcp-card" data-mcp="chkp-management" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">chkp-management</div>
+              <div class="mcp-desc">CheckPoint Quantum Security Management</div>
+            </div>
+          </div>
+          <div class="mcp-card" data-mcp="prisma-sdwan-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">prisma-sdwan-mcp</div>
+              <div class="mcp-desc">Palo Alto Prisma SD-WAN API</div>
+            </div>
+          </div>
+          <div class="mcp-card" data-mcp="zscaler-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">zscaler-mcp</div>
+              <div class="mcp-desc">Zscaler Internet Access policy automation</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="category-title">Cloud & Infrastructure</div>
+        <div class="mcp-grid">
+          <div class="mcp-card" data-mcp="azure-network-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">azure-network-mcp</div>
+              <div class="mcp-desc">Azure VNet & Network Security Group audit</div>
+            </div>
+          </div>
+          <div class="mcp-card" data-mcp="terraform-mcp" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">terraform-mcp</div>
+              <div class="mcp-desc">HashiCorp Terraform state inspection</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Sidebar Summary -->
+    <div class="sidebar">
+      <div class="summary-box">
+        <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Deployment Summary</h3>
+        <div class="summary-item">
+          <span>OpenClaw Core</span>
+          <span style="color: var(--accent-emerald)">Enabled</span>
+        </div>
+        <div class="summary-item">
+          <span>DefenseClaw Proxy</span>
+          <span style="color: var(--accent-cyan)">Port :4000</span>
+        </div>
+        <div class="summary-item">
+          <span>Kernel Lockdown</span>
+          <span style="color: var(--accent-purple)">Enforced</span>
+        </div>
+        <div class="summary-item">
+          <span>Selected MCPs</span>
+          <span id="selected-count" style="color: var(--accent-blue)">2 Servers</span>
+        </div>
+
+        <button class="btn-primary" onclick="deployStack()">Deploy NetClaw Stack</button>
+
+        <div class="log-box" id="log-output">
+          [System] Setup wizard initialized.<br>
+          [Ready] Click Deploy NetClaw Stack to install selected components.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function toggleMcp(element) {
+      element.classList.toggle('selected');
+      updateCount();
+    }
+
+    function updateCount() {
+      const count = document.querySelectorAll('.mcp-card.selected').length;
+      document.getElementById('selected-count').innerText = `${count} Servers`;
+    }
+
+    function deployStack() {
+      const selected = Array.from(document.querySelectorAll('.mcp-card.selected'))
+        .map(el => el.getAttribute('data-mcp'));
+      
+      const log = document.getElementById('log-output');
+      log.innerHTML += `<br>[Deploy] Triggering installation for ${selected.join(', ')}...`;
+      log.scrollTop = log.scrollHeight;
+
+      fetch('/api/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selected_mcps: selected,
+          risk_mode: 'production',
+          lockdown: document.getElementById('kernel-lockdown').checked
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        log.innerHTML += `<br>[Success] ${data.message}`;
+        log.scrollTop = log.scrollHeight;
+      })
+      .catch(err => {
+        log.innerHTML += `<br>[Error] Deployment failed: ${err}`;
+        log.scrollTop = log.scrollHeight;
+      });
+    }
+  </script>
+</body>
+</html>
