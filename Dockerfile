@@ -22,5 +22,5 @@ ENV N2N_RISK_MODE=production
 ENV OPENCLAW_HOME=/root/.openclaw
 ENV PYTHONPATH=/app:/app/mcp-servers/protocol-mcp
 
-# Entrypoint default runs the selective MCP installer
-CMD ["python", "scripts/mcp-installer.py", "--all", "--target", "docker-compose", "--mode", "production"]
+# Entrypoint default runs the interactive MCP installer wizard
+CMD ["python", "scripts/mcp-installer.py", "--interactive"]

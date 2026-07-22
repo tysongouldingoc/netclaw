@@ -83,7 +83,7 @@ def generate_docker_compose_string(selected_mcps: list[str]) -> str:
         "    build: .",
         "    image: netclaw-agent:latest",
         "    container_name: netclaw-agent",
-        "    command: python scripts/mcp-installer.py --all --target docker-compose --mode production",
+        "    command: python scripts/mcp-installer.py --interactive",
         "    volumes:",
         "      - .:/app",
         "    working_dir: /app",
