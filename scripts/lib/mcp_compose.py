@@ -59,15 +59,23 @@ def get_service_dict(mcp_name: str) -> dict:
 
 def generate_docker_compose_string(selected_mcps: list[str]) -> str:
     """Generates YAML string for docker-compose.mcp.yml with hardened security profile."""
+    repo_root = Path(__file__).resolve().parent.parent.parent
     lines = [
-        "version: '3.8'",
         "services:",
     ]
     for mcp in selected_mcps:
+        dockerfile_path = repo_root / "mcp-servers" / mcp / "Dockerfile"
         lines.extend([
             f"  {mcp}:",
             f"    image: mcp-{mcp}:latest",
             f"    container_name: mcp-{mcp}",
+        ])
+        if dockerfile_path.exists():
+            lines.extend([
+                "    build:",
+                f"      context: mcp-servers/{mcp}",
+            ])
+        lines.extend([
             "    security_opt:",
             '      - "no-new-privileges:true"',
             "    read_only: true",
@@ -79,6 +87,7 @@ def generate_docker_compose_string(selected_mcps: list[str]) -> str:
             f'      - "config/env/.env.{mcp}"',
             "    networks:",
             "      - defenseclaw_net",
+            "",
         ])
     lines.extend([
         "networks:",

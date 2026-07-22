@@ -200,16 +200,24 @@ def slice_secrets_for_mcp(mcp_name: str, required_keys: list[str]) -> str:
         if k not in env_map and k in os.environ:
             env_map[k] = os.environ[k]
 
+    repo_env_dir = Path(REPO_ROOT) / "config" / "env"
+    repo_env_dir.mkdir(parents=True, exist_ok=True)
+    set_permissions_shim(repo_env_dir, 0o700)
+
     sliced_path = env_dir / f".env.{mcp_name}"
+    repo_sliced_path = repo_env_dir / f".env.{mcp_name}"
     lines = []
     for k in required_keys:
         val = env_map.get(k, "")
         lines.append(f"{k}={val}")
 
-    sliced_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    content_str = "\n".join(lines) + ("\n" if lines else "")
+    sliced_path.write_text(content_str)
+    repo_sliced_path.write_text(content_str)
 
     # Enforce 0600 file permissions
     set_permissions_shim(sliced_path, 0o600)
+    set_permissions_shim(repo_sliced_path, 0o600)
 
     return str(sliced_path.resolve())
 
