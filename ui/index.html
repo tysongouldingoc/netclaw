@@ -385,6 +385,29 @@
             <span class="slider"></span>
           </label>
         </div>
+
+        <!-- Host Kernel Command Whitelist Box & Examples -->
+        <div style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(255,255,255,0.06);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <label style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-main);">
+              Host Kernel Command Execution Whitelist
+            </label>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">Fail-Closed Enforcement</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+            Only permitted host binaries can be executed by OpenClaw/NetClaw agents. Unlisted commands are blocked by DefenseClaw Model-Guard & systemd system call filters.
+          </p>
+
+          <!-- Example Presets -->
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Presets:</span>
+            <button type="button" onclick="setWhitelistPreset('network')" style="background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: var(--accent-blue); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Network Ops</button>
+            <button type="button" onclick="setWhitelistPreset('cisco')" style="background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.3); color: var(--accent-cyan); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Cisco / CheckPoint</button>
+            <button type="button" onclick="setWhitelistPreset('readonly')" style="background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: var(--accent-emerald); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Strict Read-Only</button>
+          </div>
+
+          <textarea id="cmd-whitelist" rows="3" style="width: 100%; background: rgba(5,7,12,0.7); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #34d399; resize: vertical;" placeholder="e.g. ping, traceroute, curl, dig, git, ip, python, node, show">ping, traceroute, curl, dig, git, ip, python, node, show, display</textarea>
+        </div>
       </div>
 
       <!-- Step 3: Selective MCP Server Selector -->
@@ -499,6 +522,17 @@
   </main>
 
   <script>
+    function setWhitelistPreset(type) {
+      const box = document.getElementById('cmd-whitelist');
+      if (type === 'network') {
+        box.value = 'ping, traceroute, mtr, dig, curl, gnmic, ip, python, node';
+      } else if (type === 'cisco') {
+        box.value = 'pyats, nornir, netmiko, ssh, show, display, ping, traceroute';
+      } else if (type === 'readonly') {
+        box.value = 'git, cat, ls, grep, find, echo, pwd, python';
+      }
+    }
+
     function toggleMcp(element) {
       element.classList.toggle('selected');
       updateCount();
@@ -512,9 +546,10 @@
     function deployStack() {
       const selected = Array.from(document.querySelectorAll('.mcp-card.selected'))
         .map(el => el.getAttribute('data-mcp'));
+      const cmdWhitelist = document.getElementById('cmd-whitelist').value;
       
       const log = document.getElementById('log-output');
-      log.innerHTML += `<br>[Deploy] Triggering installation for ${selected.join(', ')}...`;
+      log.innerHTML += `<br>[Deploy] Installing selected MCPs & enforcing Kernel Command Whitelist...`;
       log.scrollTop = log.scrollHeight;
 
       fetch('/api/deploy', {
@@ -523,7 +558,8 @@
         body: JSON.stringify({
           selected_mcps: selected,
           risk_mode: 'production',
-          lockdown: document.getElementById('kernel-lockdown').checked
+          lockdown: document.getElementById('kernel-lockdown').checked,
+          command_whitelist: cmdWhitelist
         })
       })
       .then(res => res.json())

@@ -50,6 +50,13 @@ class SetupGUIHandler(http.server.SimpleHTTPRequestHandler):
                 data = json.loads(body.decode("utf-8"))
                 selected_mcps = data.get("selected_mcps", [])
                 risk_mode = data.get("risk_mode", "production")
+                cmd_whitelist = data.get("command_whitelist", "ping, traceroute, curl, dig, git, ip, python, node, show")
+
+                # Save allowed commands whitelist to config file
+                config_dir = REPO_ROOT / "config"
+                config_dir.mkdir(parents=True, exist_ok=True)
+                with open(config_dir / "allowed_commands.conf", "w") as f:
+                    f.write(cmd_whitelist.strip() + "\n")
 
                 # 1. Run mcp-installer script with selected MCPs
                 select_arg = ",".join(selected_mcps) if selected_mcps else ""
