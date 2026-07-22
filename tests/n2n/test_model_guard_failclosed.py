@@ -28,7 +28,7 @@ def test_proxy_unreachable_failclosed_in_production(mock_openclaw_home, monkeypa
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        register_script.verify_model_guard_proxy(port=4000, timeout=3.0)
+        register_script.verify_model_guard_proxy(port=59999, timeout=0.1)
 
     assert exc_info.value.code == 1
 
@@ -58,7 +58,7 @@ def test_proxy_and_scan_bypass_in_testing_mode(mock_openclaw_home, monkeypatch):
     
     monkeypatch.setenv("N2N_RISK_MODE", "testing")
 
-    res = register_script.verify_model_guard_proxy(port=4000, timeout=3.0)
+    res = register_script.verify_model_guard_proxy(port=59999, timeout=0.1)
     assert res["status"] == "WARNING_BYPASS"
     assert res["exit_code"] == 0
 
