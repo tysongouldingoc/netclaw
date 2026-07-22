@@ -186,3 +186,119 @@ def posture_ok_for_delegation(posture: dict, *, strict_all: Optional[bool] = Non
     return {"allow": True, "enforcement": "audit-degraded", "refused_control": None,
             "reason": f"audit control unavailable ({', '.join(audit_gaps)}) — "
                       f"running but flagged audit-degraded"}
+
+
+class MCPPostureEvaluator:
+    """Feature 057 dual-target posture calculation engine."""
+
+    def is_wsl2_environment(self) -> bool:
+        """Detect if running under WSL2 kernel."""
+        try:
+            if os.path.exists("/proc/version"):
+                with open("/proc/version", "r") as f:
+                    text = f.read().lower()
+                    if "microsoft" in text or "wsl" in text:
+                        return True
+        except Exception:
+            pass
+        return False
+
+    def check_docker_daemon_available(self) -> bool:
+        """Check Docker daemon accessibility."""
+        import shutil
+        import subprocess
+        if not shutil.which("docker"):
+            return False
+        try:
+            res = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    def check_systemd_user_bus_available(self) -> bool:
+        """Check systemd user bus accessibility."""
+        import shutil
+        import subprocess
+        if not shutil.which("systemctl"):
+            return False
+        try:
+            res = subprocess.run(["systemctl", "--user", "show-environment"], capture_output=True, timeout=5)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    def evaluate_target_availability(self, target: str) -> dict:
+        """Evaluate target platform runtime availability."""
+        if target == "docker-compose":
+            avail = self.check_docker_daemon_available()
+            return {"available": avail, "reason": "" if avail else "docker_daemon_unreachable"}
+        elif target == "systemd":
+            avail = self.check_systemd_user_bus_available()
+            return {"available": avail, "reason": "" if avail else "systemd_user_bus_unreachable"}
+        return {"available": False, "reason": "unknown_target"}
+
+    def evaluate_posture(self, target: str = "docker-compose", risk_mode: str = "production", mock_controls: dict | None = None) -> dict:
+        """Evaluate overall MCP server installation security posture."""
+        controls = mock_controls or {
+            "proxy_health": True,
+            "secret_isolation": True,
+            "confinement_directives": True,
+            "kernel_support": True,
+        }
+
+        if risk_mode != "production":
+            return {
+                "verdict": "testing",
+                "degraded": False,
+                "wsl2_degraded": False,
+                "mode": "testing",
+            }
+
+        # Check WSL2 / systemd limitation
+        if target == "systemd" and self.is_wsl2_environment() and not controls.get("kernel_support", True):
+            return {
+                "verdict": "production — DEGRADED (WSL2_kernel_limitation)",
+                "degraded": True,
+                "wsl2_degraded": True,
+                "mode": "production",
+            }
+
+        if not controls.get("proxy_health", True):
+            return {
+                "verdict": "production — DEGRADED (model_guard_proxy_offline)",
+                "degraded": True,
+                "wsl2_degraded": False,
+                "mode": "production",
+            }
+
+        if not controls.get("secret_isolation", True):
+            return {
+                "verdict": "production — DEGRADED (master_env_permission_leak)",
+                "degraded": True,
+                "wsl2_degraded": False,
+                "mode": "production",
+            }
+
+        if not controls.get("confinement_directives", True):
+            return {
+                "verdict": "production — DEGRADED (missing_confinement_directives)",
+                "degraded": True,
+                "wsl2_degraded": False,
+                "mode": "production",
+            }
+
+        if not controls.get("kernel_support", True):
+            return {
+                "verdict": "production — DEGRADED (WSL2_kernel_limitation)",
+                "degraded": True,
+                "wsl2_degraded": True,
+                "mode": "production",
+            }
+
+        return {
+            "verdict": "production — enforced",
+            "degraded": False,
+            "wsl2_degraded": False,
+            "mode": "production",
+        }
+

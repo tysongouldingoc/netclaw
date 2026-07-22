@@ -27,6 +27,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -39,6 +40,59 @@ TEMPLATE = os.path.join(REPO, "scripts", "systemd", "netclaw-mesh.service")
 DEFENSECLAW_TEMPLATE = os.path.join(REPO, "scripts", "systemd", "defenseclaw-sidecar.service")
 
 sys.path.insert(0, os.path.join(REPO, "mcp-servers", "protocol-mcp"))
+
+
+def get_active_mcp_service_names() -> list[str]:
+    """Returns list of active MCP server names from openclaw.json."""
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    config_paths = []
+    if openclaw_home:
+        config_paths.append(os.path.join(openclaw_home, "config", "openclaw.json"))
+        config_paths.append(os.path.join(openclaw_home, "openclaw.json"))
+    
+    config_paths.extend([
+        os.path.join(HOME, ".openclaw", "config", "openclaw.json"),
+        os.path.join(HOME, ".openclaw", "openclaw.json"),
+        os.path.join(REPO, "config", "openclaw.json"),
+    ])
+
+    for p in config_paths:
+        if os.path.exists(p):
+            try:
+                with open(p) as f:
+                    data = json.load(f)
+                return list(data.get("mcpServers", {}).keys())
+            except Exception:
+                pass
+    return []
+
+
+def _mcp_unit_text(mcp_name: str) -> str:
+    """Generates systemd user unit text for a specific MCP server with kernel confinement."""
+    python_bin = shutil.which("python3") or "/usr/bin/python3"
+    return f"""[Unit]
+Description=NetClaw MCP server {mcp_name} — durable + confined, feature 057
+After=network-online.target netclaw-mesh.service
+Wants=netclaw-mesh.service
+
+[Service]
+Type=simple
+WorkingDirectory={REPO}
+Environment=N2N_RISK_MODE={_risk_mode()}
+EnvironmentFile=%h/.openclaw/config/env/.env.{mcp_name}
+ExecStart={python_bin} {REPO}/scripts/mcp-installer.py --run-server {mcp_name}
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=%h
+InaccessiblePaths=-%h/.openclaw/.env
+
+[Install]
+WantedBy=default.target
+"""
+
 
 
 def _slug(member_id: str) -> str:
@@ -195,7 +249,10 @@ def _member_unit_text(member_id: str, launch_cmd: str, harden: bool = True) -> s
     exec_start = launch_cmd
     parts = launch_cmd.split()
     if parts and parts[0] == "bash":
-        exec_start = " ".join([shutil.which("bash") or "/bin/bash", *parts[1:]])
+        bash_path = shutil.which("bash") or "/bin/bash"
+        if not bash_path.startswith("/"):
+            bash_path = "/bin/bash"
+        exec_start = " ".join([bash_path, *parts[1:]])
     return f"""[Unit]
 Description=NetClaw iN2N member {member_id} — durable + confined, feature 057
 After=network-online.target netclaw-mesh.service

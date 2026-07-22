@@ -10,6 +10,8 @@ import pytest
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(REPO, "mcp-servers", "protocol-mcp"))
 
+from tests.fixtures.mcp_installer.conftest import mock_openclaw_home, mock_defenseclaw_proxy  # noqa: F401
+
 
 @pytest.fixture
 def fed_base(tmp_path):
@@ -23,3 +25,4 @@ def manager(fed_base):
     m = FederationManager(base_dir=fed_base)
     yield m
     m.close()
+

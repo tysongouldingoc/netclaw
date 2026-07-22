@@ -31,7 +31,8 @@ class FederationService:
         self.local_as = local_as
         self.router_id = router_id
         self.local_identity = peer_identity(local_as, router_id)
-        self.display_name = display_name or os.uname().nodename
+        nodename = getattr(os, "uname", lambda: type("U", (), {"nodename": os.environ.get("COMPUTERNAME", "localhost")})())().nodename
+        self.display_name = display_name or nodename
         self.refresh_s = refresh_s
         self.manager = manager or FederationManager()
         self.inventory = InventoryBuilder(self.manager)
