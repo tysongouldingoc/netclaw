@@ -482,26 +482,60 @@
         });
     }
 
+    function categorizeMcp(name) {
+      if (name.startsWith('chkp-')) return 'CheckPoint Security Management';
+      if (['claroty-mcp', 'prisma-sdwan-mcp', 'zscaler-mcp', 'cloudflare-security', 'cloudflare-zerotrust'].includes(name)) return 'Enterprise Security & Firewalls';
+      if (['azure-network-mcp', 'terraform-mcp', 'vault-mcp', 'datadog-mcp', 'splunk-mcp', 'pagerduty-mcp', 'jenkins-mcp', 'atlassian-mcp', 'github', 'gitlab-mcp', 'infrahub-mcp', 'cloudflare-dns-analytics', 'cloudflare-analytics', 'cloudflare-workers'].includes(name)) return 'Cloud, Infrastructure & DevOps';
+      if (['chrome-devtools-mcp', 'chrome-devtools-mcp-visible', 'ollama-mcp', 'rag-mcp', 'blender-mcp', 'sketchfab-mcp', 'unreal-mcp', 'memory-mcp', 'n2n-mcp', 'devnet-content-search', 'sqlite', 'twitter-mcp', 'twilio-mcp', 'twilio-voice-mcp', 'tts-mcp'].includes(name)) return 'AI, Media & Simulation';
+      return 'Network Automation & Telemetry';
+    }
+
     function renderMcpGrid(mcps) {
       const container = document.getElementById('mcp-container');
       if (!mcps || mcps.length === 0) {
         container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem;">No MCP servers found.</div>`;
         return;
       }
-      
-      let html = '<div class="mcp-grid">';
+
+      const groups = {
+        'Network Automation & Telemetry': [],
+        'CheckPoint Security Management': [],
+        'Enterprise Security & Firewalls': [],
+        'Cloud, Infrastructure & DevOps': [],
+        'AI, Media & Simulation': []
+      };
+
       mcps.forEach(name => {
-        const isDefaultSelected = (name === 'batfish-mcp' || name === 'gnmi-mcp');
-        html += `
-          <div class="mcp-card ${isDefaultSelected ? 'selected' : ''}" data-mcp="${name}" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">${name}</div>
-              <div class="mcp-desc">MCP service ${name}</div>
-            </div>
-          </div>
-        `;
+        const cat = categorizeMcp(name);
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(name);
       });
-      html += '</div>';
+
+      let html = '';
+      for (const [category, list] of Object.entries(groups)) {
+        if (list.length === 0) continue;
+        html += `
+          <div class="mcp-category-block" style="margin-bottom: 1.5rem;">
+            <div class="category-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>${category}</span>
+              <span style="font-size: 0.75rem; background: rgba(6,182,212,0.15); color: var(--accent-cyan); padding: 0.15rem 0.5rem; border-radius: 4px;">${list.length} MCPs</span>
+            </div>
+            <div class="mcp-grid">
+        `;
+        list.forEach(name => {
+          const isDefaultSelected = (name === 'batfish-mcp' || name === 'gnmi-mcp');
+          html += `
+            <div class="mcp-card ${isDefaultSelected ? 'selected' : ''}" data-mcp="${name}" onclick="toggleMcp(this)">
+              <div>
+                <div class="mcp-name">${name}</div>
+                <div class="mcp-desc">${category}</div>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      }
+
       container.innerHTML = html;
       updateCount();
     }
