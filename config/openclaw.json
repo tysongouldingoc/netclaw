@@ -35,19 +35,7 @@
       "name": "forward-mcp",
       "command": "mcp-servers/forward-mcp/forward-mcp",
       "args": [],
-      "required_keys": [
-        "FORWARD_API_BASE_URL",
-        "FORWARD_API_KEY",
-        "FORWARD_API_SECRET",
-        "FORWARD_INSTANCE_ID",
-        "FORWARD_DEFAULT_NETWORK_ID",
-        "FORWARD_DEFAULT_QUERY_LIMIT",
-        "FORWARD_LOCK_DIR",
-        "FORWARD_BLOOM_ENABLED",
-        "FORWARD_BLOOM_INDEX_PATH",
-        "FORWARD_SEMANTIC_CACHE_ENABLED",
-        "FORWARD_SEMANTIC_CACHE_DISK_PATH"
-      ]
+      "required_keys": []
     },
     "suzieq-mcp": {
       "name": "suzieq-mcp",
@@ -56,12 +44,7 @@
         "-u",
         "mcp-servers/suzieq-mcp/server.py"
       ],
-      "required_keys": [
-        "SUZIEQ_API_URL",
-        "SUZIEQ_API_KEY",
-        "SUZIEQ_VERIFY_SSL",
-        "SUZIEQ_TIMEOUT"
-      ]
+      "required_keys": []
     },
     "batfish-mcp": {
       "name": "batfish-mcp",
@@ -87,12 +70,7 @@
       "args": [
         "mcp-servers/azure-network-mcp/azure_network_mcp_server.py"
       ],
-      "required_keys": [
-        "AZURE_TENANT_ID",
-        "AZURE_CLIENT_ID",
-        "AZURE_CLIENT_SECRET",
-        "AZURE_SUBSCRIPTION_ID"
-      ]
+      "required_keys": []
     },
     "gitlab-mcp": {
       "name": "gitlab-mcp",
@@ -101,10 +79,7 @@
         "-y",
         "@zereight/mcp-gitlab"
       ],
-      "required_keys": [
-        "GITLAB_PERSONAL_ACCESS_TOKEN",
-        "GITLAB_API_URL"
-      ]
+      "required_keys": []
     },
     "chrome-devtools-mcp": {
       "name": "chrome-devtools-mcp",
@@ -130,10 +105,7 @@
       "name": "jenkins-mcp",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "JENKINS_URL",
-        "JENKINS_AUTH_BASE64"
-      ]
+      "required_keys": []
     },
     "atlassian-mcp": {
       "name": "atlassian-mcp",
@@ -141,14 +113,7 @@
       "args": [
         "mcp-atlassian"
       ],
-      "required_keys": [
-        "JIRA_URL",
-        "JIRA_USERNAME",
-        "JIRA_API_TOKEN",
-        "CONFLUENCE_URL",
-        "CONFLUENCE_USERNAME",
-        "CONFLUENCE_API_TOKEN"
-      ]
+      "required_keys": []
     },
     "gns3-mcp": {
       "name": "gns3-mcp",
@@ -157,13 +122,7 @@
         "-u",
         "mcp-servers/gns3-mcp-server/gns3_mcp_server.py"
       ],
-      "required_keys": [
-        "GNS3_URL",
-        "GNS3_USER",
-        "GNS3_PASSWORD",
-        "GNS3_VERIFY_SSL",
-        "GNS3_TOKEN_TTL"
-      ]
+      "required_keys": []
     },
     "prisma-sdwan-mcp": {
       "name": "prisma-sdwan-mcp",
@@ -172,22 +131,13 @@
         "-u",
         "mcp-servers/prisma-sdwan-mcp/prisma_sdwan_mcp_server.py"
       ],
-      "required_keys": [
-        "PAN_CLIENT_ID",
-        "PAN_CLIENT_SECRET",
-        "PAN_TSG_ID",
-        "PAN_REGION"
-      ]
+      "required_keys": []
     },
     "datadog-mcp": {
       "name": "datadog-mcp",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "DD_API_KEY",
-        "DD_APP_KEY",
-        "DD_SITE"
-      ]
+      "required_keys": []
     },
     "pagerduty-mcp": {
       "name": "pagerduty-mcp",
@@ -196,10 +146,7 @@
         "pagerduty-mcp",
         "--enable-write-tools"
       ],
-      "required_keys": [
-        "PAGERDUTY_USER_API_KEY",
-        "PAGERDUTY_API_HOST"
-      ]
+      "required_keys": []
     },
     "splunk-mcp": {
       "name": "splunk-mcp",
@@ -207,11 +154,7 @@
       "args": [
         "splunk-mcp"
       ],
-      "required_keys": [
-        "SPLUNK_HOST",
-        "SPLUNK_TOKEN",
-        "SPLUNK_VERIFY_SSL"
-      ]
+      "required_keys": []
     },
     "infrahub-mcp": {
       "name": "infrahub-mcp",
@@ -219,89 +162,55 @@
       "args": [
         "infrahub-mcp"
       ],
-      "required_keys": [
-        "INFRAHUB_ADDRESS",
-        "INFRAHUB_API_TOKEN"
-      ]
+      "required_keys": []
     },
     "terraform-mcp": {
       "name": "terraform-mcp",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "TFC_TOKEN",
-        "TFC_ORG",
-        "TFC_HOST"
-      ]
+      "required_keys": []
     },
     "vault-mcp": {
       "name": "vault-mcp",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "VAULT_ADDR",
-        "VAULT_TOKEN",
-        "VAULT_NAMESPACE"
-      ]
+      "required_keys": []
     },
     "zscaler-mcp": {
       "name": "zscaler-mcp",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "ZSCALER_ZIA_API_KEY",
-        "ZSCALER_ZIA_USERNAME",
-        "ZSCALER_ZIA_PASSWORD",
-        "ZSCALER_ZIA_CLOUD",
-        "ZSCALER_ZPA_CLIENT_ID",
-        "ZSCALER_ZPA_CLIENT_SECRET",
-        "ZSCALER_ZPA_CUSTOMER_ID"
-      ]
+      "required_keys": []
     },
     "cloudflare-dns-analytics": {
       "name": "cloudflare-dns-analytics",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "CLOUDFLARE_API_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID"
-      ]
+      "required_keys": []
     },
     "cloudflare-security": {
       "name": "cloudflare-security",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "CLOUDFLARE_API_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID"
-      ]
+      "required_keys": []
     },
     "cloudflare-zerotrust": {
       "name": "cloudflare-zerotrust",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "CLOUDFLARE_API_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID"
-      ]
+      "required_keys": []
     },
     "cloudflare-analytics": {
       "name": "cloudflare-analytics",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "CLOUDFLARE_API_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID"
-      ]
+      "required_keys": []
     },
     "cloudflare-workers": {
       "name": "cloudflare-workers",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "CLOUDFLARE_API_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID"
-      ]
+      "required_keys": []
     },
     "blender-mcp": {
       "name": "blender-mcp",
@@ -318,13 +227,7 @@
         "-u",
         "mcp-servers/aruba-cx-mcp/aruba_cx_mcp_server.py"
       ],
-      "required_keys": [
-        "ARUBA_CX_TARGETS",
-        "ARUBA_CX_CONFIG",
-        "ARUBA_CX_TIMEOUT",
-        "ITSM_ENABLED",
-        "ITSM_LAB_MODE"
-      ]
+      "required_keys": []
     },
     "devnet-content-search": {
       "name": "devnet-content-search",
@@ -339,14 +242,7 @@
         "-u",
         "/home/ubuntu/netclaw/mcp-servers/nautobot-mcp-v2/server.py"
       ],
-      "required_keys": [
-        "NAUTOBOT_URL",
-        "NAUTOBOT_TOKEN",
-        "NAUTOBOT_VERIFY_SSL",
-        "NAUTOBOT_TIMEOUT",
-        "ITSM_ENABLED",
-        "ITSM_LAB_MODE"
-      ]
+      "required_keys": []
     },
     "nautobot-golden-config-mcp": {
       "name": "nautobot-golden-config-mcp",
@@ -355,16 +251,7 @@
         "-u",
         "/home/ubuntu/netclaw/mcp-servers/nautobot-golden-config-mcp/server.py"
       ],
-      "required_keys": [
-        "NAUTOBOT_URL",
-        "NAUTOBOT_TOKEN",
-        "NAUTOBOT_VERIFY_SSL",
-        "NAUTOBOT_TIMEOUT",
-        "GOLDEN_CONFIG_POLL_INTERVAL",
-        "GOLDEN_CONFIG_JOB_TIMEOUT",
-        "ITSM_ENABLED",
-        "ITSM_LAB_MODE"
-      ]
+      "required_keys": []
     },
     "nautobot-routing-mcp": {
       "name": "nautobot-routing-mcp",
@@ -373,14 +260,7 @@
         "-u",
         "/home/ubuntu/netclaw/mcp-servers/nautobot-routing-mcp/server.py"
       ],
-      "required_keys": [
-        "NAUTOBOT_URL",
-        "NAUTOBOT_TOKEN",
-        "NAUTOBOT_VERIFY_SSL",
-        "NAUTOBOT_TIMEOUT",
-        "ITSM_ENABLED",
-        "ITSM_LAB_MODE"
-      ]
+      "required_keys": []
     },
     "chkp-management": {
       "name": "chkp-management",
@@ -388,15 +268,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/management/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-management-logs": {
       "name": "chkp-management-logs",
@@ -404,15 +276,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/management-logs/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-threat-prevention": {
       "name": "chkp-threat-prevention",
@@ -420,15 +284,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/threat-prevention/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-https-inspection": {
       "name": "chkp-https-inspection",
@@ -436,15 +292,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/https-inspection/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-harmony-sase": {
       "name": "chkp-harmony-sase",
@@ -452,12 +300,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/harmony-sase/dist/index.js"
       ],
-      "required_keys": [
-        "API_KEY",
-        "MANAGEMENT_HOST",
-        "ORIGIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-reputation-service": {
       "name": "chkp-reputation-service",
@@ -465,10 +308,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/reputation-service/dist/index.js"
       ],
-      "required_keys": [
-        "API_KEY",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-quantum-gw-cli": {
       "name": "chkp-quantum-gw-cli",
@@ -476,15 +316,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/gw-cli/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-gw-connection-analysis": {
       "name": "chkp-gw-connection-analysis",
@@ -492,15 +324,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/gw-cli-connection-analysis/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-threat-emulation": {
       "name": "chkp-threat-emulation",
@@ -508,10 +332,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/threat-emulation/dist/index.js"
       ],
-      "required_keys": [
-        "API_KEY",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-quantum-gaia": {
       "name": "chkp-quantum-gaia",
@@ -519,15 +340,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/gaia/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-documentation": {
       "name": "chkp-documentation",
@@ -535,9 +348,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/documentation-tool/dist/index.js"
       ],
-      "required_keys": [
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-spark-management": {
       "name": "chkp-spark-management",
@@ -545,10 +356,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/spark-management/dist/index.js"
       ],
-      "required_keys": [
-        "API_KEY",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-cpinfo-analysis": {
       "name": "chkp-cpinfo-analysis",
@@ -556,9 +364,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/cpinfo-analysis/dist/index.js"
       ],
-      "required_keys": [
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-argos-erm": {
       "name": "chkp-argos-erm",
@@ -566,10 +372,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/argos-erm/dist/index.js"
       ],
-      "required_keys": [
-        "API_KEY",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "chkp-policy-insights": {
       "name": "chkp-policy-insights",
@@ -577,15 +380,7 @@
       "args": [
         "mcp-servers/checkpoint-mcp-servers/packages/policy-insights/dist/index.js"
       ],
-      "required_keys": [
-        "MANAGEMENT_HOST",
-        "PORT",
-        "API_KEY",
-        "USERNAME",
-        "PASSWORD",
-        "DOMAIN",
-        "TELEMETRY_DISABLED"
-      ]
+      "required_keys": []
     },
     "claroty-mcp": {
       "name": "claroty-mcp",
@@ -594,14 +389,7 @@
         "-u",
         "mcp-servers/claroty-mcp/claroty_mcp_server.py"
       ],
-      "required_keys": [
-        "CLAROTY_API_URL",
-        "CLAROTY_API_TOKEN",
-        "CLAROTY_VERIFY_SSL",
-        "CLAROTY_TIMEOUT",
-        "CLAROTY_RATE_LIMIT_PER_MIN",
-        "NETCLAW_LAB_MODE"
-      ]
+      "required_keys": []
     },
     "twitter-mcp": {
       "name": "twitter-mcp",
@@ -610,14 +398,7 @@
         "-u",
         "mcp-servers/twitter-mcp/server.py"
       ],
-      "required_keys": [
-        "TWITTER_API_KEY",
-        "TWITTER_API_SECRET",
-        "TWITTER_ACCESS_TOKEN",
-        "TWITTER_ACCESS_SECRET",
-        "TWITTER_HEARTBEAT_ENABLED",
-        "TWITTER_HEARTBEAT_INTERVAL"
-      ]
+      "required_keys": []
     },
     "twilio-mcp": {
       "name": "twilio-mcp",
@@ -631,11 +412,7 @@
         "--tags",
         "Api20100401Call,Api20100401Message"
       ],
-      "required_keys": [
-        "TWILIO_ACCOUNT_SID",
-        "TWILIO_API_KEY_SID",
-        "TWILIO_API_SECRET"
-      ]
+      "required_keys": []
     },
     "twilio-voice-mcp": {
       "name": "twilio-voice-mcp",
@@ -644,21 +421,13 @@
         "-u",
         "mcp-servers/twilio-voice-mcp/server.py"
       ],
-      "required_keys": [
-        "TWILIO_ACCOUNT_SID",
-        "TWILIO_API_KEY_SID",
-        "TWILIO_API_SECRET",
-        "TWILIO_PHONE_NUMBER",
-        "TWILIO_WEBHOOK_URL"
-      ]
+      "required_keys": []
     },
     "unreal-mcp": {
       "name": "unreal-mcp",
       "command": "python3",
       "args": [],
-      "required_keys": [
-        "UE5_MCP_URL"
-      ]
+      "required_keys": []
     },
     "sketchfab-mcp": {
       "name": "sketchfab-mcp",
@@ -666,9 +435,7 @@
       "args": [
         "mcp-servers/sketchfab-mcp-server/build/index.js"
       ],
-      "required_keys": [
-        "SKETCHFAB_API_KEY"
-      ]
+      "required_keys": []
     },
     "n2n-mcp": {
       "name": "n2n-mcp",
@@ -677,9 +444,7 @@
         "-u",
         "mcp-servers/n2n-mcp/server.py"
       ],
-      "required_keys": [
-        "BGP_DAEMON_API"
-      ]
+      "required_keys": []
     },
     "rag-mcp": {
       "name": "rag-mcp",
@@ -688,117 +453,106 @@
         "-u",
         "mcp-servers/rag-mcp/rag_mcp_server.py"
       ],
-      "required_keys": [
-        "RAG_DATA_DIR",
-        "RAG_EMBEDDING_MODEL",
-        "RAG_RERANKER_MODEL",
-        "RAG_RERANK_ENABLED",
-        "RAG_RELEVANCE_FLOOR",
-        "RAG_MAX_DOC_MB",
-        "RAG_MAX_DOC_PAGES",
-        "RAG_CRAWL_MAX_PAGES",
-        "RAG_SNAPSHOT_WARN_DAYS",
-        "RAG_MAX_ROUNDS"
-      ]
+      "required_keys": []
     },
     "eve-ng-mcp-server": {
       "name": "eve-ng-mcp-server",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\eve-ng-mcp-server",
       "command": "python3",
       "args": [
         "-m",
         "eve_ng_mcp_server"
-      ]
+      ],
+      "required_keys": []
     },
     "gns3-mcp-server": {
       "name": "gns3-mcp-server",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\gns3-mcp-server",
       "command": "python3",
       "args": [
         "-m",
         "gns3_mcp_server"
-      ]
+      ],
+      "required_keys": []
     },
     "ipfix-mcp": {
       "name": "ipfix-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\ipfix-mcp",
       "command": "python3",
       "args": [
         "-m",
         "ipfix_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "memory-mcp": {
       "name": "memory-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\memory-mcp",
       "command": "python3",
       "args": [
         "-m",
         "memory_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "nautobot-mcp-v2": {
       "name": "nautobot-mcp-v2",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\nautobot-mcp-v2",
       "command": "python3",
       "args": [
         "-m",
         "nautobot_mcp_v2"
-      ]
+      ],
+      "required_keys": []
     },
     "ollama-mcp": {
       "name": "ollama-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\ollama-mcp",
       "command": "python3",
       "args": [
         "-m",
         "ollama_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "packet-buddy-mcp": {
       "name": "packet-buddy-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\packet-buddy-mcp",
       "command": "python3",
       "args": [
         "-m",
         "packet_buddy_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "protocol-mcp": {
       "name": "protocol-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\protocol-mcp",
       "command": "python3",
       "args": [
         "-m",
         "protocol_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "snmptrap-mcp": {
       "name": "snmptrap-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\snmptrap-mcp",
       "command": "python3",
       "args": [
         "-m",
         "snmptrap_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "syslog-mcp": {
       "name": "syslog-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\syslog-mcp",
       "command": "python3",
       "args": [
         "-m",
         "syslog_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "tts-mcp": {
       "name": "tts-mcp",
-      "path": "C:\\Users\\tyson\\Documents\\antigravity\\amazing-babbage\\netclaw\\mcp-servers\\tts-mcp",
       "command": "python3",
       "args": [
         "-m",
         "tts_mcp"
-      ]
+      ],
+      "required_keys": []
     },
     "github": {
       "name": "github",
@@ -807,9 +561,7 @@
         "-y",
         "@modelcontextprotocol/server-github"
       ],
-      "required_keys": [
-        "GITHUB_TOKEN"
-      ]
+      "required_keys": []
     },
     "sqlite": {
       "name": "sqlite",

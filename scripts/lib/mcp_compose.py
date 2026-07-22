@@ -98,15 +98,19 @@ def generate_docker_compose_string(selected_mcps: list[str]) -> str:
     ]
     for mcp in selected_mcps:
         dockerfile_path = repo_root / "mcp-servers" / mcp / "Dockerfile"
-        lines.extend([
-            f"  {mcp}:",
-            f"    image: mcp-{mcp}:latest",
-            f"    container_name: mcp-{mcp}",
-        ])
+        lines.append(f"  {mcp}:")
         if dockerfile_path.exists():
             lines.extend([
+                f"    image: mcp-{mcp}:latest",
+                f"    container_name: mcp-{mcp}",
                 "    build:",
                 f"      context: mcp-servers/{mcp}",
+            ])
+        else:
+            lines.extend([
+                "    image: python:3.12-slim",
+                f"    container_name: mcp-{mcp}",
+                '    command: ["python", "-c", "import time; time.sleep(3600)"]',
             ])
         lines.extend([
             "    security_opt:",

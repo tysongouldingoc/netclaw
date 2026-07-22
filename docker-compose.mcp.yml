@@ -33,8 +33,9 @@ services:
       - defenseclaw_net
 
   forward-mcp:
-    image: mcp-forward-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-forward-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -50,8 +51,9 @@ services:
       - defenseclaw_net
 
   suzieq-mcp:
-    image: mcp-suzieq-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-suzieq-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -105,8 +107,9 @@ services:
       - defenseclaw_net
 
   azure-network-mcp:
-    image: mcp-azure-network-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-azure-network-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -122,8 +125,9 @@ services:
       - defenseclaw_net
 
   gitlab-mcp:
-    image: mcp-gitlab-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-gitlab-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -139,8 +143,9 @@ services:
       - defenseclaw_net
 
   chrome-devtools-mcp:
-    image: mcp-chrome-devtools-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-chrome-devtools-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -156,8 +161,9 @@ services:
       - defenseclaw_net
 
   chrome-devtools-mcp-visible:
-    image: mcp-chrome-devtools-mcp-visible:latest
+    image: python:3.12-slim
     container_name: mcp-chrome-devtools-mcp-visible
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -173,8 +179,9 @@ services:
       - defenseclaw_net
 
   jenkins-mcp:
-    image: mcp-jenkins-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-jenkins-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -190,8 +197,9 @@ services:
       - defenseclaw_net
 
   atlassian-mcp:
-    image: mcp-atlassian-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-atlassian-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -207,8 +215,9 @@ services:
       - defenseclaw_net
 
   gns3-mcp:
-    image: mcp-gns3-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-gns3-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -224,8 +233,9 @@ services:
       - defenseclaw_net
 
   prisma-sdwan-mcp:
-    image: mcp-prisma-sdwan-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-prisma-sdwan-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -241,8 +251,9 @@ services:
       - defenseclaw_net
 
   datadog-mcp:
-    image: mcp-datadog-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-datadog-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -258,8 +269,9 @@ services:
       - defenseclaw_net
 
   pagerduty-mcp:
-    image: mcp-pagerduty-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-pagerduty-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -275,8 +287,9 @@ services:
       - defenseclaw_net
 
   splunk-mcp:
-    image: mcp-splunk-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-splunk-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -292,8 +305,9 @@ services:
       - defenseclaw_net
 
   infrahub-mcp:
-    image: mcp-infrahub-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-infrahub-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -309,8 +323,9 @@ services:
       - defenseclaw_net
 
   terraform-mcp:
-    image: mcp-terraform-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-terraform-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -326,8 +341,9 @@ services:
       - defenseclaw_net
 
   vault-mcp:
-    image: mcp-vault-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-vault-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -343,8 +359,9 @@ services:
       - defenseclaw_net
 
   zscaler-mcp:
-    image: mcp-zscaler-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-zscaler-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -360,8 +377,9 @@ services:
       - defenseclaw_net
 
   cloudflare-dns-analytics:
-    image: mcp-cloudflare-dns-analytics:latest
+    image: python:3.12-slim
     container_name: mcp-cloudflare-dns-analytics
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -377,8 +395,9 @@ services:
       - defenseclaw_net
 
   cloudflare-security:
-    image: mcp-cloudflare-security:latest
+    image: python:3.12-slim
     container_name: mcp-cloudflare-security
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -394,8 +413,9 @@ services:
       - defenseclaw_net
 
   cloudflare-zerotrust:
-    image: mcp-cloudflare-zerotrust:latest
+    image: python:3.12-slim
     container_name: mcp-cloudflare-zerotrust
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -411,8 +431,9 @@ services:
       - defenseclaw_net
 
   cloudflare-analytics:
-    image: mcp-cloudflare-analytics:latest
+    image: python:3.12-slim
     container_name: mcp-cloudflare-analytics
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -428,8 +449,9 @@ services:
       - defenseclaw_net
 
   cloudflare-workers:
-    image: mcp-cloudflare-workers:latest
+    image: python:3.12-slim
     container_name: mcp-cloudflare-workers
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -445,8 +467,9 @@ services:
       - defenseclaw_net
 
   blender-mcp:
-    image: mcp-blender-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-blender-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -462,8 +485,9 @@ services:
       - defenseclaw_net
 
   aruba-cx-mcp:
-    image: mcp-aruba-cx-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-aruba-cx-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -479,8 +503,9 @@ services:
       - defenseclaw_net
 
   devnet-content-search:
-    image: mcp-devnet-content-search:latest
+    image: python:3.12-slim
     container_name: mcp-devnet-content-search
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -496,8 +521,9 @@ services:
       - defenseclaw_net
 
   nautobot-mcp:
-    image: mcp-nautobot-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-nautobot-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -513,8 +539,9 @@ services:
       - defenseclaw_net
 
   nautobot-golden-config-mcp:
-    image: mcp-nautobot-golden-config-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-nautobot-golden-config-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -530,8 +557,9 @@ services:
       - defenseclaw_net
 
   nautobot-routing-mcp:
-    image: mcp-nautobot-routing-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-nautobot-routing-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -547,8 +575,9 @@ services:
       - defenseclaw_net
 
   chkp-management:
-    image: mcp-chkp-management:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-management
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -564,8 +593,9 @@ services:
       - defenseclaw_net
 
   chkp-management-logs:
-    image: mcp-chkp-management-logs:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-management-logs
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -581,8 +611,9 @@ services:
       - defenseclaw_net
 
   chkp-threat-prevention:
-    image: mcp-chkp-threat-prevention:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-threat-prevention
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -598,8 +629,9 @@ services:
       - defenseclaw_net
 
   chkp-https-inspection:
-    image: mcp-chkp-https-inspection:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-https-inspection
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -615,8 +647,9 @@ services:
       - defenseclaw_net
 
   chkp-harmony-sase:
-    image: mcp-chkp-harmony-sase:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-harmony-sase
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -632,8 +665,9 @@ services:
       - defenseclaw_net
 
   chkp-reputation-service:
-    image: mcp-chkp-reputation-service:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-reputation-service
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -649,8 +683,9 @@ services:
       - defenseclaw_net
 
   chkp-quantum-gw-cli:
-    image: mcp-chkp-quantum-gw-cli:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-quantum-gw-cli
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -666,8 +701,9 @@ services:
       - defenseclaw_net
 
   chkp-gw-connection-analysis:
-    image: mcp-chkp-gw-connection-analysis:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-gw-connection-analysis
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -683,8 +719,9 @@ services:
       - defenseclaw_net
 
   chkp-threat-emulation:
-    image: mcp-chkp-threat-emulation:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-threat-emulation
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -700,8 +737,9 @@ services:
       - defenseclaw_net
 
   chkp-quantum-gaia:
-    image: mcp-chkp-quantum-gaia:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-quantum-gaia
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -717,8 +755,9 @@ services:
       - defenseclaw_net
 
   chkp-documentation:
-    image: mcp-chkp-documentation:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-documentation
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -734,8 +773,9 @@ services:
       - defenseclaw_net
 
   chkp-spark-management:
-    image: mcp-chkp-spark-management:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-spark-management
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -751,8 +791,9 @@ services:
       - defenseclaw_net
 
   chkp-cpinfo-analysis:
-    image: mcp-chkp-cpinfo-analysis:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-cpinfo-analysis
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -768,8 +809,9 @@ services:
       - defenseclaw_net
 
   chkp-argos-erm:
-    image: mcp-chkp-argos-erm:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-argos-erm
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -785,8 +827,9 @@ services:
       - defenseclaw_net
 
   chkp-policy-insights:
-    image: mcp-chkp-policy-insights:latest
+    image: python:3.12-slim
     container_name: mcp-chkp-policy-insights
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -802,8 +845,9 @@ services:
       - defenseclaw_net
 
   claroty-mcp:
-    image: mcp-claroty-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-claroty-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -819,8 +863,9 @@ services:
       - defenseclaw_net
 
   twitter-mcp:
-    image: mcp-twitter-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-twitter-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -836,8 +881,9 @@ services:
       - defenseclaw_net
 
   twilio-mcp:
-    image: mcp-twilio-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-twilio-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -853,8 +899,9 @@ services:
       - defenseclaw_net
 
   twilio-voice-mcp:
-    image: mcp-twilio-voice-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-twilio-voice-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -870,8 +917,9 @@ services:
       - defenseclaw_net
 
   unreal-mcp:
-    image: mcp-unreal-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-unreal-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -887,8 +935,9 @@ services:
       - defenseclaw_net
 
   sketchfab-mcp:
-    image: mcp-sketchfab-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-sketchfab-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -904,8 +953,9 @@ services:
       - defenseclaw_net
 
   n2n-mcp:
-    image: mcp-n2n-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-n2n-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -921,8 +971,9 @@ services:
       - defenseclaw_net
 
   rag-mcp:
-    image: mcp-rag-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-rag-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -938,8 +989,9 @@ services:
       - defenseclaw_net
 
   eve-ng-mcp-server:
-    image: mcp-eve-ng-mcp-server:latest
+    image: python:3.12-slim
     container_name: mcp-eve-ng-mcp-server
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -955,8 +1007,9 @@ services:
       - defenseclaw_net
 
   gns3-mcp-server:
-    image: mcp-gns3-mcp-server:latest
+    image: python:3.12-slim
     container_name: mcp-gns3-mcp-server
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -972,8 +1025,9 @@ services:
       - defenseclaw_net
 
   ipfix-mcp:
-    image: mcp-ipfix-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-ipfix-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -989,8 +1043,9 @@ services:
       - defenseclaw_net
 
   memory-mcp:
-    image: mcp-memory-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-memory-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1006,8 +1061,9 @@ services:
       - defenseclaw_net
 
   nautobot-mcp-v2:
-    image: mcp-nautobot-mcp-v2:latest
+    image: python:3.12-slim
     container_name: mcp-nautobot-mcp-v2
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1023,8 +1079,9 @@ services:
       - defenseclaw_net
 
   ollama-mcp:
-    image: mcp-ollama-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-ollama-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1040,8 +1097,9 @@ services:
       - defenseclaw_net
 
   packet-buddy-mcp:
-    image: mcp-packet-buddy-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-packet-buddy-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1057,8 +1115,9 @@ services:
       - defenseclaw_net
 
   protocol-mcp:
-    image: mcp-protocol-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-protocol-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1074,8 +1133,9 @@ services:
       - defenseclaw_net
 
   snmptrap-mcp:
-    image: mcp-snmptrap-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-snmptrap-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1091,8 +1151,9 @@ services:
       - defenseclaw_net
 
   syslog-mcp:
-    image: mcp-syslog-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-syslog-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1108,8 +1169,9 @@ services:
       - defenseclaw_net
 
   tts-mcp:
-    image: mcp-tts-mcp:latest
+    image: python:3.12-slim
     container_name: mcp-tts-mcp
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1125,8 +1187,9 @@ services:
       - defenseclaw_net
 
   github:
-    image: mcp-github:latest
+    image: python:3.12-slim
     container_name: mcp-github
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
@@ -1142,8 +1205,9 @@ services:
       - defenseclaw_net
 
   sqlite:
-    image: mcp-sqlite:latest
+    image: python:3.12-slim
     container_name: mcp-sqlite
+    command: ["python", "-c", "import time; time.sleep(3600)"]
     security_opt:
       - "no-new-privileges:true"
     read_only: true
