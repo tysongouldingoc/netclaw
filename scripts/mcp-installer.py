@@ -337,6 +337,14 @@ def main(args: list[str] | None = None):
             except Exception:
                 pass
 
+    if not parsed_args.dry_run:
+        if parsed_args.target == "docker-compose":
+            from lib.mcp_compose import generate_docker_compose
+            repo_root = Path(__file__).resolve().parent.parent
+            output_file = repo_root / "docker-compose.mcp.yml"
+            generate_docker_compose(list(selected_servers.keys()), output_file)
+            print(f"Generated Docker Compose stack file: {output_file}")
+
     print("Selective MCP Server Installation Complete.")
 
 
