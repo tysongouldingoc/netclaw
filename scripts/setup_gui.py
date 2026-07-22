@@ -14,22 +14,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 UI_DIR = REPO_ROOT / "ui"
-PORT = 8090
+PORT = 8095
 
 
-class SetupGUIHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(UI_DIR), **kwargs)
-
+class SetupGUIHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/" or self.path == "/index.html":
+        clean_path = self.path.split("?")[0]
+        if clean_path in ("/", "/index.html"):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             with open(UI_DIR / "index.html", "rb") as f:
                 self.wfile.write(f.read())
             return
-        elif self.path == "/api/status":
+        elif clean_path == "/api/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -40,7 +38,20 @@ class SetupGUIHandler(http.server.SimpleHTTPRequestHandler):
             }
             self.wfile.write(json.dumps(payload).encode("utf-8"))
             return
-        super().do_GET()
+        elif clean_path == "/api/mcps":
+            sys.path.insert(0, str(REPO_ROOT / "scripts"))
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("mcp_installer", str(REPO_ROOT / "scripts" / "mcp-installer.py"))
+            mcp_installer = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mcp_installer)
+            mcps = mcp_installer.discover_mcp_servers()
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"mcps": list(mcps.keys())}).encode("utf-8"))
+            return
+        self.send_error(404, "File not found")
 
     def do_POST(self):
         if self.path == "/api/deploy":

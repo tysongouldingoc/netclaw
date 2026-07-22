@@ -416,76 +416,21 @@
           <div class="card-title">3. NetClaw Selective MCP Server Installer</div>
           <span class="step-badge">Step 3</span>
         </div>
-        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Select the network, security, and infrastructure MCP servers to deploy into your Docker Compose stack:
-        </p>
-
-        <div class="category-title">Network & Telemetry</div>
-        <div class="mcp-grid">
-          <div class="mcp-card selected" data-mcp="batfish-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">batfish-mcp</div>
-              <div class="mcp-desc">Network configuration analysis & ACL validation</div>
-            </div>
-          </div>
-          <div class="mcp-card selected" data-mcp="gnmi-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">gnmi-mcp</div>
-              <div class="mcp-desc">gNMI telemetry & OpenConfig telemetry</div>
-            </div>
-          </div>
-          <div class="mcp-card" data-mcp="aruba-cx-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">aruba-cx-mcp</div>
-              <div class="mcp-desc">Aruba CX switch REST API automation</div>
-            </div>
-          </div>
-          <div class="mcp-card" data-mcp="nautobot-mcp-v2" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">nautobot-mcp-v2</div>
-              <div class="mcp-desc">Nautobot SOT & IPAM queries</div>
-            </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+          <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0;">
+            Select from all <strong id="total-mcp-count" style="color: var(--accent-cyan)">66</strong> discovered MCP servers:
+          </p>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" onclick="selectAllMcps(true)" style="background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: var(--accent-blue); padding: 0.3rem 0.75rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 500;">Select All</button>
+            <button type="button" onclick="selectAllMcps(false)" style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; padding: 0.3rem 0.75rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 500;">Clear All</button>
           </div>
         </div>
 
-        <div class="category-title">Security & Firewalls</div>
-        <div class="mcp-grid">
-          <div class="mcp-card" data-mcp="chkp-management" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">chkp-management</div>
-              <div class="mcp-desc">CheckPoint Quantum Security Management</div>
-            </div>
-          </div>
-          <div class="mcp-card" data-mcp="prisma-sdwan-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">prisma-sdwan-mcp</div>
-              <div class="mcp-desc">Palo Alto Prisma SD-WAN API</div>
-            </div>
-          </div>
-          <div class="mcp-card" data-mcp="zscaler-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">zscaler-mcp</div>
-              <div class="mcp-desc">Zscaler Internet Access policy automation</div>
-            </div>
-          </div>
-        </div>
+        <input type="text" id="mcp-search" oninput="filterMcps()" placeholder="🔍 Search MCP servers (e.g. batfish, cisco, chkp, cloudflare, gnmi)..." style="width: 100%; background: rgba(5,7,12,0.7); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.6rem 0.85rem; font-family: inherit; font-size: 0.85rem; color: var(--text-main); margin-bottom: 1rem;">
 
-        <div class="category-title">Cloud & Infrastructure</div>
-        <div class="mcp-grid">
-          <div class="mcp-card" data-mcp="azure-network-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">azure-network-mcp</div>
-              <div class="mcp-desc">Azure VNet & Network Security Group audit</div>
-            </div>
-          </div>
-          <div class="mcp-card" data-mcp="terraform-mcp" onclick="toggleMcp(this)">
-            <div>
-              <div class="mcp-name">terraform-mcp</div>
-              <div class="mcp-desc">HashiCorp Terraform state inspection</div>
-            </div>
-          </div>
+        <div id="mcp-container">
+          <div style="color: var(--text-muted); font-size: 0.85rem;">Loading discovered MCP servers...</div>
         </div>
-
       </div>
 
     </div>
@@ -522,6 +467,67 @@
   </main>
 
   <script>
+    let allMcpServers = [];
+
+    function loadDiscoveredMcps() {
+      fetch('/api/mcps')
+        .then(res => res.json())
+        .then(data => {
+          allMcpServers = data.mcps || [];
+          document.getElementById('total-mcp-count').innerText = allMcpServers.length;
+          renderMcpGrid(allMcpServers);
+        })
+        .catch(err => {
+          console.error("Failed to load MCPs", err);
+        });
+    }
+
+    function renderMcpGrid(mcps) {
+      const container = document.getElementById('mcp-container');
+      if (!mcps || mcps.length === 0) {
+        container.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem;">No MCP servers found.</div>`;
+        return;
+      }
+      
+      let html = '<div class="mcp-grid">';
+      mcps.forEach(name => {
+        const isDefaultSelected = (name === 'batfish-mcp' || name === 'gnmi-mcp');
+        html += `
+          <div class="mcp-card ${isDefaultSelected ? 'selected' : ''}" data-mcp="${name}" onclick="toggleMcp(this)">
+            <div>
+              <div class="mcp-name">${name}</div>
+              <div class="mcp-desc">MCP service ${name}</div>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+      updateCount();
+    }
+
+    function selectAllMcps(select) {
+      document.querySelectorAll('.mcp-card').forEach(card => {
+        if (select) card.classList.add('selected');
+        else card.classList.remove('selected');
+      });
+      updateCount();
+    }
+
+    function filterMcps() {
+      const q = document.getElementById('mcp-search').value.toLowerCase();
+      document.querySelectorAll('.mcp-card').forEach(card => {
+        const name = card.getAttribute('data-mcp').toLowerCase();
+        if (name.includes(q)) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDiscoveredMcps);
+
     function setWhitelistPreset(type) {
       const box = document.getElementById('cmd-whitelist');
       if (type === 'network') {
